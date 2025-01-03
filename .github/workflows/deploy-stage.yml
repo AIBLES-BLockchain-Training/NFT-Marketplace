@@ -1,0 +1,111 @@
+name: Deploy dump-gold-stage
+
+on:
+  push:
+    branches:
+      - "dump-gold-stage"
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  build-and-push-image:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Push Image
+    environment: stage
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DigitalOcean Container Registry
+        run: doctl registry login --expiry-seconds 1800
+
+      - name: Build and push image to DOCR
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          context: .
+          tags: registry.digitalocean.com/bho-cr/dump-gold-monorepo-dump-gold-stage:${{ github.sha }}
+          file: Dockerfile.indexer
+          build-args: |
+            GH_NPM_TOKEN=${{ secrets.GH_NPM_TOKEN }}
+          
+  update-manifest-deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: ['build-and-push-image']
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: bhonetwork/helm-do
+          ref: 'main'
+          token: ${{ secrets.INFRA_TOKEN }}
+
+      - name: Setup git configs
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Update image tag
+        run: |
+          echo ${{ github.sha }}
+          sed -i "s/tag:.*/tag: ${{ github.sha }}/g" deploy/dump-gold/indexer/stage/values.yaml
+
+      - name: Commit changes
+        run: |
+          git add .
+          git commit -m "Update image for dump-gold-monorepo-dump-gold-stage - ${{ github.sha }}" -a
+
+      - name: Push changes
+        run: git push origin main
+
+  cleanup-old-images:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: ['update-manifest-deploy']
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Get image list and delete old images
+        run: |
+          # Login to registry
+          doctl registry login --expiry-seconds 600
+
+          # Get list of all tags for the repository
+          TAGS=$(doctl registry repository list-tags dump-gold-monorepo-dump-gold-stage --format Tag --no-header)
+
+          # Get current tag from github sha
+          CURRENT_TAG="${{ github.sha }}"
+          echo "Current tag: $CURRENT_TAG"
+
+           # Filter out the current tag from the list
+          FILTERED_TAGS=$(echo "$TAGS" | xargs -I {}  sh -c 'if [[ "{}" != "$CURRENT_TAG" ]]; then echo "{}"; fi')
+          echo "Filtered tags: $FILTERED_TAGS"
+
+           # Sort tags by creation date and keep only the most recent 2
+          OLD_TAGS=$(echo "$FILTERED_TAGS" | sort -r | tail -n +3)
+
+          # Delete old tags if they exist
+          if [ ! -z "$OLD_TAGS" ]; then
+            echo "Deleting old tags: $OLD_TAGS"
+            for TAG in $OLD_TAGS; do
+              echo "Deleting tag: $TAG"
+              doctl registry repository delete-tag dump-gold-monorepo-dump-gold-stage $TAG --force
+            done
+          else
+            echo "No old tags to delete"
+          fi

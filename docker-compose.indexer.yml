@@ -1,0 +1,46 @@
+version: "3"
+
+services:
+
+  db:
+    container_name: luckt-position-db
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dump_gold
+    ports:
+      - "5432:5432"
+    networks:
+      - network
+
+  processor:
+    container_name: luckt-position-processor
+    image: indexer
+    build:
+      context: ./subsquid-indexer
+      dockerfile: ./Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: db      
+      DB_NAME: dump_gold
+      DB_USER: admin
+      DB_PASS: postgres
+      DB_PORT: 5432
+      GQL_PORT: 4350
+      RPC_HTTP: https://rpc.subsquid.io/bsc-testnet/sqd_rpc_5b1RVzSJcxkP~6JMkfCR-u9fr96vPwUu-2c~TGagIUc74N5u
+      GATEWAY_URL: https://v2.archive.subsquid.io/network/binance-testnet
+      CHAIN_ID: 56
+      EPISODE_FACTORY_CONTRACT_ADDRESS: 0x7eCde599E9C67C20ECbF8404985F9d1Cf4d687d9
+      FROM_BLOCK: 46244432
+      WORKER_NAME: luckt_position
+      SLEEP: 1000
+    ports:
+      - "4350:4350"
+    networks:
+      - network
+  
+networks:
+  network:
+    driver: bridge

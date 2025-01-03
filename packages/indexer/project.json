@@ -1,0 +1,58 @@
+{
+  "name": "indexer",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/indexer",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project contracts --web",
+  "targets": {
+    "typegen": {
+      "command": "npx squid-evm-typegen ./src/abi ./abi/*.json",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "codegen": {
+      "command": "npx squid-typeorm-codegen",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "build": {
+      "command": "rm -rf  && tsc",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "migrate-generate": {
+      "command": "npx squid-typeorm-migration generate",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "migrate-apply": {
+      "command": "npx squid-typeorm-migration apply",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "start": {
+      "command": "node -r dotenv/config lib/main.js",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "start-graphql": {
+      "command": "npx squid-graphql-server",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    },
+    "start-all": {
+      "command": "sqd serve:prod & sqd process:prod",
+      "options": {
+        "cwd": "packages/indexer"
+      }
+    }
+  }
+}
