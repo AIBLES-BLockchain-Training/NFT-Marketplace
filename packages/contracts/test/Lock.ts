@@ -1,7 +1,7 @@
 import { anyValue } from '@nomicfoundation/hardhat-chai-matchers/withArgs';
 import { loadFixture, time } from '@nomicfoundation/hardhat-toolbox/network-helpers';
 import { expect } from 'chai';
-import { ethers } from 'hardhat';
+import { ethers } from 'hardhat'; 
 
 describe('Lock', function () {
   // We define a fixture to reuse the same setup in every test.
@@ -57,7 +57,7 @@ describe('Lock', function () {
 
         await expect(lock.withdraw()).to.be.revertedWith("You can't withdraw yet");
       });
-
+ 
       it('Should revert with the right error if called from another account', async function () {
         const { lock, unlockTime, otherAccount } = await loadFixture(deployOneYearLockFixture);
 

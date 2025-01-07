@@ -49,24 +49,24 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {},
-    bscMainnet: {
-      url: 'https://bsc-rpc.publicnode.com',
-      accounts: [process.env['BSC_ACCOUNT_PRIVATE'] || ''],
-    },
+    // bscMainnet: {
+    //   url: 'https://bsc-rpc.publicnode.com',
+    //   accounts: [process.env['BSC_ACCOUNT_PRIVATE'] || ''],
+    // },
     bscTestnet: {
       url: 'https://bsc-testnet-rpc.publicnode.com',
       accounts: [process.env['BSC_ACCOUNT_PRIVATE'] || ''],
     },
-    ethSepolia: {
-      url: 'https://ethereum-sepolia-rpc.publicnode.com',
-      accounts: [process.env['ETH_ACCOUNT_PRIVATE'] || ''],
-    },
+    // ethSepolia: {
+    //   url: 'https://ethereum-sepolia-rpc.publicnode.com',
+    //   accounts: [process.env['ETH_ACCOUNT_PRIVATE'] || ''],
+    // },
   },
   etherscan: {
     apiKey: {
-      bsc: process.env['BSCSCAN_API_KEY'] || '',
+      // bsc: process.env['BSCSCAN_API_KEY'] || '',
       bscTestnet: process.env['BSCSCAN_API_KEY'] || '',
-      sepolia: process.env['ETHERSCAN_API_KEY'] || '',
+      // sepolia: process.env['ETHERSCAN_API_KEY'] || '',
     },
   },
   mocha: {
