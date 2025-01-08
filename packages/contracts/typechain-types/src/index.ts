@@ -3,4 +3,6 @@
 /* eslint-disable */
 import type * as erc20Sol from "./ERC20.sol";
 export type { erc20Sol };
+import type * as listingSol from "./Listing.sol";
+export type { listingSol };
 export type { Lock } from "./Lock";

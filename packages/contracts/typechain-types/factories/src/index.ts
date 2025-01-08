@@ -2,4 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as erc20Sol from "./ERC20.sol";
+export * as listingSol from "./Listing.sol";
 export { Lock__factory } from "./Lock__factory";
