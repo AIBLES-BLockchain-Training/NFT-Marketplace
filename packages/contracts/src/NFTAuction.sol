@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC1155";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract NFTAuction is IERC721Receiver {
     // enum AuctionStatus
     enum AuctionStatus {
-        Created, // Created: when auction is created
-        Active, // Active: when auction has bidder
-        Cancelled // Cancelled by seller
-        Ended // Ended: when auction is ended
+        CREATED, // Created: when auction is created
+        ACTIVE, // Active: when auction has bidder
+        CANCELLED, // Cancelled by seller
+        ENDED // Ended: when auction is ended
     }
     // enum token type
     enum TokenType {
@@ -23,6 +24,8 @@ contract NFTAuction is IERC721Receiver {
         address auctionCreator; // Seller address
         address assetContract; // NFT address
         uint256 tokenId; // Token ID
+        uint256 quantity; // Quantity of NFTs
+        address currency; // Currency address for bidding (optional)
         uint256 startPrice;
         uint256 ceilingPrice; // Ceiling Price
         uint256 startTime; // uint ms
@@ -30,7 +33,7 @@ contract NFTAuction is IERC721Receiver {
         uint256 timeBufferInSeconds; // Time buffer in seconds
         address highestBidder; // Highest bidder address
         uint256 highestBid; // Highest bid
-        uint256 stepAmount; // Step amount 
+        uint256 stepAmount; // Step amount
         bool isPayoutCollected; // Is payout collected
         bool isTokenCollected; // Is token collected
         AuctionStatus status; // Auction status
@@ -39,16 +42,16 @@ contract NFTAuction is IERC721Receiver {
 
     /*
      * timeBufferInSeconds: time can delay to bid after end time
-    */
+     */
     struct AuctionParams {
         address _assetContract;
-        uint256 _tokenId;   
+        uint256 _tokenId;
         uint256 _quantity; // Quantity of NFTs
         address _currency; // Currency address for bidding (optional)
         uint256 _startPrice;
         uint256 _ceilingPrice;
         uint256 _stepAmount; // Step amount uinit %
-        uint256 _timeBufferInSeconds; 
+        uint256 _timeBufferInSeconds;
         uint256 _startTime;
         uint256 _endTime;
     }
@@ -96,15 +99,9 @@ contract NFTAuction is IERC721Receiver {
         _;
     }
 
-    // check only seller
-    modifier onlySeller(uint256 _auctionId) {
-        require(auctions[_auctionId].auctionCreator == msg.sender, "Only seller can call this function");
-        _;
-    }
-
-    // check auction active: bid?
-    modifier isAuctionActive(uint256 _auctionId) {
-        require(auctions[_auctionId].status == AuctionStatus.Active, "Auction is not active");
+    // check is creator of auction
+    modifier onlyCreator(uint256 _auctionId) {
+        require(auctions[_auctionId].auctionCreator == msg.sender, "You are not creator of this auction");
         _;
     }
 
@@ -119,8 +116,13 @@ contract NFTAuction is IERC721Receiver {
         return this.onERC721Received.selector;
     }
 
-    function checkEnsureNFTBalance(address _assetContract, uint256 _tokenId, uint256 _quantity, uint types) public view {
-        if(types == 1) {
+    function checkEnsureNFTBalance(
+        address _assetContract,
+        uint256 _tokenId,
+        uint256 _quantity,
+        uint types
+    ) private view {
+        if (types == 1) {
             require(IERC721(_assetContract).ownerOf(_tokenId) == msg.sender, "You are not owner of this NFT");
         } else {
             require(IERC1155(_assetContract).balanceOf(msg.sender, _tokenId) >= _quantity, "Insufficient NFT balance");
@@ -128,49 +130,150 @@ contract NFTAuction is IERC721Receiver {
     }
 
     // create auction
-    function createAuction(AuctionParams memory _auctionParams) public {
-        require(_auctionParams._quantity > 0, "Quantity should be greater than 0"); 
+    function createAuction(AuctionParams memory _auctionParams) external {
+        require(_auctionParams._quantity > 0, "Quantity should be greater than 0");
         require(_auctionParams._tokenId > 0, "Token ID should be greater than 0");
         require(_auctionParams._startPrice > 0, "Start price should be greater than 0");
-        require(_auctionParams._ceilingPrice > _auctionParams._startPrice, "Ceiling price should be greater than start price");
+        require(
+            _auctionParams._ceilingPrice > _auctionParams._startPrice,
+            "Ceiling price should be greater than start price"
+        );
         require(_auctionParams._timeBufferInSeconds > 0, "Time buffer should be greater than 0");
         require(_auctionParams._stepAmount > 0, "Step amount should be greater than 0"); // decimal and max step amount, 10000 == 100%
         require(_auctionParams._startTime < _auctionParams._endTime, "Start time should be less than end time");
 
         uint types = IERC165(_auctionParams._assetContract).supportsInterface(type(IERC721).interfaceId) ? 1 : 2;
-        
+
         // Check if auction creator has enough NFT balance
-        checkEnsureNFTBalance(_auctionParams._assetContract, _auctionParams._tokenId, _auctionParams._quantity);
-        if(types == 1) {
+        checkEnsureNFTBalance(_auctionParams._assetContract, _auctionParams._tokenId, _auctionParams._quantity, types);
+        if (types == 1) {
             // Transfer NFT from seller to contract use safeTransferFrom for ERC721
             IERC721(_auctionParams._assetContract).safeTransferFrom(msg.sender, address(this), _auctionParams._tokenId);
-        } else if(types == 2) {
+        } else if (types == 2) {
             // Transfer NFT from seller to contract use safeTransferFrom for ERC1155
-            IERC1155(_auctionParams._assetContract).safeTransferFrom(msg.sender, address(this), _auctionParams._tokenId, _auctionParams._quantity, "");
+            IERC1155(_auctionParams._assetContract).safeTransferFrom(
+                msg.sender,
+                address(this),
+                _auctionParams._tokenId,
+                _auctionParams._quantity,
+                ""
+            );
         }
-  
+
         auctions[totalAuctions] = Auction({
-            id: totalAuctions, 
+            id: totalAuctions,
             auctionCreator: payable(msg.sender),
             assetContract: _auctionParams._assetContract,
             tokenId: _auctionParams._tokenId,
+            quantity: _auctionParams._quantity,
+            currency: _auctionParams._currency,
             startPrice: _auctionParams._startPrice,
             ceilingPrice: _auctionParams._ceilingPrice,
-            startTime: _auctionParams._startTime,             
-            endTime: _auctionParams._endTime, 
+            startTime: _auctionParams._startTime,
+            endTime: _auctionParams._endTime,
             timeBufferInSeconds: _auctionParams._timeBufferInSeconds,
             highestBidder: address(0),
             highestBid: 0,
             stepAmount: _auctionParams._stepAmount,
             isPayoutCollected: false,
             isTokenCollected: false,
-            status: AuctionStatus.Created,
-            tokenType: if(types == 1) TokenType.ERC721 else TokenType.ERC1155
+            status: AuctionStatus.CREATED,
+            tokenType: types == 1 ? TokenType.ERC721 : TokenType.ERC1155
             //state ...
         });
 
         emit NewAuction(msg.sender, totalAuctions, _auctionParams._assetContract, auctions[totalAuctions]);
         totalAuctions++;
+    }
+
+    // cancel auction
+    function cancelAuction(uint256 _auctionId) external auctionExists(_auctionId) onlyCreator(_auctionId) {
+        require(!isAuctionExpired(_auctionId), "Auction is expired");
+        require(auctions[_auctionId].status != AuctionStatus.ACTIVE, "Auction is active");
+        require(auctions[_auctionId].status != AuctionStatus.CANCELLED, "Auction is cancelled");
+        auctions[_auctionId].status = AuctionStatus.CANCELLED;
+
+        // Transfer NFT back to seller
+        IERC721(auctions[_auctionId].assetContract).transferFrom(
+            address(this),
+            auctions[_auctionId].auctionCreator,
+            auctions[_auctionId].tokenId
+        );
+
+        emit CancelledAuction(msg.sender, _auctionId);
+    }
+
+    // collect auction payout
+    function collectAuctionPayout(uint256 _auctionId) external auctionExists(_auctionId) onlyCreator(_auctionId) {
+        require(isAuctionExpired(_auctionId), "Auction is not expired");
+        require(auctions[_auctionId].highestBidder != address(0), "Auction has no bidder");
+        require(!auctions[_auctionId].isPayoutCollected, "Payout already collected");
+
+        auctions[_auctionId].isPayoutCollected = true;
+
+        // Transfer payout to auction creator
+        IERC20 currency = IERC20(auctions[_auctionId].currency);
+        require(
+            currency.transferFrom(
+                auctions[_auctionId].highestBidder,
+                auctions[_auctionId].auctionCreator,
+                auctions[_auctionId].highestBid
+            ),
+            "Payout transfer failed"
+        );
+
+        emit AuctionPayoutCollected(_auctionId, msg.sender, auctions[_auctionId].highestBid);
+    }
+
+    // collect auction token
+    function collectAuctionToken(uint256 _auctionId) external auctionExists(_auctionId) {
+        require(isAuctionExpired(_auctionId), "Auction is not expired");
+        require(auctions[_auctionId].highestBidder == msg.sender, "Only winning bidder can collect token");
+        require(!auctions[_auctionId].isTokenCollected, "Token already collected");
+
+        auctions[_auctionId].isTokenCollected = true;
+
+        if (auctions[_auctionId].tokenType == TokenType.ERC1155) {
+            // Transfer NFT to winning bidder
+            IERC1155(auctions[_auctionId].assetContract).safeTransferFrom(
+                address(this),
+                msg.sender,
+                auctions[_auctionId].tokenId,
+                auctions[_auctionId].quantity,
+                ""
+            );
+        } else {
+            // Transfer NFT to winning bidder
+            IERC721(auctions[_auctionId].assetContract).transferFrom(
+                address(this),
+                msg.sender,
+                auctions[_auctionId].tokenId
+            );
+        }
+
+        emit AuctionTokenCollected(_auctionId, msg.sender);
+    }
+
+    // bid in auction
+    function bidInAuction(uint256 _auctionId, uint256 _bidAmount) external payable auctionExists(_auctionId) {
+        require(!isAuctionExpired(_auctionId), "Auction is expired");
+        require(msg.sender != auctions[_auctionId].highestBidder, "You are already highest bidder");
+        require(msg.sender != auctions[_auctionId].auctionCreator, "auction creator can not bid in auction");
+        require(isNewWinningBid(_auctionId, _bidAmount), "Bid amount should be greater than highest bid");
+
+        IERC20 currency = IERC20(auctions[_auctionId].currency);
+        require(currency.approve(address(this), _bidAmount), "You need to approve the contract to move the token");
+
+        bids[_auctionId][msg.sender] = _bidAmount; // Save bid amount
+
+        // update highest bid and bidder
+        auctions[_auctionId].highestBidder = msg.sender;
+        auctions[_auctionId].highestBid = _bidAmount;
+
+        if (auctions[_auctionId].status == AuctionStatus.CREATED) {
+            auctions[_auctionId].status = AuctionStatus.ACTIVE;
+        }
+        emit BidPlaced(_auctionId, msg.sender, _bidAmount);
     }
 
     // function
@@ -196,7 +299,7 @@ contract NFTAuction is IERC721Receiver {
         uint256 j = 0;
         for (uint256 i = _startId; i < _endId; i++) {
             // Check if auction is active and not expired
-            if (auctions[i].status == AuctionStatus.Active && !isAuctionExpired(i)) {
+            if (auctions[i].status == AuctionStatus.ACTIVE && !isAuctionExpired(i)) {
                 _auctions[j] = auctions[i];
                 j++;
             }
@@ -224,73 +327,10 @@ contract NFTAuction is IERC721Receiver {
     ) public view auctionExists(_auctionId) returns (bool) {
         return _bidAmount > auctions[_auctionId].highestBid + auctions[_auctionId].stepAmount;
     }
-
-    // Read contract
-
-    // bid in auction
-    function bidInAuction(uint256 _auctionId, uint256 _bidAmount) public auctionExists(_auctionId) {
-        require(!isAuctionExpired(_auctionId), "Auction is expired");
-        require(_bidAmount > auctions[_auctionId].startPrice, "Bid amount should be greater than start price");
-        require(msg.sender != auctions[_auctionId].highestBidder, "You are already highest bidder");
-        require(msg.sender != auctions[_auctionId].auctionCreator, "auction creator can not bid in auction");
-        require(isNewWinningBid(_auctionId, _bidAmount), "Bid amount should be greater than highest bid");
-
-        bids[_auctionId][msg.sender] = _bidAmount; // Save bid amount
-
-        // update highest bid and bidder
-        auctions[_auctionId].highestBidder = msg.sender;
-        auctions[_auctionId].highestBid = _bidAmount;
-
-        auctions[_auctionId].status = AuctionStatus.Active;
-        emit BidPlaced(_auctionId, msg.sender, _bidAmount);
-    }
-
-    // cancel auction
-    function cancelAuction(uint256 _auctionId) public auctionExists(_auctionId) onlySeller(_auctionId) {
-        require(!isAuctionExpired(_auctionId), "Auction is expired");
-        require(auctions[_auctionId].status != AuctionStatus.Active, "Auction is active");
-        require(auctions[_auctionId].status != AuctionStatus.Cancelled, "Auction is already cancelled");
-        auctions[_auctionId].status = AuctionStatus.Cancelled;
-
-        // Transfer NFT back to seller
-        IERC721(auctions[_auctionId].assetContract).transferFrom(address(this), auctions[_auctionId].auctionCreator, auctions[_auctionId].tokenId);
-
-        emit CancelledAuction(msg.sender, _auctionId);
-    }
-
-    // collect auction payout
-    function collectAuctionPayout(uint256 _auctionId) public auctionExists(_auctionId) onlySeller(_auctionId) {
-        require(isAuctionExpired(_auctionId), "Auction is not expired");
-        require(!auctions[_auctionId].isPayoutCollected, "Payout already collected");
-
-        auctions[_auctionId].isPayoutCollected = true;
-
-        // Transfer payout to auction creator
-        payable(msg.sender).transfer(auctions[_auctionId].highestBid);
-
-        emit AuctionPayoutCollected(_auctionId, msg.sender, auctions[_auctionId].highestBid);
-    }
-
-    // collect auction token
-    function collectAuctionToken(uint256 _auctionId) public auctionExists(_auctionId) {
-        require(isAuctionExpired(_auctionId), "Auction is not expired");
-        require(auctions[_auctionId].highestBidder == msg.sender, "Only winning bidder can collect token");
-        require(!auctions[_auctionId].isTokenCollected, "Token already collected");
-
-        auctions[_auctionId].isTokenCollected = true;
-
-        // Transfer NFT to winning bidder
-        IERC721(auctions[_auctionId].assetContract).transferFrom(address(this), msg.sender, auctions[_auctionId].tokenId);
-
-        emit AuctionTokenCollected(_auctionId, msg.sender);
-    }
-
 }
-
 
 /*
 // check balance and allowance
 // type NFT
 // time buffer
  */
- 

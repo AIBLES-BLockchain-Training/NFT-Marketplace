@@ -3,3 +3,4 @@
 /* eslint-disable */
 export * as erc20Sol from "./ERC20.sol";
 export { Lock__factory } from "./Lock__factory";
+export { NFTAuction__factory } from "./NFTAuction__factory";
