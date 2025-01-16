@@ -148,9 +148,10 @@ contract NFTAuction is IERC721Receiver {
         checkEnsureNFTBalance(_auctionParams._assetContract, _auctionParams._tokenId, _auctionParams._quantity, types);
         if (types == 1) {
             // Transfer NFT from seller to contract use safeTransferFrom for ERC721
+            require(_auctionParams._quantity == 1, "Quantity should be 1 for ERC721");
             IERC721(_auctionParams._assetContract).safeTransferFrom(msg.sender, address(this), _auctionParams._tokenId);
         } else if (types == 2) {
-            // Transfer NFT from seller to contract use safeTransferFrom for ERC1155
+            // Transfer NFT from seller to contract use safeTransferFrom for ERC1155    
             IERC1155(_auctionParams._assetContract).safeTransferFrom(
                 msg.sender,
                 address(this),
@@ -256,6 +257,7 @@ contract NFTAuction is IERC721Receiver {
 
     // bid in auction
     function bidInAuction(uint256 _auctionId, uint256 _bidAmount) external payable auctionExists(_auctionId) {
+        // check contract and transfer to system
         require(!isAuctionExpired(_auctionId), "Auction is expired");
         require(msg.sender != auctions[_auctionId].highestBidder, "You are already highest bidder");
         require(msg.sender != auctions[_auctionId].auctionCreator, "auction creator can not bid in auction");
@@ -333,4 +335,6 @@ contract NFTAuction is IERC721Receiver {
 // check balance and allowance
 // type NFT
 // time buffer
- */
+*/
+
+// transfer amount for system
