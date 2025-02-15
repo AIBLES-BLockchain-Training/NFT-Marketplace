@@ -608,7 +608,7 @@ export interface Listing extends BaseContract {
       expectedTotalPrice: BigNumberish
     ],
     [void],
-    "nonpayable"
+    "payable"
   >;
 
   buyerApprovals: TypedContractMethod<
@@ -779,7 +779,7 @@ export interface Listing extends BaseContract {
       expectedTotalPrice: BigNumberish
     ],
     [void],
-    "nonpayable"
+    "payable"
   >;
   getFunction(
     nameOrSignature: "buyerApprovals"

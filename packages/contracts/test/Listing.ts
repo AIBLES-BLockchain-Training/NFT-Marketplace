@@ -79,15 +79,6 @@ describe('Listing', function () {
       .withArgs(user1.address);
   });
 
-  it('Should revert if the currency address is invalid', async function () {
-    const { listing, admin } = await loadFixture(setup);
-
-    const fee = 500;
-    await expect(listing.connect(admin)['setCurrencyFee'](ethers.ZeroAddress, fee)).to.be.revertedWith(
-      'Invalid currency address',
-    );
-  });
-
   it('Should revert if the fee is out of range', async function () {
     const { listing, mockToken, admin } = await loadFixture(setup);
 
@@ -236,6 +227,35 @@ describe('Listing', function () {
     //   await expect(listing.connect(user1)['createListing'](listingParams))
     //   .to.be.revertedWith("Unsupported token type");
     // });
+    it('Should revert if invalid quantity', async function () {
+      const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
+
+      await listing.connect(admin)['setCurrencyFee'](mockToken.target, 500);
+
+      const block = await ethers.provider.getBlock('latest');
+      if (!block) {
+        throw new Error('Failed to get block');
+      }
+      const currentTimestamp = block.timestamp + 1000;
+
+      const listingParams = {
+        assetContract: await mockERC721.getAddress(),
+        tokenId: 0,
+        quantity: 2,
+        currency: ethers.ZeroAddress,
+        pricePerToken: ethers.parseUnits('1', 18),
+        startTimestamp: currentTimestamp,
+        endTimestamp: currentTimestamp + 604800,
+        reserved: false,
+      };
+
+      const listingId = await listing['listingCounter']();
+
+      await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+      await expect(
+        listing.connect(user1)['createListing'](listingParams))
+        .to.be.revertedWith('ERC721 quantity must be 1');
+    });
 
     it('Should revert for invalid parameters', async function () {
       const { listing, mockToken, mockERC1155, admin, user1 } = await loadFixture(setup);
@@ -1184,6 +1204,156 @@ describe('Listing', function () {
       expect(afterSellerBalance).to.equal(beforeSellerBalance + ethers.parseUnits('0.95', 18));
     });
 
+    it('Should allow valid purchase for ERC721 listing using ETH', async function () {
+      const { listing, mockERC721, admin, user1, user3 } = await loadFixture(setup);
+
+      await listing.connect(admin)['setCurrencyFee'](ethers.ZeroAddress, 500);
+
+      const block = await ethers.provider.getBlock('latest');
+      if (!block) {
+        throw new Error('Failed to get block');
+      }
+      const currentTimestamp = block.timestamp + 1000;
+    
+      const listingParams = {
+        assetContract: await mockERC721.getAddress(),
+        tokenId: 0,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        pricePerToken: ethers.parseUnits('1', 18),
+        startTimestamp: currentTimestamp,
+        endTimestamp: currentTimestamp + 604800,
+        reserved: false,
+      };
+    
+      const listingId = await listing['listingCounter']();
+    
+      await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+      await listing.connect(user1)['createListing'](listingParams);
+
+      await listing
+      .connect(user1)
+      ['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
+
+      const beforeSellerBalance = await ethers.provider.getBalance(user1.address);
+      const beforeBuyerBalance = await ethers.provider.getBalance(user3.address);
+    
+      const tx = await listing.connect(user3)['buyFromListing'](
+        listingId,
+        user3.address,
+        1,
+        ethers.ZeroAddress,
+        ethers.parseUnits('1', 18),
+        { value: ethers.parseUnits('1', 18) }
+      );
+    
+      await expect(tx)
+        .to.emit(listing, 'NFTPurchased')
+        .withArgs(listingId, user3.address, 1, ethers.parseUnits('1', 18));
+    
+      const updatedListing = await listing['listings'](listingId);
+      expect(updatedListing.quantity).to.equal(0);
+      expect(updatedListing.status).to.equal(2);
+    
+      const user3Balance = await mockERC721['balanceOf'](user3.address);
+      expect(user3Balance).to.equal(2);
+    
+      const accumulatedFee = await listing['accumulatedFees'](ethers.ZeroAddress);
+      expect(accumulatedFee).to.equal(ethers.parseUnits('0.05', 18));
+    
+      const afterSellerBalance = await ethers.provider.getBalance(user1.address);
+      expect(afterSellerBalance).to.be.above(beforeSellerBalance);
+    });
+    
+    it('Should revert if invalid ETH amount', async function () {
+      const { listing, mockERC721, admin, user1, user3 } = await loadFixture(setup);
+
+      await listing.connect(admin)['setCurrencyFee'](ethers.ZeroAddress, 500);
+
+      const block = await ethers.provider.getBlock('latest');
+      if (!block) {
+        throw new Error('Failed to get block');
+      }
+      const currentTimestamp = block.timestamp + 1000;
+    
+      const listingParams = {
+        assetContract: await mockERC721.getAddress(),
+        tokenId: 0,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        pricePerToken: ethers.parseUnits('1', 18),
+        startTimestamp: currentTimestamp,
+        endTimestamp: currentTimestamp + 604800,
+        reserved: false,
+      };
+    
+      const listingId = await listing['listingCounter']();
+    
+      await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+      await listing.connect(user1)['createListing'](listingParams);
+
+      await listing
+      .connect(user1)
+      ['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
+
+      const beforeSellerBalance = await ethers.provider.getBalance(user1.address);
+      const beforeBuyerBalance = await ethers.provider.getBalance(user3.address);
+    
+      expect(listing.connect(user3)['buyFromListing'](
+        listingId,
+        user3.address,
+        1,
+        ethers.ZeroAddress,
+        ethers.parseUnits('1', 18),
+        { value: ethers.parseUnits('0.9', 18) }
+      )).to.be.revertedWith("Incorrect ETH amount sent");
+    });
+
+    it('Should revert if msg.value > 0 for ERC20 transaction', async function () {
+      const { listing, mockERC1155, admin, user1, user3, mockToken } = await loadFixture(setup);
+
+      await listing.connect(admin)['setCurrencyFee'](mockToken.target, 500);
+
+      const block = await ethers.provider.getBlock('latest');
+      if (!block) {
+        throw new Error('Failed to get block');
+      }
+      const currentTimestamp = block.timestamp + 1000;
+
+      const listingParams = {
+        assetContract: await mockERC1155.getAddress(),
+        tokenId: 0,
+        quantity: 10,
+        currency: ethers.ZeroAddress,
+        pricePerToken: ethers.parseUnits('1', 18),
+        startTimestamp: currentTimestamp,
+        endTimestamp: currentTimestamp + 604800,
+        reserved: false,
+      };
+
+      const listingId = await listing['listingCounter']();
+
+      await mockERC1155.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+      await listing.connect(user1)['createListing'](listingParams);
+
+      await listing
+        .connect(user1)
+        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+
+      await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
+
+      const beforeSellerBalance = await mockToken['balanceOf'](user1.address);
+
+      expect(listing.connect(user3)['buyFromListing'](
+        listingId,
+        user3.address,
+        1,
+        await mockToken.getAddress(),
+        ethers.parseUnits('1', 18),
+        { value: ethers.parseUnits('0.9', 18) }
+      )).to.be.revertedWith("msg.value must be 0 for ERC20 transactions");
+    });  
+    
     it('Should not buy listing with non-exist listing id', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
 
@@ -2284,6 +2454,59 @@ describe('Listing', function () {
       await listing.connect(admin)['withdrawFees'](await mockToken.getAddress());
       const afterAdminBalance = await mockToken['balanceOf'](admin.address);
       expect(afterAdminBalance).to.equal(beforeAdminBalance + ethers.parseUnits('0.05', 18));
+    });
+
+    it('Should with draw ETH fee correctly', async function () {
+      const { listing, mockERC721, admin, user1, user3 } = await loadFixture(setup);
+
+      await listing.connect(admin)['setCurrencyFee'](ethers.ZeroAddress, 500);
+
+      const block = await ethers.provider.getBlock('latest');
+      if (!block) {
+        throw new Error('Failed to get block');
+      }
+      const currentTimestamp = block.timestamp + 1000;
+    
+      const listingParams = {
+        assetContract: await mockERC721.getAddress(),
+        tokenId: 0,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        pricePerToken: ethers.parseUnits('1', 18),
+        startTimestamp: currentTimestamp,
+        endTimestamp: currentTimestamp + 604800,
+        reserved: false,
+      };
+    
+      const listingId = await listing['listingCounter']();
+    
+      await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+      await listing.connect(user1)['createListing'](listingParams);
+
+      await listing
+      .connect(user1)
+      ['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
+
+      const beforeAdminBalance = await ethers.provider.getBalance(admin);
+
+      await listing.connect(user3)['buyFromListing'](
+        listingId,
+        user3.address,
+        1,
+        ethers.ZeroAddress,
+        ethers.parseUnits('1', 18),
+        { value: ethers.parseUnits('1', 18) }
+      );
+
+      const transaction = await listing.connect(admin)['withdrawFees'](ethers.ZeroAddress);
+      const txReceipt = await transaction.wait();
+      if (txReceipt === null) {
+        throw new Error("Transaction receipt is null");
+      }
+      const feeUsed = ethers.toBigInt(txReceipt.gasPrice*(txReceipt.cumulativeGasUsed));
+      const afterAdminBalance = await ethers.provider.getBalance(admin);
+      console.log(feeUsed);
+      expect(afterAdminBalance).to.equal(beforeAdminBalance + ethers.parseUnits('0.05', 18) - feeUsed);
     });
 
     it('Should revert if non-admin with draw fee ', async function () {

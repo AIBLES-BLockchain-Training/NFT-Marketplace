@@ -95,6 +95,11 @@ contract Listing is Ownable {
         require(params.startTimestamp < params.endTimestamp, "Invalid timestamps");
         require(params.pricePerToken > 0, "Price per token must be greater than zero");
         require(params.startTimestamp >= block.timestamp, "Start time must be in the future");
+
+        TokenType tokenType = getTokenType(params.assetContract);
+        if (tokenType == TokenType.ERC721) {
+            require(params.quantity == 1, "ERC721 quantity must be 1");
+        }
         _;
     }
 
@@ -110,7 +115,6 @@ contract Listing is Ownable {
     }
 
     function setCurrencyFee(address currency, uint256 fee) external onlyOwner {
-        require(currency != address(0), "Invalid currency address");
         require(fee > 0 && fee <= 10000, "Fee must be between 0 and 10000 (100%)");
         currencyFees[currency] = fee;
 
@@ -161,10 +165,10 @@ contract Listing is Ownable {
         IERC165 contractInstance = IERC165(assetContract);
         if (contractInstance.supportsInterface(0x80ac58cd)) {
             return TokenType.ERC721;
-        }
-        if (contractInstance.supportsInterface(0xd9b67a26)) {
+        } else if (contractInstance.supportsInterface(0xd9b67a26)) {
             return TokenType.ERC1155;
         }
+        revert("Token type not supported");
     }
 
     function updateListing(
@@ -249,7 +253,7 @@ contract Listing is Ownable {
         uint256 quantity,
         address currency,
         uint256 expectedTotalPrice
-    ) external listingExists(listingId) {
+    ) external payable listingExists(listingId) {
         NFTListing storage listing = listings[listingId];
 
         require(buyFor != address(0), "Invalid recipient address");
@@ -260,7 +264,7 @@ contract Listing is Ownable {
         uint256 priceInCurrency = currencyApprovals[listingId][currency];
         require(priceInCurrency > 0, "Currency not approved for this listing");
 
-        uint256 totalPrice = quantity * listing.pricePerToken;
+        uint256 totalPrice = quantity * priceInCurrency;
         require(expectedTotalPrice == totalPrice, "Incorrect total price");
 
         checkSellerTokenOwnership(
@@ -278,6 +282,23 @@ contract Listing is Ownable {
 
         ensureCanReceiveToken(buyFor, listing.tokenId, quantity, listing.tokenType);
 
+        uint256 fee = (totalPrice * getCurrencyFee(currency)) / 10000;
+        uint256 sellerAmount = totalPrice - fee;
+
+        if (currency == address(0)) {
+            require(msg.value == totalPrice, "Incorrect ETH amount sent");
+
+            accumulatedFees[currency] += fee;
+
+            payable(listing.owner).transfer(sellerAmount); 
+            payable(address(this)).transfer(fee);
+        } else {
+            require(msg.value == 0, "msg.value must be 0 for ERC20 transactions");
+            accumulatedFees[currency] += fee;
+            require(IERC20(currency).transferFrom(msg.sender, listing.owner, sellerAmount), "Payment transfer failed");
+            require(IERC20(currency).transferFrom(msg.sender, address(this), fee), "Fee transfer failed");
+        }
+
         listing.quantity -= quantity;
 
         if (listing.tokenType == TokenType.ERC721) {
@@ -286,14 +307,6 @@ contract Listing is Ownable {
         if (listing.tokenType == TokenType.ERC1155) {
             IERC1155(listing.assetContract).safeTransferFrom(listing.owner, buyFor, listing.tokenId, quantity, "");
         }
-
-        uint256 fee = (totalPrice * getCurrencyFee(currency)) / 10000;
-        uint256 sellerAmount = totalPrice - fee;
-
-        accumulatedFees[currency] += fee;
-
-        require(IERC20(currency).transferFrom(msg.sender, listing.owner, sellerAmount), "Payment transfer failed");
-        require(IERC20(currency).transferFrom(msg.sender, address(this), fee), "Fee transfer failed");
 
         emit NFTPurchased(listingId, buyFor, quantity, totalPrice);
 
@@ -388,16 +401,24 @@ contract Listing is Ownable {
     }
 
     function checkBuyerAllowance(address currency, uint256 totalPrice) internal view {
-        require(
-            IERC20(currency).allowance(msg.sender, address(this)) >= totalPrice,
-            "Buyer has not approved enough currency"
-        );
+        if (currency != address(0)) {
+            uint256 allowance = IERC20(currency).allowance(msg.sender, address(this));
+            require(allowance >= totalPrice, "Buyer has not approved enough currency");
+        }
     }
 
     function checkBuyerBalance(address buyer, address currency, uint256 totalPrice) public view {
-        uint256 availableBalance = IERC20(currency).balanceOf(buyer);
+        uint256 availableBalance;
+
+        if (currency == address(0)) {
+            availableBalance = buyer.balance; 
+        } else {
+            availableBalance = IERC20(currency).balanceOf(buyer); 
+        }
+
         require(availableBalance >= totalPrice, "Insufficient balance");
     }
+
 
     function totalListings() external view returns (uint256) {
         return listingCounter;
@@ -460,11 +481,20 @@ contract Listing is Ownable {
 
     function withdrawFees(address currency) external onlyOwner {
         uint256 amount = accumulatedFees[currency];
+     
         require(amount > 0, "No fees to withdraw");
         accumulatedFees[currency] = 0;
 
-        require(IERC20(currency).transfer(msg.sender, amount), "Fee withdrawal failed");
+        if (currency == address(0)) {
+            (bool success, ) = msg.sender.call{value: amount}("");
+            require(success, "ETH withdrawal failed");
+        } else {
+            require(IERC20(currency).transfer(msg.sender, amount), "Fee withdrawal failed");
+        }
 
         emit FeeWithdrawn(msg.sender, currency, amount);
     }
+
+    receive() external payable {}
+
 }

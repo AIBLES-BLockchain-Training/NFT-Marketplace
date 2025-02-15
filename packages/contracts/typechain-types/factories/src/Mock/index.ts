@@ -3,4 +3,5 @@
 /* eslint-disable */
 export { MockERC1155__factory } from "./MockERC1155__factory";
 export { MockERC721__factory } from "./MockERC721__factory";
+export { MockReceiver__factory } from "./MockReceiver__factory";
 export { MockToken__factory } from "./MockToken__factory";

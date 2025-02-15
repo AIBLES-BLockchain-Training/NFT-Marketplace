@@ -3,4 +3,5 @@
 /* eslint-disable */
 export type { MockERC1155 } from "./MockERC1155";
 export type { MockERC721 } from "./MockERC721";
+export type { MockReceiver } from "./MockReceiver";
 export type { MockToken } from "./MockToken";

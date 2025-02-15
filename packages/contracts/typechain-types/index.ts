@@ -50,5 +50,7 @@ export type { MockERC1155 } from "./src/Mock/MockERC1155";
 export { MockERC1155__factory } from "./factories/src/Mock/MockERC1155__factory";
 export type { MockERC721 } from "./src/Mock/MockERC721";
 export { MockERC721__factory } from "./factories/src/Mock/MockERC721__factory";
+export type { MockReceiver } from "./src/Mock/MockReceiver";
+export { MockReceiver__factory } from "./factories/src/Mock/MockReceiver__factory";
 export type { MockToken } from "./src/Mock/MockToken";
 export { MockToken__factory } from "./factories/src/Mock/MockToken__factory";
