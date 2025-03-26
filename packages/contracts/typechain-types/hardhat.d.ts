@@ -14,170 +14,152 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
-      name: "IERC1155Errors",
+      name: "AccessControl",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC1155Errors__factory>;
+    ): Promise<Contracts.AccessControl__factory>;
     getContractFactory(
-      name: "IERC20Errors",
+      name: "IAccessControl",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC20Errors__factory>;
+    ): Promise<Contracts.IAccessControl__factory>;
     getContractFactory(
-      name: "IERC721Errors",
+      name: "Ownable",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC721Errors__factory>;
+    ): Promise<Contracts.Ownable__factory>;
     getContractFactory(
-      name: "ERC20",
+      name: "IERC1155",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ERC20__factory>;
+    ): Promise<Contracts.IERC1155__factory>;
     getContractFactory(
-      name: "ERC20Burnable",
+      name: "IERC721",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ERC20Burnable__factory>;
+    ): Promise<Contracts.IERC721__factory>;
     getContractFactory(
-      name: "IERC20Metadata",
+      name: "ERC165",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC20Metadata__factory>;
+    ): Promise<Contracts.ERC165__factory>;
     getContractFactory(
-      name: "IERC20",
+      name: "IERC165",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC20__factory>;
+    ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
-      name: "MockERC20",
+      name: "Permission",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.MockERC20__factory>;
-    getContractFactory(
-      name: "Lock",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.Lock__factory>;
+    ): Promise<Contracts.Permission__factory>;
 
     getContractAt(
-      name: "IERC1155Errors",
+      name: "AccessControl",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IERC1155Errors>;
+    ): Promise<Contracts.AccessControl>;
     getContractAt(
-      name: "IERC20Errors",
+      name: "IAccessControl",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IERC20Errors>;
+    ): Promise<Contracts.IAccessControl>;
     getContractAt(
-      name: "IERC721Errors",
+      name: "Ownable",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IERC721Errors>;
+    ): Promise<Contracts.Ownable>;
     getContractAt(
-      name: "ERC20",
+      name: "IERC1155",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.ERC20>;
+    ): Promise<Contracts.IERC1155>;
     getContractAt(
-      name: "ERC20Burnable",
+      name: "IERC721",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.ERC20Burnable>;
+    ): Promise<Contracts.IERC721>;
     getContractAt(
-      name: "IERC20Metadata",
+      name: "ERC165",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IERC20Metadata>;
+    ): Promise<Contracts.ERC165>;
     getContractAt(
-      name: "IERC20",
+      name: "IERC165",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IERC20>;
+    ): Promise<Contracts.IERC165>;
     getContractAt(
-      name: "MockERC20",
+      name: "Permission",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.MockERC20>;
-    getContractAt(
-      name: "Lock",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.Lock>;
+    ): Promise<Contracts.Permission>;
 
     deployContract(
-      name: "IERC1155Errors",
+      name: "AccessControl",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC1155Errors>;
+    ): Promise<Contracts.AccessControl>;
     deployContract(
-      name: "IERC20Errors",
+      name: "IAccessControl",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20Errors>;
+    ): Promise<Contracts.IAccessControl>;
     deployContract(
-      name: "IERC721Errors",
+      name: "Ownable",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC721Errors>;
+    ): Promise<Contracts.Ownable>;
     deployContract(
-      name: "ERC20",
+      name: "IERC1155",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ERC20>;
+    ): Promise<Contracts.IERC1155>;
     deployContract(
-      name: "ERC20Burnable",
+      name: "IERC721",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ERC20Burnable>;
+    ): Promise<Contracts.IERC721>;
     deployContract(
-      name: "IERC20Metadata",
+      name: "ERC165",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20Metadata>;
+    ): Promise<Contracts.ERC165>;
     deployContract(
-      name: "IERC20",
+      name: "IERC165",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20>;
+    ): Promise<Contracts.IERC165>;
     deployContract(
-      name: "MockERC20",
+      name: "Permission",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.MockERC20>;
-    deployContract(
-      name: "Lock",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.Lock>;
+    ): Promise<Contracts.Permission>;
 
     deployContract(
-      name: "IERC1155Errors",
+      name: "AccessControl",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC1155Errors>;
+    ): Promise<Contracts.AccessControl>;
     deployContract(
-      name: "IERC20Errors",
+      name: "IAccessControl",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20Errors>;
+    ): Promise<Contracts.IAccessControl>;
     deployContract(
-      name: "IERC721Errors",
+      name: "Ownable",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC721Errors>;
+    ): Promise<Contracts.Ownable>;
     deployContract(
-      name: "ERC20",
+      name: "IERC1155",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ERC20>;
+    ): Promise<Contracts.IERC1155>;
     deployContract(
-      name: "ERC20Burnable",
+      name: "IERC721",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ERC20Burnable>;
+    ): Promise<Contracts.IERC721>;
     deployContract(
-      name: "IERC20Metadata",
+      name: "ERC165",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20Metadata>;
+    ): Promise<Contracts.ERC165>;
     deployContract(
-      name: "IERC20",
+      name: "IERC165",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20>;
+    ): Promise<Contracts.IERC165>;
     deployContract(
-      name: "MockERC20",
+      name: "Permission",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.MockERC20>;
-    deployContract(
-      name: "Lock",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.Lock>;
+    ): Promise<Contracts.Permission>;
 
     // default types
     getContractFactory(
