@@ -26,55 +26,64 @@ import type {
 export interface PermissionInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "AUCTION_ROLE"
       | "DEFAULT_ADMIN_ROLE"
+      | "LISTING_ROLE"
       | "MANAGE_ASSET_ROLE"
       | "MANAGE_CURRENCY_ROLE"
-      | "MANAGE_REQUESTS_ROLE"
       | "MANAGE_USER_ROLE"
+      | "NFT_ROLE"
+      | "OFFER_ROLE"
       | "addCurrency"
-      | "addUser"
-      | "approveRequests"
+      | "assignAuctionRole"
+      | "assignListingRole"
+      | "assignNFTRole"
+      | "assignOfferRole"
       | "getRoleAdmin"
       | "grantRole"
       | "hasRole"
-      | "onlyWhitelistedNFT"
-      | "onlyWhitelistedUser"
-      | "pendingRequests"
-      | "rejectRequests"
       | "removeCurrency"
-      | "removeUser"
-      | "removeWhitelistedNFT"
       | "renounceRole"
-      | "requestNFTApproval"
-      | "requestUserApproval"
+      | "requestNFTRole"
+      | "requestUserRoles"
+      | "revokeAuctionRole"
+      | "revokeListingRole"
+      | "revokeNFTRole"
+      | "revokeOfferRole"
       | "revokeRole"
-      | "setOnlyWhitelistedNFT"
-      | "setOnlyWhitelistedUser"
       | "supportedCurrencies"
       | "supportsInterface"
-      | "validUsers"
-      | "whitelistNFT"
-      | "whitelistedNFTs"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "AuctionRoleAssigned"
+      | "AuctionRoleRevoked"
       | "CurrencyAdded"
       | "CurrencyRemoved"
-      | "NFTRemoved"
-      | "NFTWhitelisted"
-      | "RequestApproval"
-      | "RequestApproved"
-      | "RequestRejected"
+      | "ListingRoleAssigned"
+      | "ListingRoleRevoked"
+      | "NFTRoleAssigned"
+      | "NFTRoleRequested"
+      | "NFTRoleRevoked"
+      | "OfferRoleAssigned"
+      | "OfferRoleRevoked"
       | "RoleAdminChanged"
       | "RoleGranted"
+      | "RoleRequested"
       | "RoleRevoked"
-      | "UserAdded"
-      | "UserRemoved"
   ): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "AUCTION_ROLE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "DEFAULT_ADMIN_ROLE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "LISTING_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -86,23 +95,32 @@ export interface PermissionInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "MANAGE_REQUESTS_ROLE",
+    functionFragment: "MANAGE_USER_ROLE",
     values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "NFT_ROLE", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "MANAGE_USER_ROLE",
+    functionFragment: "OFFER_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "addCurrency",
-    values: [AddressLike]
+    values: [AddressLike[]]
   ): string;
   encodeFunctionData(
-    functionFragment: "addUser",
-    values: [AddressLike]
+    functionFragment: "assignAuctionRole",
+    values: [AddressLike[]]
   ): string;
   encodeFunctionData(
-    functionFragment: "approveRequests",
+    functionFragment: "assignListingRole",
+    values: [AddressLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "assignNFTRole",
+    values: [AddressLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "assignOfferRole",
     values: [AddressLike[]]
   ): string;
   encodeFunctionData(
@@ -118,56 +136,40 @@ export interface PermissionInterface extends Interface {
     values: [BytesLike, AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "onlyWhitelistedNFT",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "onlyWhitelistedUser",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "pendingRequests",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "rejectRequests",
-    values: [AddressLike[]]
-  ): string;
-  encodeFunctionData(
     functionFragment: "removeCurrency",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "removeUser",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "removeWhitelistedNFT",
-    values: [AddressLike]
+    values: [AddressLike[]]
   ): string;
   encodeFunctionData(
     functionFragment: "renounceRole",
     values: [BytesLike, AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "requestNFTApproval",
+    functionFragment: "requestNFTRole",
     values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "requestUserApproval",
-    values?: undefined
+    functionFragment: "requestUserRoles",
+    values: [BytesLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "revokeAuctionRole",
+    values: [AddressLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "revokeListingRole",
+    values: [AddressLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "revokeNFTRole",
+    values: [AddressLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "revokeOfferRole",
+    values: [AddressLike[]]
   ): string;
   encodeFunctionData(
     functionFragment: "revokeRole",
     values: [BytesLike, AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setOnlyWhitelistedNFT",
-    values: [boolean]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setOnlyWhitelistedUser",
-    values: [boolean]
   ): string;
   encodeFunctionData(
     functionFragment: "supportedCurrencies",
@@ -177,21 +179,17 @@ export interface PermissionInterface extends Interface {
     functionFragment: "supportsInterface",
     values: [BytesLike]
   ): string;
-  encodeFunctionData(
-    functionFragment: "validUsers",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "whitelistNFT",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "whitelistedNFTs",
-    values: [AddressLike]
-  ): string;
 
   decodeFunctionResult(
+    functionFragment: "AUCTION_ROLE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "DEFAULT_ADMIN_ROLE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "LISTING_ROLE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -203,20 +201,29 @@ export interface PermissionInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "MANAGE_REQUESTS_ROLE",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "MANAGE_USER_ROLE",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "NFT_ROLE", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "OFFER_ROLE", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "addCurrency",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "addUser", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "approveRequests",
+    functionFragment: "assignAuctionRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "assignListingRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "assignNFTRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "assignOfferRole",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -226,28 +233,7 @@ export interface PermissionInterface extends Interface {
   decodeFunctionResult(functionFragment: "grantRole", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "hasRole", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "onlyWhitelistedNFT",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "onlyWhitelistedUser",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "pendingRequests",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "rejectRequests",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "removeCurrency",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "removeUser", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "removeWhitelistedNFT",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -255,22 +241,30 @@ export interface PermissionInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "requestNFTApproval",
+    functionFragment: "requestNFTRole",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "requestUserApproval",
+    functionFragment: "requestUserRoles",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "revokeAuctionRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "revokeListingRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "revokeNFTRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "revokeOfferRole",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "revokeRole", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "setOnlyWhitelistedNFT",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "setOnlyWhitelistedUser",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "supportedCurrencies",
     data: BytesLike
@@ -279,15 +273,30 @@ export interface PermissionInterface extends Interface {
     functionFragment: "supportsInterface",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "validUsers", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "whitelistNFT",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "whitelistedNFTs",
-    data: BytesLike
-  ): Result;
+}
+
+export namespace AuctionRoleAssignedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace AuctionRoleRevokedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace CurrencyAddedEvent {
@@ -314,7 +323,31 @@ export namespace CurrencyRemovedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace NFTRemovedEvent {
+export namespace ListingRoleAssignedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ListingRoleRevokedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
+  export interface OutputObject {
+    account: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace NFTRoleAssignedEvent {
   export type InputTuple = [nft: AddressLike];
   export type OutputTuple = [nft: string];
   export interface OutputObject {
@@ -326,7 +359,25 @@ export namespace NFTRemovedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace NFTWhitelistedEvent {
+export namespace NFTRoleRequestedEvent {
+  export type InputTuple = [
+    nft: AddressLike,
+    tokenId: BigNumberish,
+    requester: AddressLike
+  ];
+  export type OutputTuple = [nft: string, tokenId: bigint, requester: string];
+  export interface OutputObject {
+    nft: string;
+    tokenId: bigint;
+    requester: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace NFTRoleRevokedEvent {
   export type InputTuple = [nft: AddressLike];
   export type OutputTuple = [nft: string];
   export interface OutputObject {
@@ -338,12 +389,11 @@ export namespace NFTWhitelistedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace RequestApprovalEvent {
-  export type InputTuple = [target: AddressLike, requestType: BigNumberish];
-  export type OutputTuple = [target: string, requestType: bigint];
+export namespace OfferRoleAssignedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
   export interface OutputObject {
-    target: string;
-    requestType: bigint;
+    account: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -351,25 +401,11 @@ export namespace RequestApprovalEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace RequestApprovedEvent {
-  export type InputTuple = [target: AddressLike, requestType: BigNumberish];
-  export type OutputTuple = [target: string, requestType: bigint];
+export namespace OfferRoleRevokedEvent {
+  export type InputTuple = [account: AddressLike];
+  export type OutputTuple = [account: string];
   export interface OutputObject {
-    target: string;
-    requestType: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace RequestRejectedEvent {
-  export type InputTuple = [target: AddressLike, requestType: BigNumberish];
-  export type OutputTuple = [target: string, requestType: bigint];
-  export interface OutputObject {
-    target: string;
-    requestType: bigint;
+    account: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -417,6 +453,19 @@ export namespace RoleGrantedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace RoleRequestedEvent {
+  export type InputTuple = [requester: AddressLike, role: BytesLike];
+  export type OutputTuple = [requester: string, role: string];
+  export interface OutputObject {
+    requester: string;
+    role: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace RoleRevokedEvent {
   export type InputTuple = [
     role: BytesLike,
@@ -428,30 +477,6 @@ export namespace RoleRevokedEvent {
     role: string;
     account: string;
     sender: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace UserAddedEvent {
-  export type InputTuple = [user: AddressLike];
-  export type OutputTuple = [user: string];
-  export interface OutputObject {
-    user: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace UserRemovedEvent {
-  export type InputTuple = [user: AddressLike];
-  export type OutputTuple = [user: string];
-  export interface OutputObject {
-    user: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -502,26 +527,48 @@ export interface Permission extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  AUCTION_ROLE: TypedContractMethod<[], [string], "view">;
+
   DEFAULT_ADMIN_ROLE: TypedContractMethod<[], [string], "view">;
+
+  LISTING_ROLE: TypedContractMethod<[], [string], "view">;
 
   MANAGE_ASSET_ROLE: TypedContractMethod<[], [string], "view">;
 
   MANAGE_CURRENCY_ROLE: TypedContractMethod<[], [string], "view">;
 
-  MANAGE_REQUESTS_ROLE: TypedContractMethod<[], [string], "view">;
-
   MANAGE_USER_ROLE: TypedContractMethod<[], [string], "view">;
 
+  NFT_ROLE: TypedContractMethod<[], [string], "view">;
+
+  OFFER_ROLE: TypedContractMethod<[], [string], "view">;
+
   addCurrency: TypedContractMethod<
-    [_currency: AddressLike],
+    [_currencies: AddressLike[]],
     [void],
     "nonpayable"
   >;
 
-  addUser: TypedContractMethod<[_user: AddressLike], [void], "nonpayable">;
+  assignAuctionRole: TypedContractMethod<
+    [_accounts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
 
-  approveRequests: TypedContractMethod<
-    [targets: AddressLike[]],
+  assignListingRole: TypedContractMethod<
+    [_accounts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  assignNFTRole: TypedContractMethod<
+    [_nfts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  assignOfferRole: TypedContractMethod<
+    [_accounts: AddressLike[]],
     [void],
     "nonpayable"
   >;
@@ -540,28 +587,8 @@ export interface Permission extends BaseContract {
     "view"
   >;
 
-  onlyWhitelistedNFT: TypedContractMethod<[], [boolean], "view">;
-
-  onlyWhitelistedUser: TypedContractMethod<[], [boolean], "view">;
-
-  pendingRequests: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
-
-  rejectRequests: TypedContractMethod<
-    [targets: AddressLike[]],
-    [void],
-    "nonpayable"
-  >;
-
   removeCurrency: TypedContractMethod<
-    [_currency: AddressLike],
-    [void],
-    "nonpayable"
-  >;
-
-  removeUser: TypedContractMethod<[_user: AddressLike], [void], "nonpayable">;
-
-  removeWhitelistedNFT: TypedContractMethod<
-    [_nft: AddressLike],
+    [_currencies: AddressLike[]],
     [void],
     "nonpayable"
   >;
@@ -572,28 +599,44 @@ export interface Permission extends BaseContract {
     "nonpayable"
   >;
 
-  requestNFTApproval: TypedContractMethod<
+  requestNFTRole: TypedContractMethod<
     [nftContract: AddressLike, tokenId: BigNumberish],
     [void],
     "nonpayable"
   >;
 
-  requestUserApproval: TypedContractMethod<[], [void], "nonpayable">;
+  requestUserRoles: TypedContractMethod<
+    [roles: BytesLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  revokeAuctionRole: TypedContractMethod<
+    [_accounts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  revokeListingRole: TypedContractMethod<
+    [_accounts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  revokeNFTRole: TypedContractMethod<
+    [_nfts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  revokeOfferRole: TypedContractMethod<
+    [_accounts: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
 
   revokeRole: TypedContractMethod<
     [role: BytesLike, account: AddressLike],
-    [void],
-    "nonpayable"
-  >;
-
-  setOnlyWhitelistedNFT: TypedContractMethod<
-    [_status: boolean],
-    [void],
-    "nonpayable"
-  >;
-
-  setOnlyWhitelistedUser: TypedContractMethod<
-    [_status: boolean],
     [void],
     "nonpayable"
   >;
@@ -610,18 +653,18 @@ export interface Permission extends BaseContract {
     "view"
   >;
 
-  validUsers: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-
-  whitelistNFT: TypedContractMethod<[_nft: AddressLike], [void], "nonpayable">;
-
-  whitelistedNFTs: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
+    nameOrSignature: "AUCTION_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "DEFAULT_ADMIN_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "LISTING_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "MANAGE_ASSET_ROLE"
@@ -630,20 +673,29 @@ export interface Permission extends BaseContract {
     nameOrSignature: "MANAGE_CURRENCY_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "MANAGE_REQUESTS_ROLE"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
     nameOrSignature: "MANAGE_USER_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "NFT_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "OFFER_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "addCurrency"
-  ): TypedContractMethod<[_currency: AddressLike], [void], "nonpayable">;
+  ): TypedContractMethod<[_currencies: AddressLike[]], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "addUser"
-  ): TypedContractMethod<[_user: AddressLike], [void], "nonpayable">;
+    nameOrSignature: "assignAuctionRole"
+  ): TypedContractMethod<[_accounts: AddressLike[]], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "approveRequests"
-  ): TypedContractMethod<[targets: AddressLike[]], [void], "nonpayable">;
+    nameOrSignature: "assignListingRole"
+  ): TypedContractMethod<[_accounts: AddressLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "assignNFTRole"
+  ): TypedContractMethod<[_nfts: AddressLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "assignOfferRole"
+  ): TypedContractMethod<[_accounts: AddressLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "getRoleAdmin"
   ): TypedContractMethod<[role: BytesLike], [string], "view">;
@@ -662,26 +714,8 @@ export interface Permission extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "onlyWhitelistedNFT"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "onlyWhitelistedUser"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "pendingRequests"
-  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "rejectRequests"
-  ): TypedContractMethod<[targets: AddressLike[]], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "removeCurrency"
-  ): TypedContractMethod<[_currency: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "removeUser"
-  ): TypedContractMethod<[_user: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "removeWhitelistedNFT"
-  ): TypedContractMethod<[_nft: AddressLike], [void], "nonpayable">;
+  ): TypedContractMethod<[_currencies: AddressLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "renounceRole"
   ): TypedContractMethod<
@@ -690,15 +724,27 @@ export interface Permission extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "requestNFTApproval"
+    nameOrSignature: "requestNFTRole"
   ): TypedContractMethod<
     [nftContract: AddressLike, tokenId: BigNumberish],
     [void],
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "requestUserApproval"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+    nameOrSignature: "requestUserRoles"
+  ): TypedContractMethod<[roles: BytesLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "revokeAuctionRole"
+  ): TypedContractMethod<[_accounts: AddressLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "revokeListingRole"
+  ): TypedContractMethod<[_accounts: AddressLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "revokeNFTRole"
+  ): TypedContractMethod<[_nfts: AddressLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "revokeOfferRole"
+  ): TypedContractMethod<[_accounts: AddressLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "revokeRole"
   ): TypedContractMethod<
@@ -707,27 +753,26 @@ export interface Permission extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "setOnlyWhitelistedNFT"
-  ): TypedContractMethod<[_status: boolean], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "setOnlyWhitelistedUser"
-  ): TypedContractMethod<[_status: boolean], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "supportedCurrencies"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "supportsInterface"
   ): TypedContractMethod<[interfaceId: BytesLike], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "validUsers"
-  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "whitelistNFT"
-  ): TypedContractMethod<[_nft: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "whitelistedNFTs"
-  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
+  getEvent(
+    key: "AuctionRoleAssigned"
+  ): TypedContractEvent<
+    AuctionRoleAssignedEvent.InputTuple,
+    AuctionRoleAssignedEvent.OutputTuple,
+    AuctionRoleAssignedEvent.OutputObject
+  >;
+  getEvent(
+    key: "AuctionRoleRevoked"
+  ): TypedContractEvent<
+    AuctionRoleRevokedEvent.InputTuple,
+    AuctionRoleRevokedEvent.OutputTuple,
+    AuctionRoleRevokedEvent.OutputObject
+  >;
   getEvent(
     key: "CurrencyAdded"
   ): TypedContractEvent<
@@ -743,39 +788,53 @@ export interface Permission extends BaseContract {
     CurrencyRemovedEvent.OutputObject
   >;
   getEvent(
-    key: "NFTRemoved"
+    key: "ListingRoleAssigned"
   ): TypedContractEvent<
-    NFTRemovedEvent.InputTuple,
-    NFTRemovedEvent.OutputTuple,
-    NFTRemovedEvent.OutputObject
+    ListingRoleAssignedEvent.InputTuple,
+    ListingRoleAssignedEvent.OutputTuple,
+    ListingRoleAssignedEvent.OutputObject
   >;
   getEvent(
-    key: "NFTWhitelisted"
+    key: "ListingRoleRevoked"
   ): TypedContractEvent<
-    NFTWhitelistedEvent.InputTuple,
-    NFTWhitelistedEvent.OutputTuple,
-    NFTWhitelistedEvent.OutputObject
+    ListingRoleRevokedEvent.InputTuple,
+    ListingRoleRevokedEvent.OutputTuple,
+    ListingRoleRevokedEvent.OutputObject
   >;
   getEvent(
-    key: "RequestApproval"
+    key: "NFTRoleAssigned"
   ): TypedContractEvent<
-    RequestApprovalEvent.InputTuple,
-    RequestApprovalEvent.OutputTuple,
-    RequestApprovalEvent.OutputObject
+    NFTRoleAssignedEvent.InputTuple,
+    NFTRoleAssignedEvent.OutputTuple,
+    NFTRoleAssignedEvent.OutputObject
   >;
   getEvent(
-    key: "RequestApproved"
+    key: "NFTRoleRequested"
   ): TypedContractEvent<
-    RequestApprovedEvent.InputTuple,
-    RequestApprovedEvent.OutputTuple,
-    RequestApprovedEvent.OutputObject
+    NFTRoleRequestedEvent.InputTuple,
+    NFTRoleRequestedEvent.OutputTuple,
+    NFTRoleRequestedEvent.OutputObject
   >;
   getEvent(
-    key: "RequestRejected"
+    key: "NFTRoleRevoked"
   ): TypedContractEvent<
-    RequestRejectedEvent.InputTuple,
-    RequestRejectedEvent.OutputTuple,
-    RequestRejectedEvent.OutputObject
+    NFTRoleRevokedEvent.InputTuple,
+    NFTRoleRevokedEvent.OutputTuple,
+    NFTRoleRevokedEvent.OutputObject
+  >;
+  getEvent(
+    key: "OfferRoleAssigned"
+  ): TypedContractEvent<
+    OfferRoleAssignedEvent.InputTuple,
+    OfferRoleAssignedEvent.OutputTuple,
+    OfferRoleAssignedEvent.OutputObject
+  >;
+  getEvent(
+    key: "OfferRoleRevoked"
+  ): TypedContractEvent<
+    OfferRoleRevokedEvent.InputTuple,
+    OfferRoleRevokedEvent.OutputTuple,
+    OfferRoleRevokedEvent.OutputObject
   >;
   getEvent(
     key: "RoleAdminChanged"
@@ -792,28 +851,43 @@ export interface Permission extends BaseContract {
     RoleGrantedEvent.OutputObject
   >;
   getEvent(
+    key: "RoleRequested"
+  ): TypedContractEvent<
+    RoleRequestedEvent.InputTuple,
+    RoleRequestedEvent.OutputTuple,
+    RoleRequestedEvent.OutputObject
+  >;
+  getEvent(
     key: "RoleRevoked"
   ): TypedContractEvent<
     RoleRevokedEvent.InputTuple,
     RoleRevokedEvent.OutputTuple,
     RoleRevokedEvent.OutputObject
   >;
-  getEvent(
-    key: "UserAdded"
-  ): TypedContractEvent<
-    UserAddedEvent.InputTuple,
-    UserAddedEvent.OutputTuple,
-    UserAddedEvent.OutputObject
-  >;
-  getEvent(
-    key: "UserRemoved"
-  ): TypedContractEvent<
-    UserRemovedEvent.InputTuple,
-    UserRemovedEvent.OutputTuple,
-    UserRemovedEvent.OutputObject
-  >;
 
   filters: {
+    "AuctionRoleAssigned(address)": TypedContractEvent<
+      AuctionRoleAssignedEvent.InputTuple,
+      AuctionRoleAssignedEvent.OutputTuple,
+      AuctionRoleAssignedEvent.OutputObject
+    >;
+    AuctionRoleAssigned: TypedContractEvent<
+      AuctionRoleAssignedEvent.InputTuple,
+      AuctionRoleAssignedEvent.OutputTuple,
+      AuctionRoleAssignedEvent.OutputObject
+    >;
+
+    "AuctionRoleRevoked(address)": TypedContractEvent<
+      AuctionRoleRevokedEvent.InputTuple,
+      AuctionRoleRevokedEvent.OutputTuple,
+      AuctionRoleRevokedEvent.OutputObject
+    >;
+    AuctionRoleRevoked: TypedContractEvent<
+      AuctionRoleRevokedEvent.InputTuple,
+      AuctionRoleRevokedEvent.OutputTuple,
+      AuctionRoleRevokedEvent.OutputObject
+    >;
+
     "CurrencyAdded(address)": TypedContractEvent<
       CurrencyAddedEvent.InputTuple,
       CurrencyAddedEvent.OutputTuple,
@@ -836,59 +910,81 @@ export interface Permission extends BaseContract {
       CurrencyRemovedEvent.OutputObject
     >;
 
-    "NFTRemoved(address)": TypedContractEvent<
-      NFTRemovedEvent.InputTuple,
-      NFTRemovedEvent.OutputTuple,
-      NFTRemovedEvent.OutputObject
+    "ListingRoleAssigned(address)": TypedContractEvent<
+      ListingRoleAssignedEvent.InputTuple,
+      ListingRoleAssignedEvent.OutputTuple,
+      ListingRoleAssignedEvent.OutputObject
     >;
-    NFTRemoved: TypedContractEvent<
-      NFTRemovedEvent.InputTuple,
-      NFTRemovedEvent.OutputTuple,
-      NFTRemovedEvent.OutputObject
-    >;
-
-    "NFTWhitelisted(address)": TypedContractEvent<
-      NFTWhitelistedEvent.InputTuple,
-      NFTWhitelistedEvent.OutputTuple,
-      NFTWhitelistedEvent.OutputObject
-    >;
-    NFTWhitelisted: TypedContractEvent<
-      NFTWhitelistedEvent.InputTuple,
-      NFTWhitelistedEvent.OutputTuple,
-      NFTWhitelistedEvent.OutputObject
+    ListingRoleAssigned: TypedContractEvent<
+      ListingRoleAssignedEvent.InputTuple,
+      ListingRoleAssignedEvent.OutputTuple,
+      ListingRoleAssignedEvent.OutputObject
     >;
 
-    "RequestApproval(address,uint8)": TypedContractEvent<
-      RequestApprovalEvent.InputTuple,
-      RequestApprovalEvent.OutputTuple,
-      RequestApprovalEvent.OutputObject
+    "ListingRoleRevoked(address)": TypedContractEvent<
+      ListingRoleRevokedEvent.InputTuple,
+      ListingRoleRevokedEvent.OutputTuple,
+      ListingRoleRevokedEvent.OutputObject
     >;
-    RequestApproval: TypedContractEvent<
-      RequestApprovalEvent.InputTuple,
-      RequestApprovalEvent.OutputTuple,
-      RequestApprovalEvent.OutputObject
-    >;
-
-    "RequestApproved(address,uint8)": TypedContractEvent<
-      RequestApprovedEvent.InputTuple,
-      RequestApprovedEvent.OutputTuple,
-      RequestApprovedEvent.OutputObject
-    >;
-    RequestApproved: TypedContractEvent<
-      RequestApprovedEvent.InputTuple,
-      RequestApprovedEvent.OutputTuple,
-      RequestApprovedEvent.OutputObject
+    ListingRoleRevoked: TypedContractEvent<
+      ListingRoleRevokedEvent.InputTuple,
+      ListingRoleRevokedEvent.OutputTuple,
+      ListingRoleRevokedEvent.OutputObject
     >;
 
-    "RequestRejected(address,uint8)": TypedContractEvent<
-      RequestRejectedEvent.InputTuple,
-      RequestRejectedEvent.OutputTuple,
-      RequestRejectedEvent.OutputObject
+    "NFTRoleAssigned(address)": TypedContractEvent<
+      NFTRoleAssignedEvent.InputTuple,
+      NFTRoleAssignedEvent.OutputTuple,
+      NFTRoleAssignedEvent.OutputObject
     >;
-    RequestRejected: TypedContractEvent<
-      RequestRejectedEvent.InputTuple,
-      RequestRejectedEvent.OutputTuple,
-      RequestRejectedEvent.OutputObject
+    NFTRoleAssigned: TypedContractEvent<
+      NFTRoleAssignedEvent.InputTuple,
+      NFTRoleAssignedEvent.OutputTuple,
+      NFTRoleAssignedEvent.OutputObject
+    >;
+
+    "NFTRoleRequested(address,uint256,address)": TypedContractEvent<
+      NFTRoleRequestedEvent.InputTuple,
+      NFTRoleRequestedEvent.OutputTuple,
+      NFTRoleRequestedEvent.OutputObject
+    >;
+    NFTRoleRequested: TypedContractEvent<
+      NFTRoleRequestedEvent.InputTuple,
+      NFTRoleRequestedEvent.OutputTuple,
+      NFTRoleRequestedEvent.OutputObject
+    >;
+
+    "NFTRoleRevoked(address)": TypedContractEvent<
+      NFTRoleRevokedEvent.InputTuple,
+      NFTRoleRevokedEvent.OutputTuple,
+      NFTRoleRevokedEvent.OutputObject
+    >;
+    NFTRoleRevoked: TypedContractEvent<
+      NFTRoleRevokedEvent.InputTuple,
+      NFTRoleRevokedEvent.OutputTuple,
+      NFTRoleRevokedEvent.OutputObject
+    >;
+
+    "OfferRoleAssigned(address)": TypedContractEvent<
+      OfferRoleAssignedEvent.InputTuple,
+      OfferRoleAssignedEvent.OutputTuple,
+      OfferRoleAssignedEvent.OutputObject
+    >;
+    OfferRoleAssigned: TypedContractEvent<
+      OfferRoleAssignedEvent.InputTuple,
+      OfferRoleAssignedEvent.OutputTuple,
+      OfferRoleAssignedEvent.OutputObject
+    >;
+
+    "OfferRoleRevoked(address)": TypedContractEvent<
+      OfferRoleRevokedEvent.InputTuple,
+      OfferRoleRevokedEvent.OutputTuple,
+      OfferRoleRevokedEvent.OutputObject
+    >;
+    OfferRoleRevoked: TypedContractEvent<
+      OfferRoleRevokedEvent.InputTuple,
+      OfferRoleRevokedEvent.OutputTuple,
+      OfferRoleRevokedEvent.OutputObject
     >;
 
     "RoleAdminChanged(bytes32,bytes32,bytes32)": TypedContractEvent<
@@ -913,6 +1009,17 @@ export interface Permission extends BaseContract {
       RoleGrantedEvent.OutputObject
     >;
 
+    "RoleRequested(address,bytes32)": TypedContractEvent<
+      RoleRequestedEvent.InputTuple,
+      RoleRequestedEvent.OutputTuple,
+      RoleRequestedEvent.OutputObject
+    >;
+    RoleRequested: TypedContractEvent<
+      RoleRequestedEvent.InputTuple,
+      RoleRequestedEvent.OutputTuple,
+      RoleRequestedEvent.OutputObject
+    >;
+
     "RoleRevoked(bytes32,address,address)": TypedContractEvent<
       RoleRevokedEvent.InputTuple,
       RoleRevokedEvent.OutputTuple,
@@ -922,28 +1029,6 @@ export interface Permission extends BaseContract {
       RoleRevokedEvent.InputTuple,
       RoleRevokedEvent.OutputTuple,
       RoleRevokedEvent.OutputObject
-    >;
-
-    "UserAdded(address)": TypedContractEvent<
-      UserAddedEvent.InputTuple,
-      UserAddedEvent.OutputTuple,
-      UserAddedEvent.OutputObject
-    >;
-    UserAdded: TypedContractEvent<
-      UserAddedEvent.InputTuple,
-      UserAddedEvent.OutputTuple,
-      UserAddedEvent.OutputObject
-    >;
-
-    "UserRemoved(address)": TypedContractEvent<
-      UserRemovedEvent.InputTuple,
-      UserRemovedEvent.OutputTuple,
-      UserRemovedEvent.OutputObject
-    >;
-    UserRemoved: TypedContractEvent<
-      UserRemovedEvent.InputTuple,
-      UserRemovedEvent.OutputTuple,
-      UserRemovedEvent.OutputObject
     >;
   };
 }

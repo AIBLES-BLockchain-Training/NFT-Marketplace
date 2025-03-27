@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { Permission__factory } from "./Permission__factory";
+export { Permissions__factory } from "./Permissions__factory";

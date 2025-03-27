@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { Permission } from "./Permission";
+export type { Permissions } from "./Permissions";
