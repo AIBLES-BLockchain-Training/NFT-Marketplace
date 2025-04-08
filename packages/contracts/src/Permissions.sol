@@ -6,18 +6,26 @@ import "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
-contract Permissions is AccessControl {
+error InvalidRole(bytes32 role);
+error RoleAlreadyGrantedGlobally(bytes32 role);
+error RoleAlreadyGranted(address caller, bytes32 role);
+error NFTRoleAlreadyGrantedGlobally();
+error NFTAlreadyWhitelisted(address nft);
+error CallerNotOwnerOfNFT(uint256 tokenId, address caller);
+error CallerDoesNotOwnNFT(uint256 tokenId, address caller);
+error TargetIsNotNFT();
 
+contract Permissions is AccessControl {
     bytes4 private constant _INTERFACE_ID_ERC721 = 0x80ac58cd;
     bytes4 private constant _INTERFACE_ID_ERC1155 = 0xd9b67a26;
 
-    bytes32 public constant MANAGE_USER_ROLE      = keccak256("MANAGE_USER_ROLE");
-    bytes32 public constant MANAGE_ASSET_ROLE     = keccak256("MANAGE_ASSET_ROLE");
-    bytes32 public constant MANAGE_CURRENCY_ROLE  = keccak256("MANAGE_CURRENCY_ROLE");
+    bytes32 public constant MANAGE_USER_ROLE = keccak256("MANAGE_USER_ROLE");
+    bytes32 public constant MANAGE_ASSET_ROLE = keccak256("MANAGE_ASSET_ROLE");
+    bytes32 public constant MANAGE_CURRENCY_ROLE = keccak256("MANAGE_CURRENCY_ROLE");
 
     bytes32 public constant LISTING_ROLE = keccak256("LISTING_ROLE");
     bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
-    bytes32 public constant OFFER_ROLE   = keccak256("OFFER_ROLE");
+    bytes32 public constant OFFER_ROLE = keccak256("OFFER_ROLE");
 
     bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
 
@@ -38,7 +46,6 @@ contract Permissions is AccessControl {
 
     event RoleRequested(address indexed requester, bytes32 role);
     event NFTRoleRequested(address indexed nft, uint256 tokenId, address indexed requester);
-
 
     constructor(address admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -123,12 +130,7 @@ contract Permissions is AccessControl {
     }
 
     function hasRole(bytes32 role, address account) public view override returns (bool) {
-        if (
-            role == LISTING_ROLE ||
-            role == AUCTION_ROLE ||
-            role == OFFER_ROLE ||
-            role == NFT_ROLE
-        ) {
+        if (role == LISTING_ROLE || role == AUCTION_ROLE || role == OFFER_ROLE || role == NFT_ROLE) {
             if (super.hasRole(role, address(0))) {
                 return true;
             }
@@ -138,34 +140,44 @@ contract Permissions is AccessControl {
 
     // Request Role
     function requestUserRoles(bytes32[] calldata roles) external {
-      for(uint i = 0; i < roles.length; i++){
-          bytes32 role = roles[i];
-          require(
-              role == LISTING_ROLE || role == AUCTION_ROLE || role == OFFER_ROLE,
-              "Invalid role"
-          );
+        for (uint i = 0; i < roles.length; i++) {
+            bytes32 role = roles[i];
+            if (role != LISTING_ROLE && role != AUCTION_ROLE && role != OFFER_ROLE) {
+                revert InvalidRole(role);
+            }
 
-          require(!super.hasRole(role, address(0)), "Role already granted globally");
-          require(!hasRole(role, msg.sender), "Role already granted");
-          
-          emit RoleRequested(msg.sender, role);
-      }
+            if (super.hasRole(role, address(0))) {
+                revert RoleAlreadyGrantedGlobally(role);
+            }
+            if (hasRole(role, msg.sender)) {
+                revert RoleAlreadyGranted(msg.sender, role);
+            }
+
+            emit RoleRequested(msg.sender, role);
+        }
     }
 
     function requestNFTRole(address nftContract, uint256 tokenId) external {
-        require(!super.hasRole(NFT_ROLE, address(0)), "NFT role already granted globally");
-        require(!hasRole(NFT_ROLE, nftContract), "NFT already whitelisted");
+        if (super.hasRole(NFT_ROLE, address(0))) {
+            revert NFTRoleAlreadyGrantedGlobally();
+        }
+        if (hasRole(NFT_ROLE, nftContract)) {
+            revert NFTAlreadyWhitelisted(nftContract);
+        }
 
         bool isERC721 = ERC165Checker.supportsInterface(nftContract, _INTERFACE_ID_ERC721);
         bool isERC1155 = ERC165Checker.supportsInterface(nftContract, _INTERFACE_ID_ERC1155);
 
         if (isERC721) {
-            require(IERC721(nftContract).ownerOf(tokenId) == msg.sender, "Caller is not owner of the NFT");
+            if (IERC721(nftContract).ownerOf(tokenId) != msg.sender) {
+                revert CallerNotOwnerOfNFT(tokenId, msg.sender);
+            }
         } else if (isERC1155) {
-            require(IERC1155(nftContract).balanceOf(msg.sender, tokenId) > 0, "Caller does not own this NFT");
-        }
-        else {
-            revert("Target is not NFT");
+            if (IERC1155(nftContract).balanceOf(msg.sender, tokenId) == 0) {
+                revert CallerDoesNotOwnNFT(tokenId, msg.sender);
+            }
+        } else {
+            revert TargetIsNotNFT();
         }
 
         emit NFTRoleRequested(nftContract, tokenId, msg.sender);

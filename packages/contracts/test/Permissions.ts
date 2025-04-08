@@ -267,7 +267,9 @@ describe('Listing', function () {
         const { permissions, user1 } = await loadFixture(setup);
         const nftRole = await permissions['NFT_ROLE']();
 
-        await expect(permissions.connect(user1)['requestUserRoles']([nftRole])).to.be.revertedWith('Invalid role');
+        await expect(permissions.connect(user1)['requestUserRoles']([nftRole]))
+          .to.be.revertedWithCustomError(permissions, 'InvalidRole')
+          .withArgs(nftRole);
       });
 
       it('Should revert if role is already granted globally', async function () {
@@ -275,9 +277,9 @@ describe('Listing', function () {
         const listingRole = await permissions['LISTING_ROLE']();
 
         await permissions.connect(admin)['assignListingRole']([ethers.ZeroAddress]);
-        await expect(permissions.connect(user1)['requestUserRoles']([listingRole])).to.be.revertedWith(
-          'Role already granted globally',
-        );
+        await expect(permissions.connect(user1)['requestUserRoles']([listingRole]))
+          .to.be.revertedWithCustomError(permissions, 'RoleAlreadyGrantedGlobally')
+          .withArgs(listingRole);
       });
 
       it('Should revert if role is already granted to msg.sender', async function () {
@@ -285,7 +287,9 @@ describe('Listing', function () {
         const offerRole = await permissions['OFFER_ROLE']();
 
         await permissions.connect(admin)['assignOfferRole']([user1.address]);
-        await expect(permissions.connect(user1)['requestUserRoles']([offerRole])).to.be.revertedWith('Role already granted');
+        await expect(permissions.connect(user1)['requestUserRoles']([offerRole]))
+          .to.be.revertedWithCustomError(permissions, 'RoleAlreadyGranted')
+          .withArgs(user1.address, offerRole);
       });
     });
 
@@ -306,45 +310,47 @@ describe('Listing', function () {
 
       it('Should revert if target is not NFT', async function () {
         const { permissions, mockToken, user1 } = await loadFixture(setup);
-        await expect(permissions.connect(user1)['requestNFTRole'](await mockToken.getAddress(), 0)).to.be.revertedWith(
-          'Target is not NFT',
+        await expect(permissions.connect(user1)['requestNFTRole'](await mockToken.getAddress(), 0)).to.be.revertedWithCustomError(
+          permissions,
+          'TargetIsNotNFT',
         );
       });
 
       it('Should revert if NFT role already granted globally', async function () {
         const { permissions, mockERC721, admin, user1 } = await loadFixture(setup);
         await permissions.connect(admin)['assignNFTRole']([ethers.ZeroAddress]);
-        await expect(permissions.connect(user1)['requestNFTRole'](await mockERC721.getAddress(), 0)).to.be.revertedWith(
-          'NFT role already granted globally',
-        );
+        await expect(
+          permissions.connect(user1)['requestNFTRole'](await mockERC721.getAddress(), 0),
+        ).to.be.revertedWithCustomError(permissions, 'NFTRoleAlreadyGrantedGlobally');
       });
 
       it('Should revert if NFT already whitelisted', async function () {
         const { permissions, mockERC721, admin, user1 } = await loadFixture(setup);
         await permissions.connect(admin)['assignNFTRole']([await mockERC721.getAddress()]);
-        await expect(permissions.connect(user1)['requestNFTRole'](await mockERC721.getAddress(), 0)).to.be.revertedWith(
-          'NFT already whitelisted',
-        );
+        await expect(permissions.connect(user1)['requestNFTRole'](await mockERC721.getAddress(), 0))
+          .to.be.revertedWithCustomError(permissions, 'NFTAlreadyWhitelisted')
+          .withArgs(await mockERC721.getAddress());
       });
 
       it('Should revert for ERC721 if caller is not owner', async function () {
         const { permissions, mockERC721, user2 } = await loadFixture(setup);
-        await expect(permissions.connect(user2)['requestNFTRole'](await mockERC721.getAddress(), 0)).to.be.revertedWith(
-          'Caller is not owner of the NFT',
-        );
+        await expect(permissions.connect(user2)['requestNFTRole'](await mockERC721.getAddress(), 0))
+          .to.be.revertedWithCustomError(permissions, 'CallerNotOwnerOfNFT')
+          .withArgs(0, user2.address);
       });
 
       it('Should revert for ERC1155 if caller does not own the NFT', async function () {
         const { permissions, mockERC1155, user2 } = await loadFixture(setup);
-        await expect(permissions.connect(user2)['requestNFTRole'](await mockERC1155.getAddress(), 0)).to.be.revertedWith(
-          'Caller does not own this NFT',
-        );
+        await expect(permissions.connect(user2)['requestNFTRole'](await mockERC1155.getAddress(), 0))
+          .to.be.revertedWithCustomError(permissions, 'CallerDoesNotOwnNFT')
+          .withArgs(0, user2.address);
       });
 
       it('Should revert if target is not NFT', async function () {
         const { permissions, mockToken, user2 } = await loadFixture(setup);
-        await expect(permissions.connect(user2)['requestNFTRole'](await mockToken.getAddress(), 0)).to.be.revertedWith(
-          'Target is not NFT',
+        await expect(permissions.connect(user2)['requestNFTRole'](await mockToken.getAddress(), 0)).to.be.revertedWithCustomError(
+          permissions,
+          'TargetIsNotNFT',
         );
       });
     });
