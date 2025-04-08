@@ -82,13 +82,13 @@ describe('Listing', function () {
   it('Should revert if the fee is out of range', async function () {
     const { listing, mockToken, admin } = await loadFixture(setup);
 
-    await expect(listing.connect(admin)['setCurrencyFee'](mockToken.target, 0)).to.be.revertedWith(
-      'Fee must be between 0 and 10000 (100%)',
-    );
+    await expect(listing.connect(admin)['setCurrencyFee'](mockToken.target, 0))
+      .to.be.revertedWithCustomError(listing, 'FeeOutOfRange')
+      .withArgs(0, 10000);
 
-    await expect(listing.connect(admin)['setCurrencyFee'](mockToken.target, 10001)).to.be.revertedWith(
-      'Fee must be between 0 and 10000 (100%)',
-    );
+    await expect(listing.connect(admin)['setCurrencyFee'](mockToken.target, 10001))
+      .to.be.revertedWithCustomError(listing, 'FeeOutOfRange')
+      .withArgs(10001, 10000);
   });
 
   describe('Create Listing', function () {
@@ -252,9 +252,9 @@ describe('Listing', function () {
       const listingId = await listing['listingCounter']();
 
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
-      await expect(
-        listing.connect(user1)['createListing'](listingParams))
-        .to.be.revertedWith('ERC721 quantity must be 1');
+      await expect(listing.connect(user1)['createListing'](listingParams))
+        .to.be.revertedWithCustomError(listing, 'ERC721QuantityMustBeOne')
+        .withArgs(2);
     });
 
     it('Should revert for invalid parameters', async function () {
@@ -279,7 +279,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Invalid asset contract address',
+          expectedRevert: 'InvalidAssetContract',
+          args: [],
         },
         {
           description: 'invalid quantity (zero)',
@@ -293,7 +294,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Quantity must be greater than zero',
+          expectedRevert: 'QuantityMustBeGreaterThanZero',
+          args: [],
         },
         {
           description: 'invalid timestamps (start > end)',
@@ -307,7 +309,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 5000,
             reserved: false,
           },
-          expectedRevert: 'Invalid timestamps',
+          expectedRevert: 'InvalidTimestamps',
+          args: [currentTimestamp + 10000, currentTimestamp + 5000],
         },
         {
           description: 'invalid price per token (zero)',
@@ -321,7 +324,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Price per token must be greater than zero',
+          expectedRevert: 'PricePerTokenMustBeGreaterThanZero',
+          args: [],
         },
         {
           description: 'invalid start timestamp (in the past)',
@@ -335,20 +339,22 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Start time must be in the future',
+          expectedRevert: 'StartTimeNotInFuture',
+          args: [],
         },
       ];
 
-      for (const { listingParams, expectedRevert } of invalidParamsList) {
-        await expect(listing.connect(user1)['createListing'](listingParams)).to.be.revertedWith(expectedRevert);
+      for (const { listingParams, expectedRevert, args } of invalidParamsList) {
+        await expect(listing.connect(user1)['createListing'](listingParams))
+          .to.be.revertedWithCustomError(listing, expectedRevert)
+          .withArgs(...args);
       }
     });
   });
 
   describe('Update Listing', function () {
     it('Should update the listing successfully', async function () {
-      const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
-
+      const { listing, mockToken, mockERC721, user1 } = await loadFixture(setup);
       const block = await ethers.provider.getBlock('latest');
       if (!block) {
         throw new Error('Failed to get block');
@@ -367,9 +373,7 @@ describe('Listing', function () {
       };
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       const listingCounter = await listing['listingCounter']();
-
       await listing.connect(user1)['createListing'](listingParams);
-
       const updatedParams = {
         assetContract: await mockERC721.getAddress(),
         tokenId: 0,
@@ -429,7 +433,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Invalid asset contract address',
+          expectedRevert: 'InvalidAssetContract',
+          args: [],
         },
         {
           description: 'invalid quantity (zero)',
@@ -443,7 +448,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Quantity must be greater than zero',
+          expectedRevert: 'QuantityMustBeGreaterThanZero',
+          args: [],
         },
         {
           description: 'invalid timestamps (start > end)',
@@ -457,7 +463,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 5000,
             reserved: false,
           },
-          expectedRevert: 'Invalid timestamps',
+          expectedRevert: 'InvalidTimestamps',
+          args: [currentTimestamp + 10000, currentTimestamp + 5000],
         },
         {
           description: 'invalid price per token (zero)',
@@ -471,7 +478,8 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Price per token must be greater than zero',
+          expectedRevert: 'PricePerTokenMustBeGreaterThanZero',
+          args: [],
         },
         {
           description: 'invalid start timestamp (in the past)',
@@ -485,12 +493,15 @@ describe('Listing', function () {
             endTimestamp: currentTimestamp + 604800,
             reserved: false,
           },
-          expectedRevert: 'Start time must be in the future',
+          expectedRevert: 'StartTimeNotInFuture',
+          args: [],
         },
       ];
 
-      for (const { listingParams, expectedRevert } of invalidParamsList) {
-        await expect(listing.connect(user1)['updateListing'](0, listingParams)).to.be.revertedWith(expectedRevert);
+      for (const { listingParams, expectedRevert, args } of invalidParamsList) {
+        await expect(listing.connect(user1)['updateListing'](0, listingParams))
+          .to.be.revertedWithCustomError(listing, expectedRevert)
+          .withArgs(...args);
       }
     });
 
@@ -529,7 +540,9 @@ describe('Listing', function () {
         reserved: true,
       };
 
-      await expect(listing.connect(user2)['updateListing'](0, updatedParams)).to.be.revertedWith('Only owner can update listing');
+      await expect(listing.connect(user2)['updateListing'](0, updatedParams))
+        .to.be.revertedWithCustomError(listing, 'OnlyOwner')
+        .withArgs(user2.address, user1.address);
     });
 
     it('Should not update listing with non-exist listing', async function () {
@@ -551,7 +564,10 @@ describe('Listing', function () {
         endTimestamp: currentTimestamp + 691200,
         reserved: true,
       };
-      await expect(listing.connect(user1)['updateListing'](1, updatedParams)).to.be.revertedWith('Listing does not exist');
+      await expect(listing.connect(user1)['updateListing'](1, updatedParams)).to.be.revertedWithCustomError(
+        listing,
+        'ListingDoesNotExist',
+      );
     });
 
     it('Should not update listings with non-CREATED status', async function () {
@@ -590,8 +606,9 @@ describe('Listing', function () {
         endTimestamp: currentTimestamp + 691200,
         reserved: true,
       };
-      await expect(listing.connect(user1)['updateListing'](0, updatedParams)).to.be.revertedWith(
-        'Listing must be in CREATED status',
+      await expect(listing.connect(user1)['updateListing'](0, updatedParams)).to.be.revertedWithCustomError(
+        listing,
+        'ListingNotInCreatedStatus',
       );
     });
   });
@@ -651,7 +668,7 @@ describe('Listing', function () {
 
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing.connect(user1)['cancelListing'](1)).to.be.revertedWith('Listing does not exist');
+      await expect(listing.connect(user1)['cancelListing'](1)).to.be.revertedWithCustomError(listing, 'ListingDoesNotExist');
     });
 
     it('Should revert if the caller is not the owner', async function () {
@@ -678,7 +695,9 @@ describe('Listing', function () {
 
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing.connect(user2)['cancelListing'](0)).to.be.revertedWith('Only owner can cancel listing');
+      await expect(listing.connect(user2)['cancelListing'](0))
+        .to.be.revertedWithCustomError(listing, 'OnlyOwner')
+        .withArgs(user2.address, user1.address);
     });
 
     it('Should not cancel listings with non-CREATED status', async function () {
@@ -706,7 +725,10 @@ describe('Listing', function () {
       await listing.connect(user1)['createListing'](listingParams);
 
       await listing.connect(user1)['cancelListing'](0);
-      await expect(listing.connect(user1)['cancelListing'](0)).to.be.revertedWith('Listing must be in CREATED status');
+      await expect(listing.connect(user1)['cancelListing'](0)).to.be.revertedWithCustomError(
+        listing,
+        'ListingNotInCreatedStatus',
+      );
     });
   });
   describe('Approve Buyer For Listing', function () {
@@ -764,8 +786,9 @@ describe('Listing', function () {
 
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing.connect(user1)['approveBuyerForListing'](1, user2.address, true)).to.be.revertedWith(
-        'Listing does not exist',
+      await expect(listing.connect(user1)['approveBuyerForListing'](1, user2.address, true)).to.be.revertedWithCustomError(
+        listing,
+        'ListingDoesNotExist',
       );
     });
 
@@ -793,9 +816,9 @@ describe('Listing', function () {
 
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing.connect(user2)['approveBuyerForListing'](listingCounter, user2.address, true)).to.be.revertedWith(
-        'Only owner can approve currency',
-      );
+      await expect(listing.connect(user2)['approveBuyerForListing'](listingCounter, user2.address, true))
+        .to.be.revertedWithCustomError(listing, 'OnlyOwner')
+        .withArgs(user2.address, user1.address);
     });
 
     it('Should revert if the listing is not in CREATED status', async function () {
@@ -825,8 +848,9 @@ describe('Listing', function () {
 
       await listing.connect(user1)['cancelListing'](0);
 
-      await expect(listing.connect(user1)['approveBuyerForListing'](0, user2.address, true)).to.be.revertedWith(
-        'Listing must be in CREATED status',
+      await expect(listing.connect(user1)['approveBuyerForListing'](0, user2.address, true)).to.be.revertedWithCustomError(
+        listing,
+        'ListingNotInCreatedStatus',
       );
     });
 
@@ -853,8 +877,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing.connect(user1)['approveBuyerForListing'](0, user2.address, true)).to.be.revertedWith(
-        'Listing is not reserved',
+      await expect(listing.connect(user1)['approveBuyerForListing'](0, user2.address, true)).to.be.revertedWithCustomError(
+        listing,
+        'ListingNotReserved',
       );
     });
   });
@@ -961,7 +986,7 @@ describe('Listing', function () {
 
       await expect(
         listing.connect(user1)['approveCurrencyForListing'](1, await mockToken.getAddress(), pricePerTokenInCurrency),
-      ).to.be.revertedWith('Listing does not exist');
+      ).to.be.revertedWithCustomError(listing, 'ListingDoesNotExist');
     });
 
     it('Should revert if the caller is not the owner of the listing', async function () {
@@ -993,7 +1018,9 @@ describe('Listing', function () {
 
       await expect(
         listing.connect(user2)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), pricePerTokenInCurrency),
-      ).to.be.revertedWith('Only owner can approve buyers');
+      )
+        .to.be.revertedWithCustomError(listing, 'OnlyOwner')
+        .withArgs(user2.address, user1.address);
     });
 
     it('Should revert if the listing is not in CREATED status', async function () {
@@ -1027,7 +1054,7 @@ describe('Listing', function () {
 
       await expect(
         listing.connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), pricePerTokenInCurrency),
-      ).to.be.revertedWith('Listing must be in CREATED status');
+      ).to.be.revertedWithCustomError(listing, 'ListingNotInCreatedStatus');
     });
   });
 
@@ -1058,6 +1085,9 @@ describe('Listing', function () {
 
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
+
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
 
       await listing
         .connect(user1)
@@ -1115,6 +1145,9 @@ describe('Listing', function () {
 
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
+
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
 
       await listing.connect(user1)['approveBuyerForListing'](listingId, user3.address, true);
       await listing
@@ -1174,6 +1207,9 @@ describe('Listing', function () {
       await mockERC1155.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1214,7 +1250,7 @@ describe('Listing', function () {
         throw new Error('Failed to get block');
       }
       const currentTimestamp = block.timestamp + 1000;
-    
+
       const listingParams = {
         assetContract: await mockERC721.getAddress(),
         tokenId: 0,
@@ -1225,46 +1261,42 @@ describe('Listing', function () {
         endTimestamp: currentTimestamp + 604800,
         reserved: false,
       };
-    
+
       const listingId = await listing['listingCounter']();
-    
+
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await listing
-      .connect(user1)
-      ['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
+      await listing.connect(user1)['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
 
       const beforeSellerBalance = await ethers.provider.getBalance(user1.address);
       const beforeBuyerBalance = await ethers.provider.getBalance(user3.address);
-    
-      const tx = await listing.connect(user3)['buyFromListing'](
-        listingId,
-        user3.address,
-        1,
-        ethers.ZeroAddress,
-        ethers.parseUnits('1', 18),
-        { value: ethers.parseUnits('1', 18) }
-      );
-    
-      await expect(tx)
-        .to.emit(listing, 'NFTPurchased')
-        .withArgs(listingId, user3.address, 1, ethers.parseUnits('1', 18));
-    
+
+      const tx = await listing
+        .connect(user3)
+        ['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
+          value: ethers.parseUnits('1', 18),
+        });
+
+      await expect(tx).to.emit(listing, 'NFTPurchased').withArgs(listingId, user3.address, 1, ethers.parseUnits('1', 18));
+
       const updatedListing = await listing['listings'](listingId);
       expect(updatedListing.quantity).to.equal(0);
       expect(updatedListing.status).to.equal(2);
-    
+
       const user3Balance = await mockERC721['balanceOf'](user3.address);
       expect(user3Balance).to.equal(2);
-    
+
       const accumulatedFee = await listing['accumulatedFees'](ethers.ZeroAddress);
       expect(accumulatedFee).to.equal(ethers.parseUnits('0.05', 18));
-    
+
       const afterSellerBalance = await ethers.provider.getBalance(user1.address);
       expect(afterSellerBalance).to.be.above(beforeSellerBalance);
     });
-    
+
     it('Should revert if invalid ETH amount', async function () {
       const { listing, mockERC721, admin, user1, user3 } = await loadFixture(setup);
 
@@ -1275,7 +1307,7 @@ describe('Listing', function () {
         throw new Error('Failed to get block');
       }
       const currentTimestamp = block.timestamp + 1000;
-    
+
       const listingParams = {
         assetContract: await mockERC721.getAddress(),
         tokenId: 0,
@@ -1286,27 +1318,22 @@ describe('Listing', function () {
         endTimestamp: currentTimestamp + 604800,
         reserved: false,
       };
-    
+
       const listingId = await listing['listingCounter']();
-    
+
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await listing
-      .connect(user1)
-      ['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
+      await listing.connect(user1)['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
 
       const beforeSellerBalance = await ethers.provider.getBalance(user1.address);
       const beforeBuyerBalance = await ethers.provider.getBalance(user3.address);
-    
-      expect(listing.connect(user3)['buyFromListing'](
-        listingId,
-        user3.address,
-        1,
-        ethers.ZeroAddress,
-        ethers.parseUnits('1', 18),
-        { value: ethers.parseUnits('0.9', 18) }
-      )).to.be.revertedWith("Incorrect ETH amount sent");
+
+      expect(
+        listing.connect(user3)['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
+          value: ethers.parseUnits('0.9', 18),
+        }),
+      ).to.be.revertedWith('Incorrect ETH amount sent');
     });
 
     it('Should revert if msg.value > 0 for ERC20 transaction', async function () {
@@ -1344,16 +1371,15 @@ describe('Listing', function () {
 
       const beforeSellerBalance = await mockToken['balanceOf'](user1.address);
 
-      expect(listing.connect(user3)['buyFromListing'](
-        listingId,
-        user3.address,
-        1,
-        await mockToken.getAddress(),
-        ethers.parseUnits('1', 18),
-        { value: ethers.parseUnits('0.9', 18) }
-      )).to.be.revertedWith("msg.value must be 0 for ERC20 transactions");
-    });  
-    
+      expect(
+        listing
+          .connect(user3)
+          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18), {
+            value: ethers.parseUnits('0.9', 18),
+          }),
+      ).to.be.revertedWith('msg.value must be 0 for ERC20 transactions');
+    });
+
     it('Should not buy listing with non-exist listing id', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
 
@@ -1391,7 +1417,7 @@ describe('Listing', function () {
 
       await expect(
         listing.connect(user3)['buyFromListing'](1, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Listing does not exist');
+      ).to.be.revertedWithCustomError(listing, 'ListingDoesNotExist');
     });
 
     it('Should revert if buyFor is address 0', async function () {
@@ -1433,7 +1459,7 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, ethers.ZeroAddress, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Invalid recipient address');
+      ).to.be.revertedWithCustomError(listing, 'InvalidRecipientAddress');
     });
 
     it('Should revert if listing ended', async function () {
@@ -1446,6 +1472,7 @@ describe('Listing', function () {
         throw new Error('Failed to get block');
       }
       const currentTimestamp = block.timestamp + 1000;
+      const endTimestamp = currentTimestamp + 604800;
 
       const listingParams = {
         assetContract: await mockERC721.getAddress(),
@@ -1454,7 +1481,7 @@ describe('Listing', function () {
         currency: ethers.ZeroAddress,
         pricePerToken: ethers.parseUnits('1', 18),
         startTimestamp: currentTimestamp,
-        endTimestamp: currentTimestamp + 604800,
+        endTimestamp: endTimestamp,
         reserved: false,
       };
 
@@ -1469,16 +1496,20 @@ describe('Listing', function () {
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
-      const beforeSellerBalance = await mockToken['balanceOf'](user1.address);
-
       await network.provider.send('evm_increaseTime', [6048010]);
       await network.provider.send('evm_mine');
 
+      const currentBlock = await ethers.provider.getBlock('latest');
+      if (currentBlock === null) {
+        throw new Error('Failed to get block');
+      }
       await expect(
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Listing ended');
+      )
+        .to.be.revertedWithCustomError(listing, 'ListingNotAvailable')
+        .withArgs();
     });
 
     it('Should revert if listing is not available', async function () {
@@ -1508,6 +1539,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1520,7 +1554,7 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Listing is not available for purchase');
+      ).to.be.revertedWithCustomError(listing, 'ListingNotAvailable');
     });
 
     it('Should revert if buy listing with invalid quantity', async function () {
@@ -1550,6 +1584,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1560,7 +1597,9 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 2, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Invalid quantity');
+      )
+        .to.be.revertedWithCustomError(listing, 'InvalidQuantity')
+        .withArgs(2, 1);
     });
 
     it('Should revert if buy listing with currency not approve', async function () {
@@ -1590,6 +1629,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1600,7 +1642,9 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken2.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Currency not approved for this listing');
+      )
+        .to.be.revertedWithCustomError(listing, 'CurrencyNotApprovedForListing')
+        .withArgs(await mockToken2.getAddress());
     });
 
     it('Should revert if buy listing with incorect total price', async function () {
@@ -1630,6 +1674,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1640,7 +1687,9 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('0.5', 18)),
-      ).to.be.revertedWith('Incorrect total price');
+      )
+        .to.be.revertedWithCustomError(listing, 'IncorrectTotalPrice')
+        .withArgs(ethers.parseUnits('1', 18), ethers.parseUnits('0.5', 18));
     });
 
     it('Should revert if payment transfer failed', async function () {
@@ -1669,6 +1718,9 @@ describe('Listing', function () {
 
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
+
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
 
       await listing
         .connect(user1)
@@ -1711,6 +1763,9 @@ describe('Listing', function () {
 
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
+
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
 
       await listing
         .connect(user1)
@@ -1871,6 +1926,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1883,7 +1941,9 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Seller no longer owns the token');
+      )
+        .to.be.revertedWithCustomError(listing, 'SellerDoesNotOwnToken')
+        .withArgs(0, user1.address);
     });
 
     it('Should revert if seller does not have enough ERC1155 tokens', async function () {
@@ -1913,6 +1973,9 @@ describe('Listing', function () {
       await mockERC1155.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1925,7 +1988,9 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 6, await mockToken.getAddress(), ethers.parseUnits('6', 18)),
-      ).to.be.revertedWith('Seller does not have enough tokens');
+      )
+        .to.be.revertedWithCustomError(listing, 'SellerInsufficientTokens')
+        .withArgs(5, 10);
     });
 
     it('Should revert if seller is not approved ERC721', async function () {
@@ -1955,6 +2020,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -1967,7 +2035,7 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Contract is not approved to manage the token');
+      ).to.be.revertedWithCustomError(listing, 'ContractNotApprovedForERC721');
     });
 
     it('Should revert if seller is not approved ERC1155', async function () {
@@ -1997,6 +2065,9 @@ describe('Listing', function () {
       await mockERC1155.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2009,7 +2080,7 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 6, await mockToken.getAddress(), ethers.parseUnits('6', 18)),
-      ).to.be.revertedWith('Contract is not approved to manage the tokens');
+      ).to.be.revertedWithCustomError(listing, 'ContractNotApprovedForERC1155');
     });
 
     it('Should revert if seller is not approved ERC721 with approve func', async function () {
@@ -2039,6 +2110,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['approve'](await listing.getAddress(), 0);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2051,7 +2125,7 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Contract is not approved to manage the token');
+      ).to.be.revertedWithCustomError(listing, 'ContractNotApprovedForERC721');
     });
 
     it('Should revert if Buyer is not approved for this listing', async function () {
@@ -2081,6 +2155,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['approve'](await listing.getAddress(), 0);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2091,7 +2168,7 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Buyer is not approved for this listing');
+      ).to.be.revertedWithCustomError(listing, 'BuyerNotApproved');
     });
     it('Should revert if buyer has not approved enough currency', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken, mockToken2 } = await loadFixture(setup);
@@ -2120,6 +2197,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['approve'](await listing.getAddress(), 0);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2130,7 +2210,9 @@ describe('Listing', function () {
         listing
           .connect(user3)
           ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Buyer has not approved enough currency');
+      )
+        .to.be.revertedWithCustomError(listing, 'BuyerInsufficientAllowance')
+        .withArgs(ethers.parseUnits('0.5', 18), ethers.parseUnits('1', 18));
     });
 
     it('Should revert if buyer not enough currency', async function () {
@@ -2160,6 +2242,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['approve'](await listing.getAddress(), 0);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2170,7 +2255,9 @@ describe('Listing', function () {
         listing
           .connect(user2)
           ['buyFromListing'](listingId, user2.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
-      ).to.be.revertedWith('Insufficient balance');
+      )
+        .to.be.revertedWithCustomError(listing, 'InsufficientBalance')
+        .withArgs(ethers.parseUnits('0.01', 18), ethers.parseUnits('1', 18));
     });
   });
   describe('Get Function', function () {
@@ -2200,6 +2287,9 @@ describe('Listing', function () {
 
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
+
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
 
       const totalListings = await listing['totalListings']();
       expect(totalListings).to.equal(1);
@@ -2240,13 +2330,15 @@ describe('Listing', function () {
     it('Should revert if get all listing startId > endId', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
 
-      await expect(listing['getAllListings'](1, 0)).to.be.revertedWith('Invalid range');
+      await expect(listing['getAllListings'](1, 0)).to.be.revertedWithCustomError(listing, 'InvalidRange').withArgs(1, 0);
     });
 
     it('Should revert if get all listing endId > listing counter', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
 
-      await expect(listing['getAllListings'](0, 5)).to.be.revertedWith('End ID exceeds total listings');
+      await expect(listing['getAllListings'](0, 5))
+        .to.be.revertedWithCustomError(listing, 'EndIdExceedsTotalListings')
+        .withArgs(5, await listing['listingCounter']());
     });
 
     it('Should return the all valid listings', async function () {
@@ -2283,13 +2375,15 @@ describe('Listing', function () {
     it('Should revert if get all valid listing startId > endId', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
 
-      await expect(listing['getAllValidListings'](1, 0)).to.be.revertedWith('Invalid range');
+      await expect(listing['getAllValidListings'](1, 0)).to.be.revertedWithCustomError(listing, 'InvalidRange').withArgs(1, 0);
     });
 
     it('Should revert if get all valid listing endId > listing counter', async function () {
       const { listing, mockERC721, admin, user1, user3, mockToken } = await loadFixture(setup);
 
-      await expect(listing['getAllValidListings'](0, 5)).to.be.revertedWith('End ID exceeds total listings');
+      await expect(listing['getAllValidListings'](0, 5))
+        .to.be.revertedWithCustomError(listing, 'EndIdExceedsTotalListings')
+        .withArgs(5, await listing['listingCounter']());
     });
 
     it('Should return the user owned listings', async function () {
@@ -2380,7 +2474,7 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing['getListing'](1)).to.be.revertedWith('Listing does not exist');
+      await expect(listing['getListing'](1)).to.be.revertedWithCustomError(listing, 'ListingDoesNotExist');
     });
 
     it('Should revert if admin not set currency fee', async function () {
@@ -2408,8 +2502,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing['getCurrencyFee'](await mockToken.getAddress())).to.be.revertedWith(
-        'Currency fee must be greater than 0',
+      await expect(listing['getCurrencyFee'](await mockToken.getAddress())).to.be.revertedWithCustomError(
+        listing,
+        'CurrencyFeeMustBeGreaterThanZero',
       );
     });
 
@@ -2440,6 +2535,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2466,7 +2564,7 @@ describe('Listing', function () {
         throw new Error('Failed to get block');
       }
       const currentTimestamp = block.timestamp + 1000;
-    
+
       const listingParams = {
         assetContract: await mockERC721.getAddress(),
         tokenId: 0,
@@ -2477,33 +2575,31 @@ describe('Listing', function () {
         endTimestamp: currentTimestamp + 604800,
         reserved: false,
       };
-    
+
       const listingId = await listing['listingCounter']();
-    
+
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await listing
-      .connect(user1)
-      ['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
+      await listing.connect(user1)['approveCurrencyForListing'](listingId, ethers.ZeroAddress, ethers.parseUnits('1', 18));
 
       const beforeAdminBalance = await ethers.provider.getBalance(admin);
 
-      await listing.connect(user3)['buyFromListing'](
-        listingId,
-        user3.address,
-        1,
-        ethers.ZeroAddress,
-        ethers.parseUnits('1', 18),
-        { value: ethers.parseUnits('1', 18) }
-      );
+      await listing
+        .connect(user3)
+        ['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
+          value: ethers.parseUnits('1', 18),
+        });
 
       const transaction = await listing.connect(admin)['withdrawFees'](ethers.ZeroAddress);
       const txReceipt = await transaction.wait();
       if (txReceipt === null) {
-        throw new Error("Transaction receipt is null");
+        throw new Error('Transaction receipt is null');
       }
-      const feeUsed = ethers.toBigInt(txReceipt.gasPrice*(txReceipt.cumulativeGasUsed));
+      const feeUsed = ethers.toBigInt(txReceipt.gasPrice * txReceipt.cumulativeGasUsed);
       const afterAdminBalance = await ethers.provider.getBalance(admin);
       console.log(feeUsed);
       expect(afterAdminBalance).to.equal(beforeAdminBalance + ethers.parseUnits('0.05', 18) - feeUsed);
@@ -2536,6 +2632,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
+      await network.provider.send('evm_increaseTime', [2000]);
+      await network.provider.send('evm_mine');
+
       await listing
         .connect(user1)
         ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
@@ -2547,10 +2646,9 @@ describe('Listing', function () {
       await listing
         .connect(user3)
         ['buyFromListing'](0, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18));
-      await expect(listing.connect(user1)['withdrawFees'](await mockToken.getAddress())).to.be.revertedWithCustomError(
-        listing,
-        'OwnableUnauthorizedAccount',
-      );
+      await expect(listing.connect(user1)['withdrawFees'](await mockToken.getAddress()))
+        .to.be.revertedWithCustomError(listing, 'OwnableUnauthorizedAccount')
+        .withArgs(user1.address);
     });
 
     it('Should revert if no fees to withdraw', async function () {
@@ -2580,8 +2678,9 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      await expect(listing.connect(admin)['withdrawFees'](await mockToken.getAddress())).to.be.revertedWith(
-        'No fees to withdraw',
+      await expect(listing.connect(admin)['withdrawFees'](await mockToken.getAddress())).to.be.revertedWithCustomError(
+        listing,
+        'NoFeesToWithdraw',
       );
     });
   });
