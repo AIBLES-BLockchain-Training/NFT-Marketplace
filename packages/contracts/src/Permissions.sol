@@ -16,8 +16,6 @@ error CallerDoesNotOwnNFT(uint256 tokenId, address caller);
 error TargetIsNotNFT();
 
 contract Permissions is AccessControl {
-    bytes4 private constant _INTERFACE_ID_ERC721 = 0x80ac58cd;
-    bytes4 private constant _INTERFACE_ID_ERC1155 = 0xd9b67a26;
 
     bytes32 public constant MANAGE_USER_ROLE = keccak256("MANAGE_USER_ROLE");
     bytes32 public constant MANAGE_ASSET_ROLE = keccak256("MANAGE_ASSET_ROLE");
@@ -165,8 +163,8 @@ contract Permissions is AccessControl {
             revert NFTAlreadyWhitelisted(nftContract);
         }
 
-        bool isERC721 = ERC165Checker.supportsInterface(nftContract, _INTERFACE_ID_ERC721);
-        bool isERC1155 = ERC165Checker.supportsInterface(nftContract, _INTERFACE_ID_ERC1155);
+        bool isERC721 = ERC165Checker.supportsInterface(nftContract, type(IERC721).interfaceId);
+        bool isERC1155 = ERC165Checker.supportsInterface(nftContract, type(IERC1155).interfaceId);
 
         if (isERC721) {
             if (IERC721(nftContract).ownerOf(tokenId) != msg.sender) {

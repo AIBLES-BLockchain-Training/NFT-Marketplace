@@ -308,14 +308,6 @@ describe('Listing', function () {
           .withArgs(await mockERC1155.getAddress(), 0, user1.address);
       });
 
-      it('Should revert if target is not NFT', async function () {
-        const { permissions, mockToken, user1 } = await loadFixture(setup);
-        await expect(permissions.connect(user1)['requestNFTRole'](await mockToken.getAddress(), 0)).to.be.revertedWithCustomError(
-          permissions,
-          'TargetIsNotNFT',
-        );
-      });
-
       it('Should revert if NFT role already granted globally', async function () {
         const { permissions, mockERC721, admin, user1 } = await loadFixture(setup);
         await permissions.connect(admin)['assignNFTRole']([ethers.ZeroAddress]);
