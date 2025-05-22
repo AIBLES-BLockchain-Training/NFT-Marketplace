@@ -1,0 +1,533 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "hardhat/console.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+
+error InvalidAssetContract();
+error QuantityMustBeGreaterThanZero();
+error InvalidTimestamps(uint128 start, uint128 end);
+error PricePerTokenMustBeGreaterThanZero();
+error StartTimeNotInFuture();
+error ERC721QuantityMustBeOne(uint256 quantity);
+
+error ListingDoesNotExist();
+error InvalidRange(uint256 start, uint256 end);
+error EndIdExceedsTotalListings(uint256 end, uint256 total);
+
+error OnlyOwner(address caller, address owner);
+
+error ListingNotInCreatedStatus();
+error ListingNotReserved();
+error ListingNotAvailable();
+
+error InvalidRecipientAddress();
+error InvalidQuantity(uint256 requested, uint256 available);
+error CurrencyNotApprovedForListing(address currency);
+error IncorrectTotalPrice(uint256 expected, uint256 actual);
+error BuyerNotApproved();
+error BuyerInsufficientAllowance(uint256 allowance, uint256 required);
+error InsufficientBalance(uint256 available, uint256 required);
+
+error SellerDoesNotOwnToken(uint256 tokenId, address seller);
+error SellerInsufficientTokens(uint256 available, uint256 required);
+error ContractNotApprovedForERC721();
+error ContractNotApprovedForERC1155();
+
+error FeeOutOfRange(uint256 fee, uint256 max);
+error CurrencyFeeMustBeGreaterThanZero();
+error NoFeesToWithdraw();
+error ETHWithdrawalFailed();
+error FeeWithdrawalFailed();
+
+error RecipientNotERC721Receiver();
+error RecipientCannotHandleERC721Tokens();
+error RecipientNotERC1155Receiver();
+error RecipientCannotHandleERC1155Tokens();
+
+error TokenTypeNotSupported();
+
+contract Listing is Ownable {
+    uint256 public listingCounter;
+    uint256 public decimal;
+
+    enum Status {
+        UNSET,
+        CREATED,
+        COMPLETED,
+        CANCELED
+    }
+    enum TokenType {
+        ERC721,
+        ERC1155
+    }
+
+    struct NFTListing {
+        address owner;
+        address assetContract;
+        uint256 tokenId;
+        uint256 quantity;
+        address currency;
+        uint256 pricePerToken;
+        uint128 startTimestamp;
+        uint128 endTimestamp;
+        bool reserved;
+        TokenType tokenType;
+        Status status;
+    }
+
+    struct ListingParameters {
+        address assetContract;
+        uint256 tokenId;
+        uint256 quantity;
+        address currency;
+        uint256 pricePerToken;
+        uint128 startTimestamp;
+        uint128 endTimestamp;
+        bool reserved;
+    }
+
+    mapping(uint256 => NFTListing) public listings;
+    mapping(uint256 => mapping(address => bool)) public buyerApprovals;
+    mapping(uint256 => mapping(address => uint256)) public currencyApprovals;
+    mapping(address => uint256[]) public userOwnedListings;
+    mapping(address => uint256) public currencyFees;
+    mapping(address => uint256) public accumulatedFees;
+
+    event ListingCreated(
+        uint256 indexed listingId,
+        address indexed owner,
+        address indexed assetContract,
+        uint256 tokenId,
+        uint256 quantity,
+        address currency,
+        uint256 pricePerToken,
+        uint256 startTimestamp,
+        uint256 endTimestamp,
+        bool reserved
+    );
+    event ListingUpdated(
+        uint256 indexed listingId,
+        address indexed assetContract,
+        uint256 indexed tokenId,
+        uint256 quantity,
+        address currency,
+        uint256 pricePerToken,
+        uint256 startTimestamp,
+        uint256 endTimestamp,
+        bool reserved
+    );
+    event ListingCompleted(uint256 indexed listingId);
+    event BuyerApproved(uint256 indexed listingId, address indexed buyer, bool isApproved);
+    event CurrencyApproved(uint256 indexed listingId, address indexed currency, uint256 price);
+    event ListingCancelled(uint256 indexed listingId);
+    event NFTPurchased(uint256 indexed listingId, address indexed buyer, uint256 quantity, uint256 totalPrice);
+    event FeeWithdrawn(address indexed admin, address indexed currency, uint256 amount);
+    event CurrencyFeeUpdated(address indexed currency, uint256 fee);
+
+    constructor(address _owner) Ownable(_owner) {
+        listingCounter = 0;
+        decimal = 10000;
+    }
+
+    modifier validParams(ListingParameters memory params) {
+        _isValidParams(params);
+        _;
+    }
+
+    modifier listingExists(uint256 listingId) {
+        if (listings[listingId].status == Status.UNSET) revert ListingDoesNotExist();
+        _;
+    }
+
+    modifier validRange(uint256 startId, uint256 endId) {
+        if (startId > endId) revert InvalidRange(startId, endId);
+        if (endId > listingCounter) revert EndIdExceedsTotalListings(endId, listingCounter);
+        _;
+    }
+
+    function _isValidParams(ListingParameters memory params) internal view {
+        if (params.assetContract == address(0)) revert InvalidAssetContract();
+        if (params.quantity == 0) revert QuantityMustBeGreaterThanZero();
+        if (params.startTimestamp >= params.endTimestamp)
+            revert InvalidTimestamps(params.startTimestamp, params.endTimestamp);
+        if (params.pricePerToken == 0) revert PricePerTokenMustBeGreaterThanZero();
+        if (params.startTimestamp < block.timestamp) revert StartTimeNotInFuture();
+
+        TokenType tokenType = getTokenType(params.assetContract);
+        if (tokenType == TokenType.ERC721) {
+            if (params.quantity != 1) revert ERC721QuantityMustBeOne(params.quantity);
+        }
+    }
+
+    function setCurrencyFee(address currency, uint256 fee) external onlyOwner {
+        if (fee == 0 || fee > decimal) revert FeeOutOfRange(fee, decimal);
+        currencyFees[currency] = fee;
+        emit CurrencyFeeUpdated(currency, fee);
+    }
+
+    function createListing(ListingParameters memory params) external validParams(params) returns (uint256 listingId) {
+        TokenType tokenType = getTokenType(params.assetContract);
+
+        _checkSellerTokenOwnership(params.assetContract, tokenType, msg.sender, params.tokenId, params.quantity);
+        _checkSellerApproval(params.assetContract, tokenType, msg.sender, params.tokenId);
+
+        listingId = listingCounter;
+
+        listings[listingId] = NFTListing({
+            owner: msg.sender,
+            assetContract: params.assetContract,
+            tokenId: params.tokenId,
+            quantity: params.quantity,
+            currency: params.currency,
+            pricePerToken: params.pricePerToken,
+            startTimestamp: params.startTimestamp,
+            endTimestamp: params.endTimestamp,
+            reserved: params.reserved,
+            tokenType: tokenType,
+            status: Status.CREATED
+        });
+
+        userOwnedListings[msg.sender].push(listingId);
+        listingCounter++;
+
+        emit ListingCreated(
+            listingId,
+            msg.sender,
+            params.assetContract,
+            params.tokenId,
+            params.quantity,
+            params.currency,
+            params.pricePerToken,
+            params.startTimestamp,
+            params.endTimestamp,
+            params.reserved
+        );
+        return listingId;
+    }
+
+    function getTokenType(address assetContract) public view returns (TokenType) {
+        try IERC165(assetContract).supportsInterface(type(IERC721).interfaceId) returns (bool supports721) {
+            if (supports721) return TokenType.ERC721;
+        } catch {}
+
+        try IERC165(assetContract).supportsInterface(type(IERC1155).interfaceId) returns (bool supports1155) {
+            if (supports1155) return TokenType.ERC1155;
+        } catch {}
+
+        revert TokenTypeNotSupported();
+    }
+
+    function updateListing(
+        uint256 listingId,
+        ListingParameters memory params
+    ) external validParams(params) listingExists(listingId) {
+        NFTListing storage listing = listings[listingId];
+
+        if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
+        if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
+
+        listing.assetContract = params.assetContract;
+        listing.tokenId = params.tokenId;
+        listing.quantity = params.quantity;
+        listing.currency = params.currency;
+        listing.pricePerToken = params.pricePerToken;
+        listing.startTimestamp = params.startTimestamp;
+        listing.endTimestamp = params.endTimestamp;
+        listing.reserved = params.reserved;
+
+        emit ListingUpdated(
+            listingId,
+            params.assetContract,
+            params.tokenId,
+            params.quantity,
+            params.currency,
+            params.pricePerToken,
+            params.startTimestamp,
+            params.endTimestamp,
+            params.reserved
+        );
+    }
+
+    function cancelListing(uint256 listingId) external listingExists(listingId) {
+        NFTListing storage listing = listings[listingId];
+        if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
+        if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
+
+        listing.status = Status.CANCELED;
+        emit ListingCancelled(listingId);
+    }
+
+    function approveBuyerForListing(
+        uint256 listingId,
+        address buyer,
+        bool toApprove
+    ) external listingExists(listingId) {
+        NFTListing storage listing = listings[listingId];
+        if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
+        if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
+        if (!listing.reserved) revert ListingNotReserved();
+
+        buyerApprovals[listingId][buyer] = toApprove;
+        emit BuyerApproved(listingId, buyer, toApprove);
+    }
+
+    function approveCurrencyForListing(
+        uint256 listingId,
+        address currency,
+        uint256 pricePerTokenInCurrency
+    ) external listingExists(listingId) {
+        NFTListing storage listing = listings[listingId];
+        if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
+        if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
+
+        if (pricePerTokenInCurrency > 0) {
+            currencyApprovals[listingId][currency] = pricePerTokenInCurrency;
+        } else {
+            delete currencyApprovals[listingId][currency];
+        }
+        emit CurrencyApproved(listingId, currency, pricePerTokenInCurrency);
+    }
+
+    function buyFromListing(
+        uint256 listingId,
+        address buyFor,
+        uint256 quantity,
+        address currency,
+        uint256 expectedTotalPrice
+    ) external payable listingExists(listingId) {
+        NFTListing storage listing = listings[listingId];
+
+        if (buyFor == address(0)) revert InvalidRecipientAddress();
+        if (!(block.timestamp >= listing.startTimestamp && block.timestamp <= listing.endTimestamp))
+            revert ListingNotAvailable();
+        if (listing.status != Status.CREATED) revert ListingNotAvailable();
+        if (quantity == 0 || quantity > listing.quantity) revert InvalidQuantity(quantity, listing.quantity);
+
+        uint256 priceInCurrency = currencyApprovals[listingId][currency];
+        if (priceInCurrency == 0) revert CurrencyNotApprovedForListing(currency);
+
+        uint256 totalPrice = quantity * priceInCurrency;
+        if (expectedTotalPrice != totalPrice) revert IncorrectTotalPrice(totalPrice, expectedTotalPrice);
+
+        _checkSellerTokenOwnership(
+            listing.assetContract,
+            listing.tokenType,
+            listing.owner,
+            listing.tokenId,
+            listing.quantity
+        );
+        _checkSellerApproval(listing.assetContract, listing.tokenType, listing.owner, listing.tokenId);
+
+        _checkBuyerApproval(listingId, msg.sender);
+        _checkBuyerBalance(msg.sender, currency, totalPrice);
+        _checkBuyerAllowance(currency, totalPrice);
+
+        _ensureCanReceiveToken(buyFor, listing.tokenId, quantity, listing.tokenType);
+
+        listing.quantity -= quantity;
+
+        uint256 fee = (totalPrice * getCurrencyFee(currency)) / decimal;
+        uint256 sellerAmount = totalPrice - fee;
+
+        if (currency == address(0)) {
+            if (msg.value != totalPrice) revert IncorrectTotalPrice(totalPrice, msg.value);
+            accumulatedFees[currency] += fee;
+
+            (bool success1, ) = listing.owner.call{value: sellerAmount}("");
+            if (!success1) revert ETHWithdrawalFailed();
+            (bool success2, ) = address(this).call{value: fee}("");
+            if (!success2) revert FeeWithdrawalFailed();
+        } else {
+            if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
+            accumulatedFees[currency] += fee;
+            if (!IERC20(currency).transferFrom(msg.sender, listing.owner, sellerAmount)) revert FeeWithdrawalFailed();
+            if (!IERC20(currency).transferFrom(msg.sender, address(this), fee)) revert FeeWithdrawalFailed();
+        }
+
+        if (listing.tokenType == TokenType.ERC721) {
+            IERC721(listing.assetContract).safeTransferFrom(listing.owner, buyFor, listing.tokenId);
+        }
+        if (listing.tokenType == TokenType.ERC1155) {
+            IERC1155(listing.assetContract).safeTransferFrom(listing.owner, buyFor, listing.tokenId, quantity, "");
+        }
+
+        emit NFTPurchased(listingId, buyFor, quantity, totalPrice);
+
+        if (listing.quantity == 0) {
+            listing.status = Status.COMPLETED;
+            emit ListingCompleted(listingId);
+        }
+    }
+
+    function _ensureCanReceiveToken(
+        address recipient,
+        uint256 tokenId,
+        uint256 quantity,
+        TokenType tokenType
+    ) internal {
+        if (!_isContract(recipient)) {
+            return;
+        }
+
+        if (tokenType == TokenType.ERC721) {
+            if (!IERC165(recipient).supportsInterface(type(IERC721Receiver).interfaceId))
+                revert RecipientNotERC721Receiver();
+            try IERC721Receiver(recipient).onERC721Received(address(this), msg.sender, tokenId, "") returns (
+                bytes4 response
+            ) {
+                if (response != IERC721Receiver.onERC721Received.selector) revert RecipientCannotHandleERC721Tokens();
+            } catch {
+                revert RecipientCannotHandleERC721Tokens();
+            }
+        } else if (tokenType == TokenType.ERC1155) {
+            if (!IERC165(recipient).supportsInterface(type(IERC1155Receiver).interfaceId))
+                revert RecipientNotERC1155Receiver();
+            try
+                IERC1155Receiver(recipient).onERC1155Received(address(this), msg.sender, tokenId, quantity, "")
+            returns (bytes4 response) {
+                if (response != IERC1155Receiver.onERC1155Received.selector)
+                    revert RecipientCannotHandleERC1155Tokens();
+            } catch {
+                revert RecipientCannotHandleERC1155Tokens();
+            }
+        }
+    }
+
+    function _isContract(address account) internal view returns (bool) {
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    function _checkSellerTokenOwnership(
+        address assetContract,
+        TokenType tokenType,
+        address seller,
+        uint256 tokenId,
+        uint256 quantity
+    ) internal view {
+        if (tokenType == TokenType.ERC721) {
+            if (IERC721(assetContract).ownerOf(tokenId) != seller) revert SellerDoesNotOwnToken(tokenId, seller);
+        }
+        if (tokenType == TokenType.ERC1155) {
+            uint256 sellerBalance = IERC1155(assetContract).balanceOf(seller, tokenId);
+            if (sellerBalance < quantity) revert SellerInsufficientTokens(sellerBalance, quantity);
+        }
+    }
+
+    function _checkSellerApproval(
+        address assetContract,
+        TokenType tokenType,
+        address seller,
+        uint256 tokenId
+    ) internal view {
+        if (tokenType == TokenType.ERC721) {
+            if (
+                !(IERC721(assetContract).isApprovedForAll(seller, address(this)) ||
+                    IERC721(assetContract).getApproved(tokenId) == address(this))
+            ) revert ContractNotApprovedForERC721();
+        }
+        if (tokenType == TokenType.ERC1155) {
+            if (!IERC1155(assetContract).isApprovedForAll(seller, address(this)))
+                revert ContractNotApprovedForERC1155();
+        }
+    }
+
+    function _checkBuyerApproval(uint256 listingId, address buyer) internal view {
+        NFTListing storage listing = listings[listingId];
+        if (!(buyerApprovals[listingId][buyer] || !listing.reserved)) revert BuyerNotApproved();
+    }
+
+    function _checkBuyerAllowance(address currency, uint256 totalPrice) internal view {
+        if (currency != address(0)) {
+            uint256 allowance = IERC20(currency).allowance(msg.sender, address(this));
+            if (allowance < totalPrice) revert BuyerInsufficientAllowance(allowance, totalPrice);
+        }
+    }
+
+    function _checkBuyerBalance(address buyer, address currency, uint256 totalPrice) internal view {
+        uint256 availableBalance;
+        if (currency == address(0)) {
+            availableBalance = buyer.balance;
+        } else {
+            availableBalance = IERC20(currency).balanceOf(buyer);
+        }
+        if (availableBalance < totalPrice) revert InsufficientBalance(availableBalance, totalPrice);
+    }
+
+    function totalListings() external view returns (uint256) {
+        return listingCounter;
+    }
+
+    function getAllListings(
+        uint256 startId,
+        uint256 endId
+    ) external view validRange(startId, endId) returns (NFTListing[] memory) {
+        uint256 length = endId - startId + 1;
+        NFTListing[] memory allListings = new NFTListing[](length);
+        for (uint256 i = 0; i < length; i++) {
+            uint256 listingId = startId + i;
+            allListings[i] = listings[listingId];
+        }
+        return allListings;
+    }
+
+    function getAllValidListings(
+        uint256 startId,
+        uint256 endId
+    ) external view validRange(startId, endId) returns (NFTListing[] memory) {
+        uint256 length = 0;
+        for (uint256 i = startId; i <= endId; i++) {
+            if (listings[i].status == Status.CREATED) {
+                length++;
+            }
+        }
+        NFTListing[] memory validListings = new NFTListing[](length);
+        uint256 index = 0;
+        for (uint256 i = startId; i <= endId; i++) {
+            if (listings[i].status == Status.CREATED) {
+                validListings[index] = listings[i];
+                index++;
+            }
+        }
+        return validListings;
+    }
+
+    function getListing(uint256 listingId) external view listingExists(listingId) returns (NFTListing memory) {
+        return listings[listingId];
+    }
+
+    function getUserOwnedListings(address user) external view returns (uint256[] memory) {
+        return userOwnedListings[user];
+    }
+
+    function getCurrencyFee(address currency) public view returns (uint256) {
+        uint256 currencyFee = currencyFees[currency];
+        if (currencyFee == 0) revert CurrencyFeeMustBeGreaterThanZero();
+        return currencyFee;
+    }
+
+    function withdrawFees(address currency) external onlyOwner {
+        uint256 amount = accumulatedFees[currency];
+        if (amount == 0) revert NoFeesToWithdraw();
+        accumulatedFees[currency] = 0;
+        if (currency == address(0)) {
+            (bool success, ) = msg.sender.call{value: amount}("");
+            if (!success) revert ETHWithdrawalFailed();
+        } else {
+            if (!IERC20(currency).transfer(msg.sender, amount)) revert FeeWithdrawalFailed();
+        }
+        emit FeeWithdrawn(msg.sender, currency, amount);
+    }
+
+    receive() external payable {}
+}
