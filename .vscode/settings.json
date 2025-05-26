@@ -28,5 +28,8 @@
   "solidity.remappings": [
     "@openzeppelin/=../../node_modules/@openzeppelin/",
     "@pancakeswap/=../../node_modules/@pancakeswap/"
-  ]
+  ],
+  "[solidity]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
 }
