@@ -6,6 +6,10 @@ describe('Listing', function () {
   async function setup() {
     const [admin, user1, user2, user3] = await ethers.getSigners();
 
+    const PermissionsFactory = await ethers.getContractFactory('Permissions');
+    const permissions = await PermissionsFactory.deploy(admin.address);
+    await permissions.waitForDeployment();
+
     const MockTokenFactory = await ethers.getContractFactory('MockToken');
     const mockToken = await MockTokenFactory.deploy(admin.address);
     await mockToken.waitForDeployment();
@@ -41,11 +45,18 @@ describe('Listing', function () {
     // await mockReceiver.waitForDeployment();
 
     const ListingFactory = await ethers.getContractFactory('Listing');
-    const listing = await ListingFactory.deploy(admin.address);
+    const listing = await ListingFactory.deploy(admin.address, await permissions.getAddress());
     await listing.waitForDeployment();
+
+    await permissions.connect(admin)['assignListingRole']([user1.address, user2.address, user3.address]);
+    
+    await permissions.connect(admin)['assignNFTRole']([await mockERC721.getAddress(), await mockERC1155.getAddress()]);
+    
+    await permissions.connect(admin)['addCurrency']([await mockToken.getAddress(), await mockToken2.getAddress(), ethers.ZeroAddress]);
 
     return {
       listing,
+      permissions,
       mockToken,
       mockToken2,
       mockERC721,
@@ -2682,6 +2693,329 @@ describe('Listing', function () {
         listing,
         'NoFeesToWithdraw',
       );
+    });
+  });
+  describe('Permission Integration Tests', function () {
+
+    describe('createListing Permission Checks', function () {
+      it('Should revert if user does not have LISTING_ROLE', async function () {
+        const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const [,,,, user4] = await ethers.getSigners();
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await mockERC721.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: await mockToken.getAddress(),
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+
+        await mockERC721.connect(user1)['mint'](user4.address, 3);
+        await mockERC721.connect(user4)['setApprovalForAll'](await listing.getAddress(), true);
+        
+        await expect(listing.connect(user4)['createListing'](listingParams))
+          .to.be.revertedWithCustomError(listing, 'UserNotAuthorizedToCreateListing')
+          .withArgs(user4.address);
+      });
+
+      it('Should revert if NFT contract is not whitelisted', async function () {
+        const { listing, mockToken, admin, user1 } = await loadFixture(setup);
+        
+        const MockERC721Factory = await ethers.getContractFactory('MockERC721');
+        const nonWhitelistedNFT = await MockERC721Factory.deploy();
+        await nonWhitelistedNFT.waitForDeployment();
+        await nonWhitelistedNFT.connect(admin)['mint'](user1.address, 0);
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await nonWhitelistedNFT.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: await mockToken.getAddress(),
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+
+        await nonWhitelistedNFT.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+        
+        await expect(listing.connect(user1)['createListing'](listingParams))
+          .to.be.revertedWithCustomError(listing, 'NFTNotWhitelistedForListing')
+          .withArgs(await nonWhitelistedNFT.getAddress());
+      });
+
+      it('Should revert if currency is not supported', async function () {
+        const { listing, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const MockTokenFactory = await ethers.getContractFactory('MockToken');
+        const unsupportedToken = await MockTokenFactory.deploy(admin.address);
+        await unsupportedToken.waitForDeployment();
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await mockERC721.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: await unsupportedToken.getAddress(),
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+
+        await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+        
+        await expect(listing.connect(user1)['createListing'](listingParams))
+          .to.be.revertedWithCustomError(listing, 'CurrencyNotSupportedForListing')
+          .withArgs(await unsupportedToken.getAddress());
+      });
+    });
+
+    describe('updateListing Permission Checks', function () {
+      it('Should revert if new currency is not supported', async function () {
+        const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await mockERC721.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: await mockToken.getAddress(),
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+        
+        await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+        await listing.connect(user1)['createListing'](listingParams);
+
+        const MockTokenFactory = await ethers.getContractFactory('MockToken');
+        const unsupportedToken = await MockTokenFactory.deploy(admin.address);
+        await unsupportedToken.waitForDeployment();
+
+        const updatedParams = {
+          ...listingParams,
+          currency: await unsupportedToken.getAddress(),
+          pricePerToken: ethers.parseUnits('2', 18),
+        };
+
+        await expect(listing.connect(user1)['updateListing'](0, updatedParams))
+          .to.be.revertedWithCustomError(listing, 'CurrencyNotSupportedForListing')
+          .withArgs(await unsupportedToken.getAddress());
+      });
+
+      it('Should revert if new NFT contract is not whitelisted when changing asset contract', async function () {
+        const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await mockERC721.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: await mockToken.getAddress(),
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+        
+        await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+        await listing.connect(user1)['createListing'](listingParams);
+
+        const MockERC721Factory = await ethers.getContractFactory('MockERC721');
+        const nonWhitelistedNFT = await MockERC721Factory.deploy();
+        await nonWhitelistedNFT.waitForDeployment();
+        await nonWhitelistedNFT.connect(admin)['mint'](user1.address, 0);
+
+        const updatedParams = {
+          ...listingParams,
+          assetContract: await nonWhitelistedNFT.getAddress(),
+          pricePerToken: ethers.parseUnits('2', 18),
+        };
+
+        await expect(listing.connect(user1)['updateListing'](0, updatedParams))
+          .to.be.revertedWithCustomError(listing, 'NFTNotWhitelistedForListing')
+          .withArgs(await nonWhitelistedNFT.getAddress());
+      });
+    });
+
+    describe('approveCurrencyForListing Permission Checks', function () {
+      it('Should revert if currency is not supported', async function () {
+        const { listing, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await mockERC721.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: ethers.ZeroAddress,
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+        
+        await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
+        await listing.connect(user1)['createListing'](listingParams);
+
+        const MockTokenFactory = await ethers.getContractFactory('MockToken');
+        const unsupportedToken = await MockTokenFactory.deploy(admin.address);
+        await unsupportedToken.waitForDeployment();
+
+        const listingId = 0;
+        const pricePerTokenInCurrency = ethers.parseUnits('2', 18);
+
+        await expect(
+          listing.connect(user1)['approveCurrencyForListing'](listingId, await unsupportedToken.getAddress(), pricePerTokenInCurrency)
+        ).to.be.revertedWithCustomError(listing, 'CurrencyNotSupportedForListing')
+          .withArgs(await unsupportedToken.getAddress());
+      });
+    });
+
+    describe('Permission Helper Functions', function () {
+      it('Should correctly check if user has listing permission', async function () {
+        const { listing, admin, user1 } = await loadFixture(setup);
+        
+        expect(await listing['hasListingPermission'](user1.address)).to.be.true;
+        
+        const [,,,, user4] = await ethers.getSigners();
+        expect(await listing['hasListingPermission'](user4.address)).to.be.false;
+      });
+
+      it('Should correctly check if NFT contract is whitelisted', async function () {
+        const { listing, mockERC721, admin } = await loadFixture(setup);
+        
+        expect(await listing['isNFTWhitelisted'](await mockERC721.getAddress())).to.be.true;
+        
+        const MockERC721Factory = await ethers.getContractFactory('MockERC721');
+        const nonWhitelistedNFT = await MockERC721Factory.deploy();
+        await nonWhitelistedNFT.waitForDeployment();
+        
+        expect(await listing['isNFTWhitelisted'](await nonWhitelistedNFT.getAddress())).to.be.false;
+      });
+
+      it('Should correctly check if currency is supported', async function () {
+        const { listing, mockToken, admin } = await loadFixture(setup);
+        
+        expect(await listing['isCurrencySupported'](await mockToken.getAddress())).to.be.true;
+        
+        expect(await listing['isCurrencySupported'](ethers.ZeroAddress)).to.be.true;
+        
+        const MockTokenFactory = await ethers.getContractFactory('MockToken');
+        const unsupportedToken = await MockTokenFactory.deploy(admin.address);
+        await unsupportedToken.waitForDeployment();
+        
+        expect(await listing['isCurrencySupported'](await unsupportedToken.getAddress())).to.be.false;
+      });
+
+      it('Should return false for all permission checks when permission contract is not set', async function () {
+        const { mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const ListingFactory = await ethers.getContractFactory('Listing');
+        const listingWithoutPermissions = await ListingFactory.deploy(admin.address, ethers.ZeroAddress);
+        await listingWithoutPermissions.waitForDeployment();
+        
+        expect(await listingWithoutPermissions['hasListingPermission'](user1.address)).to.be.false;
+        expect(await listingWithoutPermissions['isNFTWhitelisted'](await mockERC721.getAddress())).to.be.false;
+        expect(await listingWithoutPermissions['isCurrencySupported'](await mockToken.getAddress())).to.be.false;
+      });
+    });
+
+    describe('setPermissionContract Function', function () {
+      it('Should allow owner to set permission contract', async function () {
+        const { listing, admin } = await loadFixture(setup);
+        
+        const PermissionsFactory = await ethers.getContractFactory('Permissions');
+        const newPermissions = await PermissionsFactory.deploy(admin.address);
+        await newPermissions.waitForDeployment();
+        
+        const oldPermissionAddress = await listing['permissionContract']();
+        
+        await expect(listing.connect(admin)['setPermissionContract'](await newPermissions.getAddress()))
+          .to.emit(listing, 'PermissionContractUpdated')
+          .withArgs(oldPermissionAddress, await newPermissions.getAddress());
+        
+        expect(await listing['permissionContract']()).to.equal(await newPermissions.getAddress());
+      });
+
+      it('Should revert if non-owner tries to set permission contract', async function () {
+        const { listing, admin, user1 } = await loadFixture(setup);
+        
+        const PermissionsFactory = await ethers.getContractFactory('Permissions');
+        const newPermissions = await PermissionsFactory.deploy(admin.address);
+        await newPermissions.waitForDeployment();
+        
+        await expect(listing.connect(user1)['setPermissionContract'](await newPermissions.getAddress()))
+          .to.be.revertedWithCustomError(listing, 'OwnableUnauthorizedAccount')
+          .withArgs(user1.address);
+      });
+
+      it('Should revert operations when permission contract is not set', async function () {
+        const { mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
+        
+        const ListingFactory = await ethers.getContractFactory('Listing');
+        const listingWithoutPermissions = await ListingFactory.deploy(admin.address, ethers.ZeroAddress);
+        await listingWithoutPermissions.waitForDeployment();
+        
+        const block = await ethers.provider.getBlock('latest');
+        if (!block) {
+          throw new Error('Failed to get block');
+        }
+        const currentTimestamp = block.timestamp + 1000;
+
+        const listingParams = {
+          assetContract: await mockERC721.getAddress(),
+          tokenId: 0,
+          quantity: 1,
+          currency: await mockToken.getAddress(),
+          pricePerToken: ethers.parseUnits('1', 18),
+          startTimestamp: currentTimestamp,
+          endTimestamp: currentTimestamp + 604800,
+          reserved: false,
+        };
+
+        await mockERC721.connect(user1)['setApprovalForAll'](await listingWithoutPermissions.getAddress(), true);
+        
+        await expect(listingWithoutPermissions.connect(user1)['createListing'](listingParams))
+          .to.be.revertedWithCustomError(listingWithoutPermissions, 'PermissionContractNotSet');
+      });
     });
   });
 });

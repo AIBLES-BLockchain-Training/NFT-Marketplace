@@ -8,7 +8,7 @@ async function main() {
     const owner = "0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a";
 
     const Listing = await ethers.getContractFactory("Listing");
-    const listing = await Listing.deploy(owner);
+    const listing = await Listing.deploy(owner, "0x992a59a46D3c450e2A00e3f1711475107F1B6E89");
     
     const listingAddr = await listing.getAddress();
     console.log("Listing deployed to:", listingAddr);
@@ -20,7 +20,7 @@ async function main() {
     });
     await run("verify:verify", {
         address: listingAddr,
-        constructorArguments: [owner],
+        constructorArguments: [owner, "0x992a59a46D3c450e2A00e3f1711475107F1B6E89"],
     });
 }
 
