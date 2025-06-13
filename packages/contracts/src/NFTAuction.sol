@@ -307,7 +307,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         );
         require(msg.sender != auction.highestBidder, "You are already highest bidder");
         require(msg.sender != auction.auctionCreator, "Auction creator can not bid");
-        require(isNewWinningBid(_auctionId, _bidAmount), "Bid amount is not valid");
+        require(isNewWinningBid(_auctionId, _bidAmount), "Bid amount is not a new winning bid");
 
         // Lấy thông tin người trả giá cũ và token currency TRƯỚC KHI thay đổi bất cứ thứ gì
         address previousHighestBidder = auction.highestBidder;
