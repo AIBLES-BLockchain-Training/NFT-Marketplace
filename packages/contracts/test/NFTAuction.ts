@@ -29,8 +29,14 @@ describe('NFTAuction with ERC721', function () {
     await deployed.waitForDeployment();
     nftAuction = deployed as unknown as NFTAuction;
 
-    const AUCTION_ROLE = ethers.keccak256(ethers.toUtf8Bytes('AUCTION_ROLE'));
-    await permissions.grantRole(AUCTION_ROLE, seller.address);
+    // Assign roles to seller
+    await permissions.connect(admin).assignAuctionRole([seller.address]);
+    
+    // Assign roles for nft
+    await permissions.connect(admin).assignNFTRole([mockERC721.getAddress()]);
+
+    // add support currency
+    await permissions.addCurrency([mockERC20.getAddress()]);
 
     // Mint NFTs for seller
     await mockERC721.mint(seller.address, 1);
@@ -51,19 +57,21 @@ describe('NFTAuction with ERC721', function () {
       nftAuction,
       mockERC20,
       mockERC721,
+      admin,
       seller,
       bidder1,
       bidder2,
       addressErc20: await mockERC20.getAddress(),
       addressErc721: await mockERC721.getAddress(),
       addressSystem: auctionAddress,
+      permissions,
     };
   }
 
-  let nftAuction, mockERC20, mockERC721, seller, bidder1, bidder2, addressErc20, addressErc721, addressSystem;
+  let nftAuction, mockERC20, mockERC721, admin, seller, bidder1, bidder2, addressErc20, addressErc721, addressSystem, permissions;
 
   beforeEach(async function () {
-    ({ nftAuction, mockERC20, mockERC721, seller, bidder1, bidder2, addressErc20, addressErc721, addressSystem } =
+    ({ nftAuction, mockERC20, mockERC721, admin, seller, bidder1, bidder2, addressErc20, addressErc721, addressSystem, permissions } =
       await loadFixture(deployContractLoadfixture));
   });
 
@@ -107,8 +115,8 @@ describe('NFTAuction with ERC721', function () {
       _endTime: endTime,
     };
 
-    // Approve NFT transfer before creating auction
-    await mockERC721.connect(seller).approve(addressSystem, tokenId);
+    // Approve all NFT transfer before creating auction
+    await mockERC721.connect(seller).setApprovalForAll(addressSystem, true);
     await nftAuction.connect(seller).createAuction(auctionArgs);
 
     const auction = await nftAuction.auctions(0);
@@ -140,6 +148,7 @@ describe('NFTAuction with ERC721', function () {
   describe('Auction function create and cancel with ERC721', function () {
     it('Should create an auction', async function () {
       const { startTime, endTime, auctionObject } = await createAuction(1);
+      // console.log(auctionObject);
 
       expect(await mockERC721.ownerOf(1)).to.equal(addressSystem);
       expect(auctionObject).to.deep.include({
@@ -204,7 +213,7 @@ describe('NFTAuction with ERC721', function () {
     });
 
     it('Should revert if bidder nft 721 with quantity > 1', async function () {
-      await mockERC721.connect(seller).approve(addressSystem, 1);
+      await mockERC721.connect(seller).setApprovalForAll(addressSystem, true);
       const startTime = await time.latest();
       const endTime = startTime + 3600; // 1 hour later
       await expect(
@@ -258,6 +267,68 @@ describe('NFTAuction with ERC721', function () {
           _endTime: endTime,
         }),
       ).to.be.revertedWith('Ceiling price should be greater than start price');
+    });
+
+    it('Should revert if start time is greater than end time', async function () {
+      const startTime = await time.latest();
+      const endTime = startTime + 600; // 10 minutes later
+      await expect(
+        nftAuction.connect(seller).createAuction({
+          _assetContract: addressErc721,
+          _tokenId: 1,
+          _quantity: 1,
+          _currency: addressErc20,
+          _startPrice: ethers.parseEther('1'),
+          _ceilingPrice: ethers.parseEther('100'),
+          _stepAmount: 500,
+          _timeBufferInSeconds: 120, // 2 minutes
+          _startTime: startTime,
+          _endTime: endTime,
+        }),
+      ).to.be.revertedWith('Auction time is too short');
+    });
+
+    it('Should revert if nft is not whitelisted', async function () {
+      const startTime = await time.latest();
+      const endTime = startTime + 3600; // 1 hour later
+
+      await permissions.connect(admin).revokeNFTRole([mockERC721.getAddress()]);
+
+      await expect(
+        nftAuction.connect(seller).createAuction({
+          _assetContract: addressErc721,
+          _tokenId: 1,
+          _quantity: 1,
+          _currency: addressErc20,
+          _startPrice: ethers.parseEther('1'),
+          _ceilingPrice: ethers.parseEther('100'),
+          _stepAmount: 500,
+          _timeBufferInSeconds: 120, // 2 minutes
+          _startTime: startTime,
+          _endTime: endTime,
+        }),
+      ).to.be.revertedWith('NFT contract is not whitelisted');
+    });
+
+    it('Should revert if currency is not supported', async function () {
+      await permissions.connect(admin).removeCurrency([addressErc20]);
+      const startTime = await time.latest();
+      const endTime = startTime + 3600; // 1 hour later
+
+      await expect(
+        nftAuction.connect(seller).createAuction({
+          _assetContract: addressErc721,
+          _tokenId: 1,
+          _quantity: 1,
+          _currency: addressErc20,
+          _startPrice: ethers.parseEther('1'),
+          _ceilingPrice: ethers.parseEther('100'),
+          _stepAmount: 500,
+          _timeBufferInSeconds: 120, // 2 minutes
+          _startTime: startTime,
+          _endTime: endTime,
+        }),
+      ).to.be.revertedWith('Currency is not supported');
     });
 
     describe('Should test function cancelAuction', function () {
@@ -571,8 +642,14 @@ describe('NFTAuction with ERC1155', function () {
     const nftAuction: any = await NFTAuction.deploy(await permissions.getAddress());
     await nftAuction.waitForDeployment();
 
-    const AUCTION_ROLE = ethers.keccak256(ethers.toUtf8Bytes('AUCTION_ROLE'));
-    await permissions.grantRole(AUCTION_ROLE, seller.address);
+    // Assign roles to seller
+    await permissions.connect(admin).assignAuctionRole([seller.address]);
+
+    // Assign roles for nft
+    await permissions.connect(admin).assignNFTRole([mockERC1155.getAddress()]);
+
+    // add support currency
+    await permissions.addCurrency([mockERC20.getAddress()]);
 
     // Mint NFTs for seller
     await mockERC1155.mint(seller.address, 1, 10);
@@ -592,18 +669,20 @@ describe('NFTAuction with ERC1155', function () {
       mockERC20,
       mockERC1155,
       seller,
+      admin,
       bidder1,
       bidder2,
       addressErc20: await mockERC20.getAddress(),
       addressErc1155: await mockERC1155.getAddress(),
       addressSystem: auctionAddress,
+      permissions,
     };
   }
 
-  let nftAuction, mockERC20, mockERC1155, seller, bidder1, bidder2, addressErc20, addressErc1155, addressSystem;
+  let nftAuction, mockERC20, mockERC1155, admin, seller, bidder1, bidder2, addressErc20, addressErc1155, addressSystem, permissions;
 
   beforeEach(async function () {
-    ({ nftAuction, mockERC20, mockERC1155, seller, bidder1, bidder2, addressErc20, addressErc1155, addressSystem } =
+    ({ nftAuction, mockERC20, mockERC1155, admin, seller, bidder1, bidder2, addressErc20, addressErc1155, addressSystem, permissions } =
       await loadFixture(deployContractLoadfixture));
   });
 
@@ -753,6 +832,28 @@ describe('NFTAuction with ERC1155', function () {
 
       // Should fail with insufficient balance
       await expect(nftAuction.connect(seller).createAuction(auctionArgs)).to.be.revertedWith('Insufficient NFT balance');
+    });
+
+    it('Should revert if nft is not whitelisted', async function () {
+      const startTime = await time.latest();
+      const endTime = startTime + 3600; // 1 hour later
+
+      await permissions.connect(admin).revokeNFTRole([mockERC1155.getAddress()]);
+
+      await expect(
+        nftAuction.connect(seller).createAuction({
+          _assetContract: addressErc1155,
+          _tokenId: 1,
+          _quantity: 10,
+          _currency: addressErc20,
+          _startPrice: ethers.parseEther('1'),
+          _ceilingPrice: ethers.parseEther('100'),
+          _stepAmount: 1,
+          _timeBufferInSeconds: 120, // 2 minutes
+          _startTime: startTime,
+          _endTime: endTime,
+        }),
+      ).to.be.revertedWith('NFT contract is not whitelisted');
     });
   });
 

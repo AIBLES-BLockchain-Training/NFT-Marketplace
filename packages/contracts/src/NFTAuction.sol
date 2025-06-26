@@ -11,6 +11,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     // Permissions contract address
     IPermission public permissionsContract;
     bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
+    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
 
     // enum AuctionStatus
     enum AuctionStatus {
@@ -62,6 +63,9 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         uint256 _startTime;
         uint256 _endTime;
     }
+
+    //state const
+    uint256 public constant MIN_TIME_AUCTION = 1 hours; // 1 hour
 
     // total Auctions is created
     uint256 public totalAuctions;
@@ -121,6 +125,17 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         _;
     }
 
+    // check if NFT contract is whitelisted
+    modifier onlyWhitelistedNFT(address _nft) {
+        require(permissionsContract.hasRole(NFT_ROLE, _nft), "NFT contract is not whitelisted");
+        _;
+    }
+
+    modifier onlySupportedCurrency(address _currency) {
+        require(permissionsContract.supportedCurrencies(_currency), "Currency is not supported");
+        _;
+    }
+
     constructor(address _permissionsContract) {
         permissionsContract = IPermission(_permissionsContract);
     }
@@ -140,9 +155,9 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         address _assetContract,
         uint256 _tokenId,
         uint256 _quantity,
-        uint types
+        TokenType types
     ) private view {
-        if (types == 1) {
+        if (types == TokenType.ERC721) {
             require(IERC721(_assetContract).ownerOf(_tokenId) == msg.sender, "You are not owner of this NFT");
         } else {
             require(IERC1155(_assetContract).balanceOf(msg.sender, _tokenId) >= _quantity, "Insufficient NFT balance");
@@ -150,7 +165,15 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     }
 
     // create auction
-    function createAuction(AuctionParams memory _auctionParams) external onlyAuctioneer {
+    function createAuction(
+        AuctionParams memory _auctionParams
+    )
+        external
+        onlyAuctioneer
+        onlyWhitelistedNFT(_auctionParams._assetContract)
+        onlySupportedCurrency(_auctionParams._currency)
+    {
+        // ======================== 1. CHECKS (Kiểm tra điều kiện) ========================
         require(_auctionParams._quantity > 0, "Quantity should be greater than 0");
         require(_auctionParams._tokenId > 0, "Token ID should be greater than 0");
         require(_auctionParams._startPrice > 0, "Start price should be greater than 0");
@@ -160,23 +183,26 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         );
         require(_auctionParams._timeBufferInSeconds > 0, "Time buffer should be greater than 0");
         require(_auctionParams._stepAmount > 0, "Step amount should be greater than 0"); // decimal and max step amount, 10000 == 100%
-        require(_auctionParams._startTime < _auctionParams._endTime, "Start time should be less than end time");
+        require(_auctionParams._startTime + MIN_TIME_AUCTION <= _auctionParams._endTime, "Auction time is too short");
 
-        uint types = IERC165(_auctionParams._assetContract).supportsInterface(type(IERC721).interfaceId) ? 1 : 2;
+        TokenType types = IERC165(_auctionParams._assetContract).supportsInterface(type(IERC721).interfaceId)
+            ? TokenType.ERC721
+            : TokenType.ERC1155;
 
         // Check if auction creator has enough NFT balance
         checkEnsureNFTBalance(_auctionParams._assetContract, _auctionParams._tokenId, _auctionParams._quantity, types);
 
-        if (types == 1) {
+        if (types == TokenType.ERC721) {
             // Transfer NFT from seller to contract use safeTransferFrom for ERC721
-            // require approval before transfer
+            // get approved for all
             require(
-                IERC721(_auctionParams._assetContract).getApproved(_auctionParams._tokenId) == address(this),
+                IERC721(_auctionParams._assetContract).isApprovedForAll(msg.sender, address(this)) ||
+                    IERC721(_auctionParams._assetContract).getApproved(_auctionParams._tokenId) == address(this),
                 "Contract should be approved to transfer NFT"
             );
             require(_auctionParams._quantity == 1, "Quantity should be 1 for ERC721");
             IERC721(_auctionParams._assetContract).safeTransferFrom(msg.sender, address(this), _auctionParams._tokenId);
-        } else if (types == 2) {
+        } else if (types == TokenType.ERC1155) {
             // Transfer NFT from seller to contract use safeTransferFrom for ERC1155
             require(
                 IERC1155(_auctionParams._assetContract).isApprovedForAll(msg.sender, address(this)),
@@ -209,8 +235,8 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             isPayoutCollected: false,
             isTokenCollected: false,
             status: AuctionStatus.CREATED,
-            tokenType: types == 1 ? TokenType.ERC721 : TokenType.ERC1155
-            //state ...
+            tokenType: types // Set token type based on the contract interface
+            //state variables
         });
 
         emit NewAuction(msg.sender, totalAuctions, _auctionParams._assetContract, auctions[totalAuctions]);
