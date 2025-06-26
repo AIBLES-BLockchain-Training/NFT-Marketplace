@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -9,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import "./IPermissions.sol"; 
 
 error InvalidAssetContract();
 error QuantityMustBeGreaterThanZero();
@@ -53,9 +53,19 @@ error RecipientCannotHandleERC1155Tokens();
 
 error TokenTypeNotSupported();
 
+error PermissionContractNotSet();
+error UserNotAuthorizedToCreateListing(address user);
+error NFTNotWhitelistedForListing(address nftContract);
+error CurrencyNotSupportedForListing(address currency);
+
 contract Listing is Ownable {
     uint256 public listingCounter;
     uint256 public decimal;
+
+    IPermission public permissionContract;
+
+    bytes32 public constant LISTING_ROLE = keccak256("LISTING_ROLE");
+    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
 
     enum Status {
         UNSET,
@@ -130,10 +140,28 @@ contract Listing is Ownable {
     event NFTPurchased(uint256 indexed listingId, address indexed buyer, uint256 quantity, uint256 totalPrice);
     event FeeWithdrawn(address indexed admin, address indexed currency, uint256 amount);
     event CurrencyFeeUpdated(address indexed currency, uint256 fee);
+    
+    event PermissionContractUpdated(address indexed oldPermission, address indexed newPermission);
 
-    constructor(address _owner) Ownable(_owner) {
+    constructor(address _owner, address _permissionContract) Ownable(_owner) {
         listingCounter = 0;
         decimal = 10000;
+        permissionContract = IPermission(_permissionContract);
+    }
+
+    modifier onlyAuthorizedSeller() {
+        _checkListingPermission(msg.sender);
+        _;
+    }
+
+    modifier onlyWhitelistedNFT(address assetContract) {
+        _checkNFTPermission(assetContract);
+        _;
+    }
+
+    modifier onlySupportedCurrency(address currency) {
+        _checkCurrencyPermission(currency);
+        _;
     }
 
     modifier validParams(ListingParameters memory params) {
@@ -150,6 +178,48 @@ contract Listing is Ownable {
         if (startId > endId) revert InvalidRange(startId, endId);
         if (endId > listingCounter) revert EndIdExceedsTotalListings(endId, listingCounter);
         _;
+    }
+
+    function setPermissionContract(address _permissionContract) external onlyOwner {
+        address oldPermission = address(permissionContract);
+        permissionContract = IPermission(_permissionContract);
+        emit PermissionContractUpdated(oldPermission, _permissionContract);
+    }
+
+    function _checkListingPermission(address user) internal view {
+        if (address(permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!permissionContract.hasRole(LISTING_ROLE, user)) {
+            revert UserNotAuthorizedToCreateListing(user);
+        }
+    }
+
+    function _checkNFTPermission(address nftContract) internal view {
+        if (address(permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!permissionContract.hasRole(NFT_ROLE, nftContract)) {
+            revert NFTNotWhitelistedForListing(nftContract);
+        }
+    }
+
+    function _checkCurrencyPermission(address currency) internal view {
+        if (address(permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!permissionContract.supportedCurrencies(currency)) {
+            revert CurrencyNotSupportedForListing(currency);
+        }
+    }
+
+    function hasListingPermission(address user) external view returns (bool) {
+        if (address(permissionContract) == address(0)) return false;
+        return permissionContract.hasRole(LISTING_ROLE, user);
+    }
+
+    function isNFTWhitelisted(address nftContract) external view returns (bool) {
+        if (address(permissionContract) == address(0)) return false;
+        return permissionContract.hasRole(NFT_ROLE, nftContract);
+    }
+
+    function isCurrencySupported(address currency) external view returns (bool) {
+        if (address(permissionContract) == address(0)) return false;
+        return permissionContract.supportedCurrencies(currency);
     }
 
     function _isValidParams(ListingParameters memory params) internal view {
@@ -172,7 +242,14 @@ contract Listing is Ownable {
         emit CurrencyFeeUpdated(currency, fee);
     }
 
-    function createListing(ListingParameters memory params) external validParams(params) returns (uint256 listingId) {
+    function createListing(ListingParameters memory params) 
+        external 
+        validParams(params) 
+        onlyAuthorizedSeller()  
+        onlyWhitelistedNFT(params.assetContract)  
+        onlySupportedCurrency(params.currency)  
+        returns (uint256 listingId) 
+    {
         TokenType tokenType = getTokenType(params.assetContract);
 
         _checkSellerTokenOwnership(params.assetContract, tokenType, msg.sender, params.tokenId, params.quantity);
@@ -227,11 +304,15 @@ contract Listing is Ownable {
     function updateListing(
         uint256 listingId,
         ListingParameters memory params
-    ) external validParams(params) listingExists(listingId) {
+    ) external validParams(params) listingExists(listingId) onlySupportedCurrency(params.currency) { 
         NFTListing storage listing = listings[listingId];
 
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
+
+        if (listing.assetContract != params.assetContract) {
+            _checkNFTPermission(params.assetContract);
+        }
 
         listing.assetContract = params.assetContract;
         listing.tokenId = params.tokenId;
@@ -282,7 +363,7 @@ contract Listing is Ownable {
         uint256 listingId,
         address currency,
         uint256 pricePerTokenInCurrency
-    ) external listingExists(listingId) {
+    ) external listingExists(listingId) onlySupportedCurrency(currency) {  
         NFTListing storage listing = listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();

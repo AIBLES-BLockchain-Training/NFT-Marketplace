@@ -8,6 +8,9 @@ data
 
 # dependencies
 node_modules
+coverage
+coverage.json
+typechain-types
 
 # IDEs and editors
 /.idea
