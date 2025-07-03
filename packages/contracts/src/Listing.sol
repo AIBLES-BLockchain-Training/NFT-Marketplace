@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "./IPermissions.sol";
+import "./library/Ownable.sol";
+import "./library/ReentrancyGuard.sol";
 
 error InvalidAssetContract();
 error QuantityMustBeGreaterThanZero();
@@ -57,26 +59,37 @@ error UserNotAuthorizedToCreateListing(address user);
 error NFTNotWhitelistedForListing(address nftContract);
 error CurrencyNotSupportedForListing(address currency);
 
-contract Listing {
+contract Listing is Ownable, ReentrancyGuard {
     
-    // ============= STORAGE STRUCT =============
+    // ============= STORAGE STRUCTS =============
     
-    struct ListingStorage {
+    struct CoreStorage {
         uint256 listingCounter;
         uint256 decimal;
         IPermission permissionContract;
+        bool initialized;
+    }
+    
+    struct ListingData {
         mapping(uint256 => NFTListing) listings;
+        mapping(address => uint256[]) userOwnedListings;
+    }
+    
+    struct ApprovalData {
         mapping(uint256 => mapping(address => bool)) buyerApprovals;
         mapping(uint256 => mapping(address => uint256)) currencyApprovals;
-        mapping(address => uint256[]) userOwnedListings;
+    }
+    
+    struct FeeData {
         mapping(address => uint256) currencyFees;
         mapping(address => uint256) accumulatedFees;
-        
-        address owner;
-        
-        uint256 reentrancyStatus;
-        
-        bool initialized;
+    }
+    
+    struct ListingStorage {
+        CoreStorage core;
+        ListingData listings;
+        ApprovalData approvals;
+        FeeData fees;
     }
     
     // ============= UNSTRUCTURED STORAGE SLOT =============
@@ -91,10 +104,6 @@ contract Listing {
         }
     }
     
-    // ============= REENTRANCY CONSTANTS =============
-    
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
     
     // ============= CONSTANTS & ENUMS =============
     
@@ -178,94 +187,58 @@ contract Listing {
     
     function initialize(address _owner, address _permissionContract) external {
         ListingStorage storage s = _listingStorage();
-        require(!s.initialized, "Already initialized");
+        require(!s.core.initialized, "Already initialized");
         
-        s.owner = _owner;
-        s.listingCounter = 0;
-        s.decimal = 10000;
-        s.permissionContract = IPermission(_permissionContract);
-        s.reentrancyStatus = _NOT_ENTERED;
-        s.initialized = true;
-        
-        emit OwnershipTransferred(address(0), _owner);
+        _setupOwner(_owner);
+        s.core.listingCounter = 0;
+        s.core.decimal = 10000;
+        s.core.permissionContract = IPermission(_permissionContract);
+        s.core.initialized = true;
     }
 
-    // ============= OWNERSHIP FUNCTIONS =============
+    // ============= OWNABLE IMPLEMENTATION =============
     
-    function owner() public view returns (address) {
-        return _listingStorage().owner;
+    function _canSetOwner() internal view override returns (bool) {
+        return msg.sender == owner();
     }
     
-    function _transferOwnership(address newOwner) internal {
-        ListingStorage storage s = _listingStorage();
-        address oldOwner = s.owner;
-        s.owner = newOwner;
-        emit OwnershipTransferred(oldOwner, newOwner);
-    }
-    
-    function transferOwnership(address newOwner) public {
-        require(newOwner != address(0), "New owner is the zero address");
-        require(msg.sender == owner(), "Ownable: caller is not the owner");
-        _transferOwnership(newOwner);
-    }
-    
-    function renounceOwnership() public {
-        require(msg.sender == owner(), "Ownable: caller is not the owner");
-        _transferOwnership(address(0));
-    }
-    
-    modifier onlyOwner() {
-        require(msg.sender == owner(), "Ownable: caller is not the owner");
-        _;
-    }
-    
-    // ============= REENTRANCY GUARD =============
-    
-    modifier nonReentrant() {
-        ListingStorage storage s = _listingStorage();
-        require(s.reentrancyStatus != _ENTERED, "ReentrancyGuard: reentrant call");
-        
-        s.reentrancyStatus = _ENTERED;
-        _;
-        s.reentrancyStatus = _NOT_ENTERED;
-    }
 
     // ============= PUBLIC GETTERS =============
     
     function listingCounter() external view returns (uint256) {
-        return _listingStorage().listingCounter;
+        return _listingStorage().core.listingCounter;
     }
     
     function decimal() external view returns (uint256) {
-        return _listingStorage().decimal;
+        return _listingStorage().core.decimal;
     }
     
     function permissionContract() external view returns (IPermission) {
-        return _listingStorage().permissionContract;
+        return _listingStorage().core.permissionContract;
     }
     
     function listings(uint256 listingId) external view returns (NFTListing memory) {
-        return _listingStorage().listings[listingId];
+        return _listingStorage().listings.listings[listingId];
     }
     
     function buyerApprovals(uint256 listingId, address buyer) external view returns (bool) {
-        return _listingStorage().buyerApprovals[listingId][buyer];
+        return _listingStorage().approvals.buyerApprovals[listingId][buyer];
     }
     
     function currencyApprovals(uint256 listingId, address currency) external view returns (uint256) {
-        return _listingStorage().currencyApprovals[listingId][currency];
+        return _listingStorage().approvals.currencyApprovals[listingId][currency];
     }
     
     function userOwnedListings(address user) external view returns (uint256[] memory) {
-        return _listingStorage().userOwnedListings[user];
+        return _listingStorage().listings.userOwnedListings[user];
     }
     
     function currencyFees(address currency) external view returns (uint256) {
-        return _listingStorage().currencyFees[currency];
+        return _listingStorage().fees.currencyFees[currency];
     }
     
     function accumulatedFees(address currency) external view returns (uint256) {
-        return _listingStorage().accumulatedFees[currency];
+        return _listingStorage().fees.accumulatedFees[currency];
     }
 
     // ============= MODIFIERS =============
@@ -291,14 +264,14 @@ contract Listing {
     }
 
     modifier listingExists(uint256 listingId) {
-        if (_listingStorage().listings[listingId].status == Status.UNSET) revert ListingDoesNotExist();
+        if (_listingStorage().listings.listings[listingId].status == Status.UNSET) revert ListingDoesNotExist();
         _;
     }
 
     modifier validRange(uint256 startId, uint256 endId) {
         ListingStorage storage s = _listingStorage();
         if (startId > endId) revert InvalidRange(startId, endId);
-        if (endId > s.listingCounter) revert EndIdExceedsTotalListings(endId, s.listingCounter);
+        if (endId > s.core.listingCounter) revert EndIdExceedsTotalListings(endId, s.core.listingCounter);
         _;
     }
 
@@ -306,15 +279,15 @@ contract Listing {
 
     function setPermissionContract(address _permissionContract) external onlyOwner {
         ListingStorage storage s = _listingStorage();
-        address oldPermission = address(s.permissionContract);
-        s.permissionContract = IPermission(_permissionContract);
+        address oldPermission = address(s.core.permissionContract);
+        s.core.permissionContract = IPermission(_permissionContract);
         emit PermissionContractUpdated(oldPermission, _permissionContract);
     }
 
     function setCurrencyFee(address currency, uint256 fee) external onlyOwner {
         ListingStorage storage s = _listingStorage();
-        if (fee == 0 || fee > s.decimal) revert FeeOutOfRange(fee, s.decimal);
-        s.currencyFees[currency] = fee;
+        if (fee == 0 || fee > s.core.decimal) revert FeeOutOfRange(fee, s.core.decimal);
+        s.fees.currencyFees[currency] = fee;
         emit CurrencyFeeUpdated(currency, fee);
     }
 
@@ -322,44 +295,44 @@ contract Listing {
 
     function _checkListingPermission(address user) internal view {
         ListingStorage storage s = _listingStorage();
-        if (address(s.permissionContract) == address(0)) revert PermissionContractNotSet();
-        if (!s.permissionContract.hasRole(LISTING_ROLE, user)) {
+        if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!s.core.permissionContract.hasRole(LISTING_ROLE, user)) {
             revert UserNotAuthorizedToCreateListing(user);
         }
     }
 
     function _checkNFTPermission(address nftContract) internal view {
         ListingStorage storage s = _listingStorage();
-        if (address(s.permissionContract) == address(0)) revert PermissionContractNotSet();
-        if (!s.permissionContract.hasRole(NFT_ROLE, nftContract)) {
+        if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!s.core.permissionContract.hasRole(NFT_ROLE, nftContract)) {
             revert NFTNotWhitelistedForListing(nftContract);
         }
     }
 
     function _checkCurrencyPermission(address currency) internal view {
         ListingStorage storage s = _listingStorage();
-        if (address(s.permissionContract) == address(0)) revert PermissionContractNotSet();
-        if (!s.permissionContract.supportedCurrencies(currency)) {
+        if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!s.core.permissionContract.supportedCurrencies(currency)) {
             revert CurrencyNotSupportedForListing(currency);
         }
     }
 
     function hasListingPermission(address user) external view returns (bool) {
         ListingStorage storage s = _listingStorage();
-        if (address(s.permissionContract) == address(0)) return false;
-        return s.permissionContract.hasRole(LISTING_ROLE, user);
+        if (address(s.core.permissionContract) == address(0)) return false;
+        return s.core.permissionContract.hasRole(LISTING_ROLE, user);
     }
 
     function isNFTWhitelisted(address nftContract) external view returns (bool) {
         ListingStorage storage s = _listingStorage();
-        if (address(s.permissionContract) == address(0)) return false;
-        return s.permissionContract.hasRole(NFT_ROLE, nftContract);
+        if (address(s.core.permissionContract) == address(0)) return false;
+        return s.core.permissionContract.hasRole(NFT_ROLE, nftContract);
     }
 
     function isCurrencySupported(address currency) external view returns (bool) {
         ListingStorage storage s = _listingStorage();
-        if (address(s.permissionContract) == address(0)) return false;
-        return s.permissionContract.supportedCurrencies(currency);
+        if (address(s.core.permissionContract) == address(0)) return false;
+        return s.core.permissionContract.supportedCurrencies(currency);
     }
 
     // ============= VALIDATION FUNCTIONS =============
@@ -395,9 +368,9 @@ contract Listing {
         _checkSellerApproval(params.assetContract, tokenType, msg.sender, params.tokenId);
 
         ListingStorage storage s = _listingStorage();
-        listingId = s.listingCounter;
+        listingId = s.core.listingCounter;
 
-        s.listings[listingId] = NFTListing({
+        s.listings.listings[listingId] = NFTListing({
             owner: msg.sender,
             assetContract: params.assetContract,
             tokenId: params.tokenId,
@@ -411,8 +384,8 @@ contract Listing {
             status: Status.CREATED
         });
 
-        s.userOwnedListings[msg.sender].push(listingId);
-        s.listingCounter++;
+        s.listings.userOwnedListings[msg.sender].push(listingId);
+        s.core.listingCounter++;
 
         emit ListingCreated(
             listingId,
@@ -446,7 +419,7 @@ contract Listing {
         ListingParameters memory params
     ) external validParams(params) listingExists(listingId) onlySupportedCurrency(params.currency) nonReentrant { 
         ListingStorage storage s = _listingStorage();
-        NFTListing storage listing = s.listings[listingId];
+        NFTListing storage listing = s.listings.listings[listingId];
 
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
@@ -479,7 +452,7 @@ contract Listing {
 
     function cancelListing(uint256 listingId) external listingExists(listingId) nonReentrant {
         ListingStorage storage s = _listingStorage();
-        NFTListing storage listing = s.listings[listingId];
+        NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
 
@@ -493,12 +466,12 @@ contract Listing {
         bool toApprove
     ) external listingExists(listingId) nonReentrant {
         ListingStorage storage s = _listingStorage();
-        NFTListing storage listing = s.listings[listingId];
+        NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
         if (!listing.reserved) revert ListingNotReserved();
 
-        s.buyerApprovals[listingId][buyer] = toApprove;
+        s.approvals.buyerApprovals[listingId][buyer] = toApprove;
         emit BuyerApproved(listingId, buyer, toApprove);
     }
 
@@ -508,14 +481,14 @@ contract Listing {
         uint256 pricePerTokenInCurrency
     ) external listingExists(listingId) onlySupportedCurrency(currency) nonReentrant {  
         ListingStorage storage s = _listingStorage();
-        NFTListing storage listing = s.listings[listingId];
+        NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
 
         if (pricePerTokenInCurrency > 0) {
-            s.currencyApprovals[listingId][currency] = pricePerTokenInCurrency;
+            s.approvals.currencyApprovals[listingId][currency] = pricePerTokenInCurrency;
         } else {
-            delete s.currencyApprovals[listingId][currency];
+            delete s.approvals.currencyApprovals[listingId][currency];
         }
         emit CurrencyApproved(listingId, currency, pricePerTokenInCurrency);
     }
@@ -528,7 +501,7 @@ contract Listing {
         uint256 expectedTotalPrice
     ) external payable listingExists(listingId) nonReentrant {
         ListingStorage storage s = _listingStorage();
-        NFTListing storage listing = s.listings[listingId];
+        NFTListing storage listing = s.listings.listings[listingId];
 
         if (buyFor == address(0)) revert InvalidRecipientAddress();
         if (!(block.timestamp >= listing.startTimestamp && block.timestamp <= listing.endTimestamp))
@@ -536,7 +509,7 @@ contract Listing {
         if (listing.status != Status.CREATED) revert ListingNotAvailable();
         if (quantity == 0 || quantity > listing.quantity) revert InvalidQuantity(quantity, listing.quantity);
 
-        uint256 priceInCurrency = s.currencyApprovals[listingId][currency];
+        uint256 priceInCurrency = s.approvals.currencyApprovals[listingId][currency];
         if (priceInCurrency == 0) revert CurrencyNotApprovedForListing(currency);
 
         uint256 totalPrice = quantity * priceInCurrency;
@@ -559,12 +532,12 @@ contract Listing {
 
         listing.quantity -= quantity;
 
-        uint256 fee = (totalPrice * getCurrencyFee(currency)) / s.decimal;
+        uint256 fee = (totalPrice * getCurrencyFee(currency)) / s.core.decimal;
         uint256 sellerAmount = totalPrice - fee;
 
         if (currency == address(0)) {
             if (msg.value != totalPrice) revert IncorrectTotalPrice(totalPrice, msg.value);
-            s.accumulatedFees[currency] += fee;
+            s.fees.accumulatedFees[currency] += fee;
 
             (bool success1, ) = listing.owner.call{value: sellerAmount}("");
             if (!success1) revert ETHWithdrawalFailed();
@@ -572,7 +545,7 @@ contract Listing {
             if (!success2) revert FeeWithdrawalFailed();
         } else {
             if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
-            s.accumulatedFees[currency] += fee;
+            s.fees.accumulatedFees[currency] += fee;
             if (!IERC20(currency).transferFrom(msg.sender, listing.owner, sellerAmount)) revert FeeWithdrawalFailed();
             if (!IERC20(currency).transferFrom(msg.sender, address(this), fee)) revert FeeWithdrawalFailed();
         }
@@ -671,8 +644,8 @@ contract Listing {
     }
 
     function _checkBuyerApproval(ListingStorage storage s, uint256 listingId, address buyer) internal view {
-        NFTListing storage listing = s.listings[listingId];
-        if (!(s.buyerApprovals[listingId][buyer] || !listing.reserved)) revert BuyerNotApproved();
+        NFTListing storage listing = s.listings.listings[listingId];
+        if (!(s.approvals.buyerApprovals[listingId][buyer] || !listing.reserved)) revert BuyerNotApproved();
     }
 
     function _checkBuyerAllowance(address currency, uint256 totalPrice) internal view {
@@ -695,7 +668,7 @@ contract Listing {
     // ============= VIEW FUNCTIONS =============
 
     function totalListings() external view returns (uint256) {
-        return _listingStorage().listingCounter;
+        return _listingStorage().core.listingCounter;
     }
 
     function getAllListings(
@@ -707,7 +680,7 @@ contract Listing {
         NFTListing[] memory allListings = new NFTListing[](length);
         for (uint256 i = 0; i < length; i++) {
             uint256 listingId = startId + i;
-            allListings[i] = s.listings[listingId];
+            allListings[i] = s.listings.listings[listingId];
         }
         return allListings;
     }
@@ -719,15 +692,15 @@ contract Listing {
         ListingStorage storage s = _listingStorage();
         uint256 length = 0;
         for (uint256 i = startId; i <= endId; i++) {
-            if (s.listings[i].status == Status.CREATED) {
+            if (s.listings.listings[i].status == Status.CREATED) {
                 length++;
             }
         }
         NFTListing[] memory validListings = new NFTListing[](length);
         uint256 index = 0;
         for (uint256 i = startId; i <= endId; i++) {
-            if (s.listings[i].status == Status.CREATED) {
-                validListings[index] = s.listings[i];
+            if (s.listings.listings[i].status == Status.CREATED) {
+                validListings[index] = s.listings.listings[i];
                 index++;
             }
         }
@@ -735,21 +708,21 @@ contract Listing {
     }
 
     function getListing(uint256 listingId) external view listingExists(listingId) returns (NFTListing memory) {
-        return _listingStorage().listings[listingId];
+        return _listingStorage().listings.listings[listingId];
     }
 
     function getCurrencyFee(address currency) public view returns (uint256) {
         ListingStorage storage s = _listingStorage();
-        uint256 currencyFee = s.currencyFees[currency];
+        uint256 currencyFee = s.fees.currencyFees[currency];
         if (currencyFee == 0) revert CurrencyFeeMustBeGreaterThanZero();
         return currencyFee;
     }
 
     function withdrawFees(address currency) external onlyOwner {
         ListingStorage storage s = _listingStorage();
-        uint256 amount = s.accumulatedFees[currency];
+        uint256 amount = s.fees.accumulatedFees[currency];
         if (amount == 0) revert NoFeesToWithdraw();
-        s.accumulatedFees[currency] = 0;
+        s.fees.accumulatedFees[currency] = 0;
         if (currency == address(0)) {
             (bool success, ) = msg.sender.call{value: amount}("");
             if (!success) revert ETHWithdrawalFailed();
