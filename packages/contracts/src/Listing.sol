@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "./IPermissions.sol";
-import "./library/Ownable.sol";
 import "./library/ReentrancyGuard.sol";
 
 error InvalidAssetContract();
@@ -59,7 +58,7 @@ error UserNotAuthorizedToCreateListing(address user);
 error NFTNotWhitelistedForListing(address nftContract);
 error CurrencyNotSupportedForListing(address currency);
 
-contract Listing is Ownable, ReentrancyGuard {
+contract Listing is ReentrancyGuard {
     
     // ============= STORAGE STRUCTS =============
     
@@ -107,6 +106,7 @@ contract Listing is Ownable, ReentrancyGuard {
     
     // ============= CONSTANTS & ENUMS =============
     
+    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
     bytes32 public constant LISTING_ROLE = keccak256("LISTING_ROLE");
     bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
 
@@ -149,7 +149,6 @@ contract Listing is Ownable, ReentrancyGuard {
 
     // ============= EVENTS =============
     
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     
     event ListingCreated(
         uint256 indexed listingId,
@@ -185,23 +184,15 @@ contract Listing is Ownable, ReentrancyGuard {
 
     // ============= INITIALIZATION =============
     
-    function initialize(address _owner, address _permissionContract) external {
+    function initialize(address _permissionContract) external {
         ListingStorage storage s = _listingStorage();
         require(!s.core.initialized, "Already initialized");
         
-        _setupOwner(_owner);
         s.core.listingCounter = 0;
         s.core.decimal = 10000;
         s.core.permissionContract = IPermission(_permissionContract);
         s.core.initialized = true;
     }
-
-    // ============= OWNABLE IMPLEMENTATION =============
-    
-    function _canSetOwner() internal view override returns (bool) {
-        return msg.sender == owner();
-    }
-    
 
     // ============= PUBLIC GETTERS =============
     
@@ -277,14 +268,16 @@ contract Listing is Ownable, ReentrancyGuard {
 
     // ============= ADMIN FUNCTIONS =============
 
-    function setPermissionContract(address _permissionContract) external onlyOwner {
+    function setPermissionContract(address _permissionContract) external {
+        _checkManagementPermission();
         ListingStorage storage s = _listingStorage();
         address oldPermission = address(s.core.permissionContract);
         s.core.permissionContract = IPermission(_permissionContract);
         emit PermissionContractUpdated(oldPermission, _permissionContract);
     }
 
-    function setCurrencyFee(address currency, uint256 fee) external onlyOwner {
+    function setCurrencyFee(address currency, uint256 fee) external {
+        _checkManagementPermission();
         ListingStorage storage s = _listingStorage();
         if (fee == 0 || fee > s.core.decimal) revert FeeOutOfRange(fee, s.core.decimal);
         s.fees.currencyFees[currency] = fee;
@@ -292,6 +285,14 @@ contract Listing is Ownable, ReentrancyGuard {
     }
 
     // ============= PERMISSION FUNCTIONS =============
+
+    function _checkManagementPermission() internal view {
+        ListingStorage storage s = _listingStorage();
+        if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
+        if (!s.core.permissionContract.hasRole(MANAGEMENT_ROLE, msg.sender)) {
+            revert("Caller does not have MANAGEMENT_ROLE");
+        }
+    }
 
     function _checkListingPermission(address user) internal view {
         ListingStorage storage s = _listingStorage();
@@ -718,7 +719,8 @@ contract Listing is Ownable, ReentrancyGuard {
         return currencyFee;
     }
 
-    function withdrawFees(address currency) external onlyOwner {
+    function withdrawFees(address currency) external {
+        _checkManagementPermission();
         ListingStorage storage s = _listingStorage();
         uint256 amount = s.fees.accumulatedFees[currency];
         if (amount == 0) revert NoFeesToWithdraw();

@@ -7,8 +7,9 @@ describe('Listing', function () {
     const [admin, user1, user2, user3] = await ethers.getSigners();
 
     const PermissionsFactory = await ethers.getContractFactory('Permissions');
-    const permissions = await PermissionsFactory.deploy(admin.address);
+    const permissions = await PermissionsFactory.deploy();
     await permissions.waitForDeployment();
+    await permissions['initialize'](admin.address);
 
     const MockTokenFactory = await ethers.getContractFactory('MockToken');
     const mockToken = await MockTokenFactory.deploy(admin.address);
@@ -47,9 +48,10 @@ describe('Listing', function () {
     const ListingFactory = await ethers.getContractFactory('Listing');
     const listing = await ListingFactory.deploy();
     await listing.waitForDeployment();
-    await listing['initialize'](admin.address, await permissions.getAddress());
+    await listing['initialize'](await permissions.getAddress());
 
-    await permissions.connect(admin)['assignListingRole']([user1.address, user2.address, user3.address]);
+    const LISTING_ROLE = await permissions['LISTING_ROLE']();
+    await permissions.connect(admin)['assignRole'](LISTING_ROLE, [user1.address, user2.address, user3.address]);
 
     await permissions.connect(admin)['assignNFTRole']([await mockERC721.getAddress(), await mockERC1155.getAddress()]);
 
@@ -88,7 +90,7 @@ describe('Listing', function () {
 
     const fee = 500;
     await expect(listing.connect(user1)['setCurrencyFee'](mockToken.target, fee)).to.be.revertedWith(
-      'Ownable: caller is not the owner',
+      'Caller does not have MANAGEMENT_ROLE',
     );
   });
 
@@ -2613,7 +2615,7 @@ describe('Listing', function () {
       await listing
         .connect(user3)['buyFromListing'](0, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18));
       await expect(listing.connect(user1)['withdrawFees'](await mockToken.getAddress())).to.be.revertedWith(
-        'Ownable: caller is not the owner',
+        'Caller does not have MANAGEMENT_ROLE',
       );
     });
 
@@ -2919,8 +2921,9 @@ describe('Listing', function () {
         const { listing, admin } = await loadFixture(setup);
 
         const PermissionsFactory = await ethers.getContractFactory('Permissions');
-        const newPermissions = await PermissionsFactory.deploy(admin.address);
+        const newPermissions = await PermissionsFactory.deploy();
         await newPermissions.waitForDeployment();
+        await newPermissions['initialize'](admin.address);
 
         const oldPermissionAddress = await listing['permissionContract']();
 
@@ -2935,11 +2938,12 @@ describe('Listing', function () {
         const { listing, admin, user1 } = await loadFixture(setup);
 
         const PermissionsFactory = await ethers.getContractFactory('Permissions');
-        const newPermissions = await PermissionsFactory.deploy(admin.address);
+        const newPermissions = await PermissionsFactory.deploy();
         await newPermissions.waitForDeployment();
+        await newPermissions['initialize'](admin.address);
 
         await expect(listing.connect(user1)['setPermissionContract'](await newPermissions.getAddress())).to.be.revertedWith(
-          'Ownable: caller is not the owner',
+          'Caller does not have MANAGEMENT_ROLE',
         );
       });
 
