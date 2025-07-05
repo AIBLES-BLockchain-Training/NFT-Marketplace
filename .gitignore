@@ -52,6 +52,9 @@ out
 
 # Env
 .env
-
-
+coverage
+coverage.json
+typechain-types
 crytic-export
+
+run_test.bat

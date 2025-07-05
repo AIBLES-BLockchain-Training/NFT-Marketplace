@@ -11,7 +11,7 @@
     "noFallthroughCasesInSwitch": true
   },
   "files": ["./hardhat.config.ts"],
-  "include": ["./src", "./scripts", "./test"],
+  "include": ["./src/**/*", "./scripts", "./test", "./test/**/*"],
   "references": [
     {
       "path": "./tsconfig.lib.json"

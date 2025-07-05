@@ -39,6 +39,7 @@ const config: HardhatUserConfig = {
   },
   typechain: {
     outDir: './typechain-types',
+    target: 'ethers-v6',
   },
   defaultNetwork: 'hardhat',
   sourcify: {
