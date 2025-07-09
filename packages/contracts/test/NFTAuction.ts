@@ -25,9 +25,11 @@ describe('NFTAuction with ERC721', function () {
 
     // Deploy NFTAuction
     const NFTAuction = await ethers.getContractFactory('NFTAuction');
-    const deployed = await NFTAuction.deploy(await permissions.getAddress());
-    await deployed.waitForDeployment();
-    nftAuction = deployed as unknown as NFTAuction;
+    const auction = await NFTAuction.deploy();
+    await auction.waitForDeployment();
+    await auction['initialize'](await permissions.getAddress());
+    
+    nftAuction = auction as unknown as NFTAuction;
 
     // Assign roles to seller
     await permissions.connect(admin).assignAuctionRole([seller.address]);
@@ -209,7 +211,7 @@ describe('NFTAuction with ERC721', function () {
           _startTime: startTime,
           _endTime: endTime,
         }),
-      ).to.be.revertedWith('Auction: Caller does not have the auction role');
+      ).to.be.revertedWith('Caller does not have the auction role');
     });
 
     it('Should revert if bidder nft 721 with quantity > 1', async function () {
@@ -328,7 +330,7 @@ describe('NFTAuction with ERC721', function () {
           _startTime: startTime,
           _endTime: endTime,
         }),
-      ).to.be.revertedWith('Currency is not supported');
+      ).to.be.revertedWith('Currency is not whitelisted');
     });
 
     describe('Should test function cancelAuction', function () {
@@ -639,8 +641,9 @@ describe('NFTAuction with ERC1155', function () {
 
     // Deploy NFTAuction
     const NFTAuction = await ethers.getContractFactory('NFTAuction');
-    const nftAuction: any = await NFTAuction.deploy(await permissions.getAddress());
-    await nftAuction.waitForDeployment();
+    const auction = await NFTAuction.deploy();
+    await auction.waitForDeployment();
+    await auction['initialize'](await permissions.getAddress());
 
     // Assign roles to seller
     await permissions.connect(admin).assignAuctionRole([seller.address]);
@@ -660,12 +663,12 @@ describe('NFTAuction with ERC1155', function () {
     await mockERC20['mint'](bidder2.address, value);
 
     // Approve tokens for auction contract
-    const auctionAddress = await nftAuction.getAddress();
+    const auctionAddress = await auction.getAddress();
     await mockERC20.connect(bidder1).approve(auctionAddress, value);
     await mockERC20.connect(bidder2).approve(auctionAddress, value);
 
     return {
-      nftAuction,
+      nftAuction: auction,
       mockERC20,
       mockERC1155,
       seller,
