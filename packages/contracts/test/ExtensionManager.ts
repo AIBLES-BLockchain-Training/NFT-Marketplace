@@ -29,7 +29,7 @@ describe('ExtensionManager', function () {
     const ListingFactory = await ethers.getContractFactory('Listing');
     const listing = await ListingFactory.deploy();
     await listing.waitForDeployment();
-    await listing['initialize'](admin.address, await permissions.getAddress());
+    await listing['initializeListing'](await permissions.getAddress());
 
     const NFTAuctionFactory = await ethers.getContractFactory('NFTAuction');
     const nftAuction = await NFTAuctionFactory.deploy(await permissions.getAddress());
@@ -45,9 +45,8 @@ describe('ExtensionManager', function () {
     await extensionManager.waitForDeployment();
 
     // Setup permissions
-    await permissions.connect(admin)['assignListingRole']([user1.address, user2.address]);
-    await permissions.connect(admin)['assignAuctionRole']([user1.address, user2.address]);
-    await permissions.connect(admin)['assignOfferRole']([user1.address, user2.address]);
+    const LISTING_ROLE = await permissions['LISTING_ROLE']();
+    await permissions.connect(admin)['assignRole'](LISTING_ROLE, [user1.address, user2.address]);
     await permissions.connect(admin)['assignNFTRole']([await mockERC721.getAddress(), await mockERC1155.getAddress()]);
     await permissions.connect(admin)['addCurrency']([await mockToken.getAddress(), ethers.ZeroAddress]);
 
@@ -64,8 +63,8 @@ describe('ExtensionManager', function () {
           functionSignature: 'listingCounter()',
         },
         {
-          functionSelector: '0x313ce567', // decimal()
-          functionSignature: 'decimal()',
+          functionSelector: '0x313ce567', // decimalListing()
+          functionSignature: 'decimalListing()',
         },
         {
           functionSelector: '0x1d1f1c20', // createListing(ListingParameters)
@@ -145,7 +144,10 @@ describe('ExtensionManager', function () {
         .withArgs(
           listingExtension.metadata.name,
           listingExtension.metadata.implementation,
-          listingExtension
+          [
+            [listingExtension.metadata.name, listingExtension.metadata.metadataURI, listingExtension.metadata.implementation],
+            listingExtension.functions.map(f => [f.functionSelector, f.functionSignature])
+          ]
         );
       
       // Verify extension was added
@@ -167,8 +169,8 @@ describe('ExtensionManager', function () {
           .withArgs(
             listingExtension.metadata.name,
             listingExtension.functions[i].functionSelector,
-            listingExtension.functions[i],
-            listingExtension.metadata
+            [listingExtension.functions[i].functionSelector, listingExtension.functions[i].functionSignature],
+            [listingExtension.metadata.name, listingExtension.metadata.metadataURI, listingExtension.metadata.implementation]
           );
       }
     });
@@ -181,7 +183,10 @@ describe('ExtensionManager', function () {
         .withArgs(
           auctionExtension.metadata.name,
           auctionExtension.metadata.implementation,
-          auctionExtension
+          [
+            [auctionExtension.metadata.name, auctionExtension.metadata.metadataURI, auctionExtension.metadata.implementation],
+            auctionExtension.functions.map(f => [f.functionSelector, f.functionSignature])
+          ]
         );
       
       const storedExtension = await extensionManager['getExtension'](auctionExtension.metadata.name);
@@ -197,7 +202,10 @@ describe('ExtensionManager', function () {
         .withArgs(
           offerExtension.metadata.name,
           offerExtension.metadata.implementation,
-          offerExtension
+          [
+            [offerExtension.metadata.name, offerExtension.metadata.metadataURI, offerExtension.metadata.implementation],
+            offerExtension.functions.map(f => [f.functionSelector, f.functionSignature])
+          ]
         );
       
       const storedExtension = await extensionManager['getExtension'](offerExtension.metadata.name);
@@ -238,6 +246,32 @@ describe('ExtensionManager', function () {
         .to.be.revertedWithCustomError(extensionManager, 'OwnableUnauthorizedAccount')
         .withArgs(user1.address);
     });
+
+    it('Should revert when adding extension with name that already exists', async function () {
+      const { extensionManager, listingExtension, listing, admin } = await loadFixture(setup);
+      
+      // Add first extension
+      await extensionManager.connect(admin)['addExtension'](listingExtension);
+      
+      // Try to add another extension with same name but different implementation
+      const duplicateNameExtension = {
+        metadata: {
+          name: 'Listing', // Same name as listingExtension
+          metadataURI: 'ipfs://duplicate',
+          implementation: await listing.getAddress(),
+        },
+        functions: [
+          {
+            functionSelector: '0x12345678', // Different function
+            functionSignature: 'someFunction()',
+          },
+        ],
+      };
+      
+      await expect(extensionManager.connect(admin)['addExtension'](duplicateNameExtension))
+        .to.be.revertedWithCustomError(extensionManager, 'ExtensionAlreadyExists')
+        .withArgs('Listing');
+    });
   });
 
   describe('replaceExtension with Real Contracts', function () {
@@ -271,7 +305,10 @@ describe('ExtensionManager', function () {
         .withArgs(
           updatedListingExtension.metadata.name,
           updatedListingExtension.metadata.implementation,
-          updatedListingExtension
+          [
+            [updatedListingExtension.metadata.name, updatedListingExtension.metadata.metadataURI, updatedListingExtension.metadata.implementation],
+            updatedListingExtension.functions.map(f => [f.functionSelector, f.functionSignature])
+          ]
         );
       
       // Verify extension was replaced
@@ -308,7 +345,7 @@ describe('ExtensionManager', function () {
           .withArgs(
             listingExtension.metadata.name,
             listingExtension.functions[i].functionSelector,
-            listingExtension.metadata
+            [listingExtension.metadata.name, listingExtension.metadata.metadataURI, listingExtension.metadata.implementation]
           );
       }
     });
@@ -337,6 +374,80 @@ describe('ExtensionManager', function () {
       // New auction functions should be available
       expect(await extensionManager['getImplementationForFunction']('0x19b58f14')).to.equal(auctionExtension.metadata.implementation);
     });
+
+    it('Should revert if non-owner tries to replace extension', async function () {
+      const { extensionManager, listingExtension, listing, user1, admin } = await loadFixture(setup);
+      
+      // Add extension as owner first
+      await extensionManager.connect(admin)['addExtension'](listingExtension);
+      
+      const replacementExtension = {
+        metadata: {
+          name: 'Listing',
+          metadataURI: 'ipfs://new-listing',
+          implementation: await listing.getAddress(),
+        },
+        functions: [
+          {
+            functionSelector: '0x427e2f42',
+            functionSignature: 'permissionContract()',
+          },
+        ],
+      };
+      
+      await expect(extensionManager.connect(user1)['replaceExtension'](replacementExtension))
+        .to.be.revertedWithCustomError(extensionManager, 'OwnableUnauthorizedAccount')
+        .withArgs(user1.address);
+    });
+
+    it('Should revert when trying to replace non-existent extension', async function () {
+      const { extensionManager, listing, admin } = await loadFixture(setup);
+      
+      const nonExistentExtension = {
+        metadata: {
+          name: 'NonExistent',
+          metadataURI: 'ipfs://non-existent',
+          implementation: await listing.getAddress(),
+        },
+        functions: [
+          {
+            functionSelector: '0x12345678',
+            functionSignature: 'someFunction()',
+          },
+        ],
+      };
+      
+      await expect(extensionManager.connect(admin)['replaceExtension'](nonExistentExtension))
+        .to.be.revertedWithCustomError(extensionManager, 'ExtensionDoesNotExist')
+        .withArgs('NonExistent');
+    });
+
+    it('Should revert when replacing causes function selector conflict', async function () {
+      const { extensionManager, listingExtension, auctionExtension, listing, admin } = await loadFixture(setup);
+      
+      // Add both extensions
+      await extensionManager.connect(admin)['addExtension'](listingExtension);
+      await extensionManager.connect(admin)['addExtension'](auctionExtension);
+      
+      // Try to replace listing with a function that conflicts with auction
+      const conflictingReplacement = {
+        metadata: {
+          name: 'Listing',
+          metadataURI: 'ipfs://conflicting',
+          implementation: await listing.getAddress(),
+        },
+        functions: [
+          {
+            functionSelector: '0x19b58f14', // Same as totalAuctions() in auctionExtension
+            functionSignature: 'totalAuctions()',
+          },
+        ],
+      };
+      
+      await expect(extensionManager.connect(admin)['replaceExtension'](conflictingReplacement))
+        .to.be.revertedWithCustomError(extensionManager, 'FunctionAlreadyExists')
+        .withArgs('0x19b58f14');
+    });
   });
 
   describe('removeExtension with Real Contracts', function () {
@@ -345,9 +456,18 @@ describe('ExtensionManager', function () {
       
       await extensionManager.connect(admin)['addExtension'](listingExtension);
       
+      // Get the stored extension first to match the exact data
+      const storedExtension = await extensionManager['getExtension'](listingExtension.metadata.name);
+      
       await expect(extensionManager.connect(admin)['removeExtension'](listingExtension.metadata.name))
         .to.emit(extensionManager, 'ExtensionRemoved')
-        .withArgs(listingExtension.metadata.name, listingExtension);
+        .withArgs(
+          listingExtension.metadata.name,
+          [
+            [storedExtension.metadata.name, storedExtension.metadata.metadataURI, storedExtension.metadata.implementation],
+            storedExtension.functions.map(f => [f.functionSelector, f.functionSignature])
+          ]
+        );
       
       // Verify extension was removed
       await expect(extensionManager['getExtension'](listingExtension.metadata.name))
@@ -374,6 +494,25 @@ describe('ExtensionManager', function () {
           .to.equal(ethers.ZeroAddress);
       }
     });
+
+    it('Should revert if non-owner tries to remove extension', async function () {
+      const { extensionManager, listingExtension, user1, admin } = await loadFixture(setup);
+      
+      // Add extension as owner first
+      await extensionManager.connect(admin)['addExtension'](listingExtension);
+      
+      await expect(extensionManager.connect(user1)['removeExtension'](listingExtension.metadata.name))
+        .to.be.revertedWithCustomError(extensionManager, 'OwnableUnauthorizedAccount')
+        .withArgs(user1.address);
+    });
+
+    it('Should revert when trying to remove non-existent extension', async function () {
+      const { extensionManager, admin } = await loadFixture(setup);
+      
+      await expect(extensionManager.connect(admin)['removeExtension']('NonExistentExtension'))
+        .to.be.revertedWithCustomError(extensionManager, 'ExtensionDoesNotExist')
+        .withArgs('NonExistentExtension');
+    });
   });
 
   describe('Function Management with Real Contracts', function () {
@@ -394,8 +533,8 @@ describe('ExtensionManager', function () {
         .withArgs(
           listingExtension.metadata.name,
           newFunction.functionSelector,
-          newFunction,
-          listingExtension.metadata
+          [newFunction.functionSelector, newFunction.functionSignature],
+          [listingExtension.metadata.name, listingExtension.metadata.metadataURI, listingExtension.metadata.implementation]
         );
       
       // Verify function was added
@@ -418,7 +557,11 @@ describe('ExtensionManager', function () {
         extensionManager.connect(admin)['disableFunctionInExtension'](listingExtension.metadata.name, functionToDisable)
       )
         .to.emit(extensionManager, 'FunctionDisabled')
-        .withArgs(listingExtension.metadata.name, functionToDisable, listingExtension.metadata);
+        .withArgs(
+          listingExtension.metadata.name,
+          functionToDisable,
+          [listingExtension.metadata.name, listingExtension.metadata.metadataURI, listingExtension.metadata.implementation]
+        );
       
       // Verify function was removed
       const storedExtension = await extensionManager['getExtension'](listingExtension.metadata.name);
@@ -443,6 +586,50 @@ describe('ExtensionManager', function () {
       )
         .to.be.revertedWithCustomError(extensionManager, 'FunctionNotInExtension')
         .withArgs(listingExtension.metadata.name, auctionFunctionSelector);
+    });
+
+    it('Should revert when trying to enable function in non-existent extension', async function () {
+      const { extensionManager, admin } = await loadFixture(setup);
+      
+      const newFunction = {
+        functionSelector: '0x12345678',
+        functionSignature: 'someFunction()',
+      };
+      
+      await expect(
+        extensionManager.connect(admin)['enableFunctionInExtension']('NonExistentExtension', newFunction)
+      )
+        .to.be.revertedWithCustomError(extensionManager, 'ExtensionDoesNotExist')
+        .withArgs('NonExistentExtension');
+    });
+
+    it('Should revert when enabling function that already exists in another extension', async function () {
+      const { extensionManager, listingExtension, auctionExtension, admin } = await loadFixture(setup);
+      
+      await extensionManager.connect(admin)['addExtension'](listingExtension);
+      await extensionManager.connect(admin)['addExtension'](auctionExtension);
+      
+      // Try to add a function to listing that already exists in auction
+      const duplicateFunction = {
+        functionSelector: auctionExtension.functions[0].functionSelector, // totalAuctions()
+        functionSignature: auctionExtension.functions[0].functionSignature,
+      };
+      
+      await expect(
+        extensionManager.connect(admin)['enableFunctionInExtension'](listingExtension.metadata.name, duplicateFunction)
+      )
+        .to.be.revertedWithCustomError(extensionManager, 'FunctionAlreadyExists')
+        .withArgs(duplicateFunction.functionSelector);
+    });
+
+    it('Should revert when trying to disable function in non-existent extension', async function () {
+      const { extensionManager, admin } = await loadFixture(setup);
+      
+      await expect(
+        extensionManager.connect(admin)['disableFunctionInExtension']('NonExistentExtension', '0x12345678')
+      )
+        .to.be.revertedWithCustomError(extensionManager, 'ExtensionDoesNotExist')
+        .withArgs('NonExistentExtension');
     });
   });
 

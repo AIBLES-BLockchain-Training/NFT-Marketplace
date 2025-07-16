@@ -48,7 +48,7 @@ describe('Listing', function () {
     const ListingFactory = await ethers.getContractFactory('Listing');
     const listing = await ListingFactory.deploy();
     await listing.waitForDeployment();
-    await listing['initialize'](await permissions.getAddress());
+    await listing['initializeListing'](await permissions.getAddress());
 
     const LISTING_ROLE = await permissions['LISTING_ROLE']();
     await permissions.connect(admin)['assignRole'](LISTING_ROLE, [user1.address, user2.address, user3.address]);

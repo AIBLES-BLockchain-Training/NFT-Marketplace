@@ -184,7 +184,7 @@ contract Listing is ReentrancyGuard {
 
     // ============= INITIALIZATION =============
     
-    function initialize(address _permissionContract) external {
+    function initializeListing(address _permissionContract) external {
         ListingStorage storage s = _listingStorage();
         require(!s.core.initialized, "Already initialized");
         
@@ -200,7 +200,7 @@ contract Listing is ReentrancyGuard {
         return _listingStorage().core.listingCounter;
     }
     
-    function decimal() external view returns (uint256) {
+    function decimalListing() external view returns (uint256) {
         return _listingStorage().core.decimal;
     }
     
