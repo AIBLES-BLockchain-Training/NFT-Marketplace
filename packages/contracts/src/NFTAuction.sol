@@ -108,7 +108,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     event NFTReceived(address operator, address from, uint256 tokenId, bytes data);
 
     // ============= INITIALIZATION =============
-    function initialize(address _permissionsContract) external {
+    function initializeAuction(address _permissionsContract) external {
         AuctionStorage storage s = _auctionStorage();
         require(!s.coreStorage.initialized, "Auction: Already initialized");
         s.coreStorage.permissionsContract = IPermission(_permissionsContract);
@@ -132,14 +132,14 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         }
     }
 
-    function hasNFTRole(address _nft) internal view {
+    function hasAuctionNFTRole(address _nft) internal view {
         AuctionStorage storage s = _auctionStorage();
         if (!s.coreStorage.permissionsContract.hasRole(NFT_ROLE, _nft)) {
             revert("NFT contract is not whitelisted");
         }
     }
 
-    function hasCurrencyRole(address _currency) internal view {
+    function hasAuctionCurrencyRole(address _currency) internal view {
         AuctionStorage storage s = _auctionStorage();
         if (!s.coreStorage.permissionsContract.supportedCurrencies(_currency)) {
             revert("Currency is not whitelisted");
@@ -166,14 +166,14 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     }
 
     modifier onlyWhitelistedNFT(address _nft) {
-        hasNFTRole(_nft);
+        hasAuctionNFTRole(_nft);
         _;
     }
 
     modifier onlySupportedCurrency(address _currency) {
-        hasCurrencyRole(_currency);
+        hasAuctionCurrencyRole(_currency);
         _;
-    }
+    } 
 
     function onERC721Received(
         address operator,

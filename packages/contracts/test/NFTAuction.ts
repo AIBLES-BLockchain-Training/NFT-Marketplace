@@ -27,8 +27,8 @@ describe('NFTAuction with ERC721', function () {
     const NFTAuction = await ethers.getContractFactory('NFTAuction');
     const auction = await NFTAuction.deploy();
     await auction.waitForDeployment();
-    await auction['initialize'](await permissions.getAddress());
-    
+    await auction['initializeAuction'](await permissions.getAddress());
+
     nftAuction = auction as unknown as NFTAuction;
 
     // Assign roles to seller
@@ -643,7 +643,7 @@ describe('NFTAuction with ERC1155', function () {
     const NFTAuction = await ethers.getContractFactory('NFTAuction');
     const auction = await NFTAuction.deploy();
     await auction.waitForDeployment();
-    await auction['initialize'](await permissions.getAddress());
+    await auction['initializeAuction'](await permissions.getAddress());
 
     // Assign roles to seller
     await permissions.connect(admin).assignAuctionRole([seller.address]);
