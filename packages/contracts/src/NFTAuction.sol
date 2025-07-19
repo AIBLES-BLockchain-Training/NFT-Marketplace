@@ -36,7 +36,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     }
 
     // ============= CONSTANTS & ENUMS =============
-
+    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
     bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
     bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
 
@@ -106,6 +106,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     event AuctionPayoutCollected(uint256 auctionId, address auctionCreator, uint256 amount);
     event AuctionTokenCollected(uint256 auctionId, address bidder);
     event NFTReceived(address operator, address from, uint256 tokenId, bytes data);
+    event UpdatePermissionsContract(address oldPermissionsContract, address newPermissionsContract);
 
     // ============= INITIALIZATION =============
     function initializeAuction(address _permissionsContract) external {
@@ -114,13 +115,14 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         s.coreStorage.permissionsContract = IPermission(_permissionsContract);
         s.coreStorage.initialized = true;
     }
+
     // ============= GET STORAGE =============
     function auctions(uint256 _auctionId) external view returns (Auction memory) {
         return _auctionStorage().auctionData.auctions[_auctionId];
     }
 
     function totalAuctions() external view returns (uint256) {
-        return _auctionStorage().coreStorage.totalAuctions; 
+        return _auctionStorage().coreStorage.totalAuctions;
     }
 
     // ============= PERMISSION FUNCTIONS =============
@@ -143,6 +145,13 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         AuctionStorage storage s = _auctionStorage();
         if (!s.coreStorage.permissionsContract.supportedCurrencies(_currency)) {
             revert("Currency is not whitelisted");
+        }
+    }
+
+    function _checkManagementPermission() internal view {
+        AuctionStorage storage s = _auctionStorage();
+        if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE, msg.sender)) {
+            revert("Caller does not have MANAGEMENT_ROLE");
         }
     }
 
@@ -173,7 +182,16 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     modifier onlySupportedCurrency(address _currency) {
         hasAuctionCurrencyRole(_currency);
         _;
-    } 
+    }
+
+    // ============= ADMIN FUNCTIONS =============
+    function setPermissionsContract(address _permissionsContract) external {
+        _checkManagementPermission();
+        AuctionStorage storage s = _auctionStorage();
+        address oldPermissionsContract = address(s.coreStorage.permissionsContract);
+        s.coreStorage.permissionsContract = IPermission(_permissionsContract);
+        emit UpdatePermissionsContract(oldPermissionsContract, _permissionsContract);
+    }
 
     function onERC721Received(
         address operator,
