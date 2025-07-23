@@ -160,21 +160,25 @@ contract Permissions is IPermission, AccessControl {
     
     function requestUserRoles(bytes32[] calldata roles) external {
         PermissionsStorage storage s = _permissionsStorage();
+        uint256 successCount = 0;
+        
         for (uint i = 0; i < roles.length; i++) {
             bytes32 role = roles[i];
             if (!s.allowedRoles[role]) {
-                revert InvalidRole(role);
+                continue;
             }
             
-            if (hasRole(role, address(0))) {
-                revert RoleAlreadyGrantedGlobally(role);
+            if (super.hasRole(role, address(0))) {
+                continue;
             }
-            if (hasRole(role, msg.sender)) {
-                revert RoleAlreadyGranted(msg.sender, role);
+            if (super.hasRole(role, msg.sender)) {
+                continue;
             }
             
             emit RoleRequested(msg.sender, role);
+            successCount++;
         }
+        require(successCount > 0, "No valid role requests");
     }
     
     function requestNFTRole(address nftContract, uint256 tokenId) external {

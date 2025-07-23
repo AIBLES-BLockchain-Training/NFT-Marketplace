@@ -536,26 +536,24 @@ contract Listing is ReentrancyGuard {
         uint256 fee = (totalPrice * getCurrencyFee(currency)) / s.core.decimal;
         uint256 sellerAmount = totalPrice - fee;
 
-        if (currency == address(0)) {
-            if (msg.value != totalPrice) revert IncorrectTotalPrice(totalPrice, msg.value);
-            s.fees.accumulatedFees[currency] += fee;
-
-            (bool success1, ) = listing.owner.call{value: sellerAmount}("");
-            if (!success1) revert ETHWithdrawalFailed();
-            (bool success2, ) = address(this).call{value: fee}("");
-            if (!success2) revert FeeWithdrawalFailed();
-        } else {
-            if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
-            s.fees.accumulatedFees[currency] += fee;
-            if (!IERC20(currency).transferFrom(msg.sender, listing.owner, sellerAmount)) revert FeeWithdrawalFailed();
-            if (!IERC20(currency).transferFrom(msg.sender, address(this), fee)) revert FeeWithdrawalFailed();
-        }
-
         if (listing.tokenType == TokenType.ERC721) {
             IERC721(listing.assetContract).safeTransferFrom(listing.owner, buyFor, listing.tokenId);
         }
         if (listing.tokenType == TokenType.ERC1155) {
             IERC1155(listing.assetContract).safeTransferFrom(listing.owner, buyFor, listing.tokenId, quantity, "");
+        }
+
+        if (currency == address(0)) {
+            if (msg.value != totalPrice) revert IncorrectTotalPrice(totalPrice, msg.value);
+            s.fees.accumulatedFees[currency] += fee;
+
+            (bool success, ) = listing.owner.call{value: sellerAmount}("");
+            if (!success) revert ETHWithdrawalFailed();
+        } else {
+            if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
+            s.fees.accumulatedFees[currency] += fee;
+            if (!IERC20(currency).transferFrom(msg.sender, listing.owner, sellerAmount)) revert FeeWithdrawalFailed();
+            if (!IERC20(currency).transferFrom(msg.sender, address(this), fee)) revert FeeWithdrawalFailed();
         }
 
         emit NFTPurchased(listingId, buyFor, quantity, totalPrice);
