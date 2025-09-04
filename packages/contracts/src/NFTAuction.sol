@@ -8,12 +8,38 @@ import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "./IPermissions.sol";
 
 contract NFTAuction is IERC721Receiver, ERC1155Holder {
-    // Permissions contract address
-    IPermission public permissionsContract;
+    // ============= STORAGE STRUCTS =============
+    struct CoreStorage {
+        uint256 totalAuctions;
+        IPermission permissionsContract;
+        bool initialized;
+    }
+
+    struct AuctionData {
+        mapping(uint256 => Auction) auctions;
+        mapping(uint256 => mapping(address => uint256)) bids; // map check bid amount in a auction
+    }
+
+    struct AuctionStorage {
+        CoreStorage coreStorage;
+        AuctionData auctionData;
+    }
+
+    // ============= UNSTRUCTURED STORAGE SLOT =============
+    uint256 private constant AUCTION_STORAGE_SLOT = uint256(keccak256("eip1967.listing.storage")) - 1;
+
+    function _auctionStorage() internal pure returns (AuctionStorage storage s) {
+        uint256 slot = AUCTION_STORAGE_SLOT;
+        assembly {
+            s.slot := slot
+        }
+    }
+
+    // ============= CONSTANTS & ENUMS =============
+    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
     bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
     bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
 
-    // enum AuctionStatus
     enum AuctionStatus {
         CREATED, // Created: when auction is created
         ACTIVE, // Active: when auction has bidder
@@ -48,9 +74,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         TokenType tokenType; // Token type
     }
 
-    /*
-     * timeBufferInSeconds: time can delay to bid after end time
-     */
     struct AuctionParams {
         address _assetContract;
         uint256 _tokenId;
@@ -64,19 +87,9 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         uint256 _endTime;
     }
 
-    //state const
     uint256 public constant MIN_TIME_AUCTION = 1 hours; // 1 hour
 
-    // total Auctions is created
-    uint256 public totalAuctions;
-
-    // map Auctions
-    mapping(uint256 auctionId => Auction) public auctions;
-
-    // map check bid amount in a auction
-    mapping(uint256 auctionId => mapping(address => uint256)) public bids;
-
-    // event Auction Created
+    // ============= EVENTS =============
     event NewAuction(address auctionCreator, uint256 auctionId, address assetContract, Auction auction);
 
     event AuctionCloser(
@@ -88,59 +101,98 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         address winningBidder
     );
 
-    // Auction Cancelled
     event CancelledAuction(address auctionCreator, uint256 auctionId);
-
-    // Bid Placed
     event BidPlaced(uint256 auctionId, address bidder, uint256 amount);
-
-    // Auction Payout Collected is collected
     event AuctionPayoutCollected(uint256 auctionId, address auctionCreator, uint256 amount);
-
-    // Auction Token Collected is collected
     event AuctionTokenCollected(uint256 auctionId, address bidder);
-
-    // NFT Received
     event NFTReceived(address operator, address from, uint256 tokenId, bytes data);
+    event UpdatePermissionsContract(address oldPermissionsContract, address newPermissionsContract);
 
-    // modifier
-    // check if auction exists
+    // ============= INITIALIZATION =============
+    function initializeAuction(address _permissionsContract) external {
+        AuctionStorage storage s = _auctionStorage();
+        require(!s.coreStorage.initialized, "Auction: Already initialized");
+        s.coreStorage.permissionsContract = IPermission(_permissionsContract);
+        s.coreStorage.initialized = true;
+    }
+
+    // ============= GET STORAGE =============
+    function auctions(uint256 _auctionId) external view returns (Auction memory) {
+        return _auctionStorage().auctionData.auctions[_auctionId];
+    }
+
+    function totalAuctions() external view returns (uint256) {
+        return _auctionStorage().coreStorage.totalAuctions;
+    }
+
+    // ============= PERMISSION FUNCTIONS =============
+    function hasAuctionRole(address _account) internal view {
+        AuctionStorage storage s = _auctionStorage();
+        if (address(s.coreStorage.permissionsContract) == address(0)) revert("Caller does not have the auction role");
+        if (!s.coreStorage.permissionsContract.hasRole(AUCTION_ROLE, _account)) {
+            revert("Caller does not have the auction role");
+        }
+    }
+
+    function hasAuctionNFTRole(address _nft) internal view {
+        AuctionStorage storage s = _auctionStorage();
+        if (!s.coreStorage.permissionsContract.hasRole(NFT_ROLE, _nft)) {
+            revert("NFT contract is not whitelisted");
+        }
+    }
+
+    function hasAuctionCurrencyRole(address _currency) internal view {
+        AuctionStorage storage s = _auctionStorage();
+        if (!s.coreStorage.permissionsContract.supportedCurrencies(_currency)) {
+            revert("Currency is not whitelisted");
+        }
+    }
+
+    function _checkManagementPermission() internal view {
+        AuctionStorage storage s = _auctionStorage();
+        if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE, msg.sender)) {
+            revert("Caller does not have MANAGEMENT_ROLE");
+        }
+    }
+
+    // ============= MODIFIERS =============
     modifier auctionExists(uint256 _auctionId) {
-        require(_auctionId < totalAuctions, "Auction does not exist");
+        require(_auctionId < _auctionStorage().coreStorage.totalAuctions, "Auction does not exist");
         _;
     }
 
-    // check is creator of auction
     modifier onlyCreator(uint256 _auctionId) {
-        require(auctions[_auctionId].auctionCreator == msg.sender, "You are not creator of this auction");
-        _;
-    }
-
-    // check if caller is auctioneer
-    modifier onlyAuctioneer() {
         require(
-            permissionsContract.hasRole(AUCTION_ROLE, msg.sender),
-            "Auction: Caller does not have the auction role"
+            _auctionStorage().auctionData.auctions[_auctionId].auctionCreator == msg.sender,
+            "You are not creator of this auction"
         );
         _;
     }
 
-    // check if NFT contract is whitelisted
+    modifier onlyAuctioneer() {
+        hasAuctionRole(msg.sender);
+        _;
+    }
+
     modifier onlyWhitelistedNFT(address _nft) {
-        require(permissionsContract.hasRole(NFT_ROLE, _nft), "NFT contract is not whitelisted");
+        hasAuctionNFTRole(_nft);
         _;
     }
 
     modifier onlySupportedCurrency(address _currency) {
-        require(permissionsContract.supportedCurrencies(_currency), "Currency is not supported");
+        hasAuctionCurrencyRole(_currency);
         _;
     }
 
-    constructor(address _permissionsContract) {
-        permissionsContract = IPermission(_permissionsContract);
+    // ============= ADMIN FUNCTIONS =============
+    function setPermissionsContract(address _permissionsContract) external {
+        _checkManagementPermission();
+        AuctionStorage storage s = _auctionStorage();
+        address oldPermissionsContract = address(s.coreStorage.permissionsContract);
+        s.coreStorage.permissionsContract = IPermission(_permissionsContract);
+        emit UpdatePermissionsContract(oldPermissionsContract, _permissionsContract);
     }
 
-    // onERC721Received function
     function onERC721Received(
         address operator,
         address from,
@@ -164,7 +216,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         }
     }
 
-    // create auction
     function createAuction(
         AuctionParams memory _auctionParams
     )
@@ -217,8 +268,11 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             );
         }
 
-        auctions[totalAuctions] = Auction({
-            id: totalAuctions,
+        AuctionStorage storage s = _auctionStorage();
+        uint256 totalAuction = s.coreStorage.totalAuctions;
+
+        s.auctionData.auctions[totalAuction] = Auction({
+            id: totalAuction,
             auctionCreator: payable(msg.sender),
             assetContract: _auctionParams._assetContract,
             tokenId: _auctionParams._tokenId,
@@ -239,33 +293,31 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             //state variables
         });
 
-        emit NewAuction(msg.sender, totalAuctions, _auctionParams._assetContract, auctions[totalAuctions]);
-        totalAuctions++;
+        emit NewAuction(msg.sender, totalAuction, _auctionParams._assetContract, s.auctionData.auctions[totalAuction]);
+        s.coreStorage.totalAuctions++;
     }
 
     // cancel auction
     function cancelAuction(uint256 _auctionId) external auctionExists(_auctionId) onlyCreator(_auctionId) {
+        AuctionStorage storage s = _auctionStorage();
+        Auction storage auction = s.auctionData.auctions[_auctionId];
         require(!isAuctionExpired(_auctionId), "Auction is expired");
-        require(auctions[_auctionId].status != AuctionStatus.ACTIVE, "Auction has bidders");
-        auctions[_auctionId].status = AuctionStatus.CANCELLED;
+        require(auction.status != AuctionStatus.ACTIVE, "Auction has bidders");
+        auction.status = AuctionStatus.CANCELLED;
 
         // check type of NFT
-        if (auctions[_auctionId].tokenType == TokenType.ERC1155) {
+        if (auction.tokenType == TokenType.ERC1155) {
             // Transfer NFT back to seller if nft is ERC1155
-            IERC1155(auctions[_auctionId].assetContract).safeTransferFrom(
+            IERC1155(auction.assetContract).safeTransferFrom(
                 address(this),
-                auctions[_auctionId].auctionCreator,
-                auctions[_auctionId].tokenId,
-                auctions[_auctionId].quantity,
+                auction.auctionCreator,
+                auction.tokenId,
+                auction.quantity,
                 ""
             );
         } else {
             // Transfer NFT back to seller if nft is ERC721
-            IERC721(auctions[_auctionId].assetContract).transferFrom(
-                address(this),
-                auctions[_auctionId].auctionCreator,
-                auctions[_auctionId].tokenId
-            );
+            IERC721(auction.assetContract).transferFrom(address(this), auction.auctionCreator, auction.tokenId);
         }
 
         emit CancelledAuction(msg.sender, _auctionId);
@@ -273,46 +325,43 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
 
     // collect auction payout
     function collectAuctionPayout(uint256 _auctionId) external auctionExists(_auctionId) onlyCreator(_auctionId) {
+        AuctionStorage storage s = _auctionStorage();
+        Auction storage auction = s.auctionData.auctions[_auctionId];
         require(isAuctionExpired(_auctionId), "Auction is not expired");
-        require(auctions[_auctionId].highestBidder != address(0), "Auction has no bidder");
-        require(!auctions[_auctionId].isPayoutCollected, "Payout already collected");
+        require(auction.highestBidder != address(0), "Auction has no bidder");
+        require(!auction.isPayoutCollected, "Payout already collected");
 
-        auctions[_auctionId].isPayoutCollected = true;
+        auction.isPayoutCollected = true;
 
         // Transfer payout to auction creator
-        IERC20 currency = IERC20(auctions[_auctionId].currency);
-        require(
-            currency.transfer(auctions[_auctionId].auctionCreator, auctions[_auctionId].highestBid),
-            "Payout transfer failed"
-        );
+        IERC20 currency = IERC20(auction.currency);
+        require(currency.transfer(auction.auctionCreator, auction.highestBid), "Payout transfer failed");
 
-        emit AuctionPayoutCollected(_auctionId, msg.sender, auctions[_auctionId].highestBid);
+        emit AuctionPayoutCollected(_auctionId, msg.sender, auction.highestBid);
     }
 
     // collect auction token
     function collectAuctionToken(uint256 _auctionId) external auctionExists(_auctionId) {
+        AuctionStorage storage s = _auctionStorage();
+        Auction storage auction = s.auctionData.auctions[_auctionId];
         require(isAuctionExpired(_auctionId), "Auction is not expired");
-        require(auctions[_auctionId].highestBidder == msg.sender, "Only winning bidder can collect token");
-        require(!auctions[_auctionId].isTokenCollected, "Token NFT already collected");
+        require(auction.highestBidder == msg.sender, "Only winning bidder can collect token");
+        require(!auction.isTokenCollected, "Token NFT already collected");
 
-        auctions[_auctionId].isTokenCollected = true;
+        auction.isTokenCollected = true;
 
-        if (auctions[_auctionId].tokenType == TokenType.ERC1155) {
+        if (auction.tokenType == TokenType.ERC1155) {
             // Transfer NFT to winning bidder
-            IERC1155(auctions[_auctionId].assetContract).safeTransferFrom(
+            IERC1155(auction.assetContract).safeTransferFrom(
                 address(this),
                 msg.sender,
-                auctions[_auctionId].tokenId,
-                auctions[_auctionId].quantity,
+                auction.tokenId,
+                auction.quantity,
                 ""
             );
         } else {
             // Transfer NFT to winning bidder
-            IERC721(auctions[_auctionId].assetContract).transferFrom(
-                address(this),
-                msg.sender,
-                auctions[_auctionId].tokenId
-            );
+            IERC721(auction.assetContract).transferFrom(address(this), msg.sender, auction.tokenId);
         }
 
         emit AuctionTokenCollected(_auctionId, msg.sender);
@@ -321,7 +370,8 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     // bid in auction
     function bidInAuction(uint256 _auctionId, uint256 _bidAmount) external payable auctionExists(_auctionId) {
         // ======================== 1. CHECKS (Kiểm tra điều kiện) ========================
-        Auction storage auction = auctions[_auctionId];
+        AuctionStorage storage s = _auctionStorage();
+        Auction storage auction = s.auctionData.auctions[_auctionId];
 
         // Tất cả các lệnh require được đặt ở đây
         require(!_isContract(msg.sender), "Contract can not bid in auction");
@@ -349,7 +399,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         // Cập nhật người trả giá cao nhất mới
         auction.highestBidder = msg.sender;
         auction.highestBid = _bidAmount;
-        bids[_auctionId][msg.sender] = _bidAmount;
+        s.auctionData.bids[_auctionId][msg.sender] = _bidAmount;
 
         // Cập nhật trạng thái đấu giá
         if (auction.status == AuctionStatus.CREATED) {
@@ -376,27 +426,25 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     // function
     // get data of a auction
     function getAuction(uint256 _auctionId) public view auctionExists(_auctionId) returns (Auction memory) {
-        return auctions[_auctionId];
+        return _auctionStorage().auctionData.auctions[_auctionId];
     }
 
     // get all auctions
     function getAllAuctions(uint256 _startId, uint256 _endId) public view returns (Auction[] memory) {
-        require(_startId < _endId && _endId <= totalAuctions, "Invalid range"); // Check range validity
         Auction[] memory _auctions = new Auction[](_endId - _startId);
         for (uint256 i = _startId; i < _endId; i++) {
-            _auctions[i - _startId] = auctions[i];
+            _auctions[i - _startId] = _auctionStorage().auctionData.auctions[i];
         }
         return _auctions;
     }
 
     // get all valid auctions
     function getAllValidAuctions(uint256 _startId, uint256 _endId) public view returns (Auction[] memory) {
-        require(_startId < _endId && _endId <= totalAuctions, "Invalid range");
-
+        AuctionStorage storage s = _auctionStorage();
         // Đếm số lượng đấu giá hợp lệ
         uint256 count = 0;
         for (uint256 i = _startId; i < _endId; i++) {
-            if (auctions[i].status == AuctionStatus.ACTIVE && !isAuctionExpired(i)) {
+            if (s.auctionData.auctions[i].status == AuctionStatus.ACTIVE && !isAuctionExpired(i)) {
                 count++;
             }
         }
@@ -405,8 +453,8 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         Auction[] memory _auctions = new Auction[](count);
         uint256 index = 0;
         for (uint256 i = _startId; i < _endId; i++) {
-            if (auctions[i].status == AuctionStatus.ACTIVE && !isAuctionExpired(i)) {
-                _auctions[index] = auctions[i];
+            if (s.auctionData.auctions[i].status == AuctionStatus.ACTIVE && !isAuctionExpired(i)) {
+                _auctions[index] = s.auctionData.auctions[i];
                 index++;
             }
         }
@@ -417,14 +465,14 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     // get new winnig bid
     function getNewWinningBid(uint256 _auctionId) public view auctionExists(_auctionId) returns (address, uint256) {
         return (
-            auctions[_auctionId].highestBidder, // Winning bidder
-            auctions[_auctionId].highestBid // Winning bid
+            _auctionStorage().auctionData.auctions[_auctionId].highestBidder, // Winning bidder
+            _auctionStorage().auctionData.auctions[_auctionId].highestBid // Winning bid
         );
     }
 
     // get auction is expired
     function isAuctionExpired(uint256 _auctionId) public view auctionExists(_auctionId) returns (bool) {
-        return block.timestamp > auctions[_auctionId].endTime;
+        return block.timestamp > _auctionStorage().auctionData.auctions[_auctionId].endTime;
     }
 
     // check bid is new winning bid
@@ -432,22 +480,27 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         uint256 _auctionId,
         uint256 _bidAmount
     ) public view auctionExists(_auctionId) returns (bool) {
-        uint256 currentHighestBid = auctions[_auctionId].highestBid;
+        AuctionStorage storage s = _auctionStorage();
+
+        uint256 currentHighestBid = s.auctionData.auctions[_auctionId].highestBid;
         uint256 requiredAmount;
 
         // 1. Giá thầu phải nhỏ hơn hoặc bằng giá trần
-        if (_bidAmount > auctions[_auctionId].ceilingPrice) {
+        if (_bidAmount > s.auctionData.auctions[_auctionId].ceilingPrice) {
             return false;
         }
 
         // Nếu chưa có ai đặt giá
-        if (auctions[_auctionId].highestBidder == address(0)) {
+        if (s.auctionData.auctions[_auctionId].highestBidder == address(0)) {
             requiredAmount =
-                auctions[_auctionId].startPrice +
-                ((auctions[_auctionId].startPrice * auctions[_auctionId].stepAmount) / 10000); // nếu chưa có người đặt giá thì đặt giá bằng start price
+                s.auctionData.auctions[_auctionId].startPrice +
+                ((s.auctionData.auctions[_auctionId].startPrice * s.auctionData.auctions[_auctionId].stepAmount) /
+                    10000); // nếu chưa có người đặt giá thì đặt giá bằng start price
         } else {
             // Nếu đã có người đặt giá, tính bước giá tối thiểu ex step = 500 is 5%
-            requiredAmount = currentHighestBid + ((currentHighestBid * auctions[_auctionId].stepAmount) / 10000); // step amount in %
+            requiredAmount =
+                currentHighestBid +
+                ((currentHighestBid * s.auctionData.auctions[_auctionId].stepAmount) / 10000); // step amount in %
         }
 
         return _bidAmount >= requiredAmount;
