@@ -7,8 +7,9 @@ describe('Listing', function () {
     const [admin, user1, user2, user3] = await ethers.getSigners();
 
     const PermissionsFactory = await ethers.getContractFactory('Permissions');
-    const permissions = await PermissionsFactory.deploy(admin.address);
+    const permissions = await PermissionsFactory.deploy();
     await permissions.waitForDeployment();
+    await permissions['initialize'](admin.address);
 
     const MockTokenFactory = await ethers.getContractFactory('MockToken');
     const mockToken = await MockTokenFactory.deploy(admin.address);
@@ -45,14 +46,17 @@ describe('Listing', function () {
     // await mockReceiver.waitForDeployment();
 
     const ListingFactory = await ethers.getContractFactory('Listing');
-    const listing = await ListingFactory.deploy(admin.address, await permissions.getAddress());
+    const listing = await ListingFactory.deploy();
     await listing.waitForDeployment();
+    await listing['initializeListing'](await permissions.getAddress());
 
-    await permissions.connect(admin)['assignListingRole']([user1.address, user2.address, user3.address]);
-    
+    const LISTING_ROLE = await permissions['LISTING_ROLE']();
+    await permissions.connect(admin)['assignRole'](LISTING_ROLE, [user1.address, user2.address, user3.address]);
+
     await permissions.connect(admin)['assignNFTRole']([await mockERC721.getAddress(), await mockERC1155.getAddress()]);
-    
-    await permissions.connect(admin)['addCurrency']([await mockToken.getAddress(), await mockToken2.getAddress(), ethers.ZeroAddress]);
+
+    await permissions
+      .connect(admin)['addCurrency']([await mockToken.getAddress(), await mockToken2.getAddress(), ethers.ZeroAddress]);
 
     return {
       listing,
@@ -85,9 +89,9 @@ describe('Listing', function () {
     const { listing, mockToken, user1 } = await loadFixture(setup);
 
     const fee = 500;
-    await expect(listing.connect(user1)['setCurrencyFee'](mockToken.target, fee))
-      .to.be.revertedWithCustomError(listing, 'OwnableUnauthorizedAccount')
-      .withArgs(user1.address);
+    await expect(listing.connect(user1)['setCurrencyFee'](mockToken.target, fee)).to.be.revertedWith(
+      'Caller does not have MANAGEMENT_ROLE',
+    );
   });
 
   it('Should revert if the fee is out of range', async function () {
@@ -139,7 +143,7 @@ describe('Listing', function () {
       expect(createdListing.reserved).to.equal(false);
       expect(createdListing.status).to.equal(1);
 
-      const ownedListingsAfter = await listing['getUserOwnedListings'](user1.address);
+      const ownedListingsAfter = await listing['userOwnedListings'](user1.address);
 
       expect(ownedListingsAfter).to.include(listingCounter);
     });
@@ -180,7 +184,7 @@ describe('Listing', function () {
       expect(createdListing.reserved).to.equal(false);
       expect(createdListing.status).to.equal(1);
 
-      const ownedListingsAfter = await listing['getUserOwnedListings'](user1.address);
+      const ownedListingsAfter = await listing['userOwnedListings'](user1.address);
 
       expect(ownedListingsAfter).to.include(listingCounter);
     });
@@ -1101,8 +1105,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1110,8 +1113,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.emit(listing, 'NFTPurchased')
         .withArgs(listingId, user3.address, 1, ethers.parseUnits('1', 18));
@@ -1162,8 +1164,7 @@ describe('Listing', function () {
 
       await listing.connect(user1)['approveBuyerForListing'](listingId, user3.address, true);
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1171,8 +1172,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.emit(listing, 'NFTPurchased')
         .withArgs(listingId, user3.address, 1, ethers.parseUnits('1', 18));
@@ -1222,8 +1222,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1231,8 +1230,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.emit(listing, 'NFTPurchased')
         .withArgs(listingId, user3.address, 1, ethers.parseUnits('1', 18));
@@ -1287,8 +1285,7 @@ describe('Listing', function () {
       const beforeBuyerBalance = await ethers.provider.getBalance(user3.address);
 
       const tx = await listing
-        .connect(user3)
-        ['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
+        .connect(user3)['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
           value: ethers.parseUnits('1', 18),
         });
 
@@ -1375,8 +1372,7 @@ describe('Listing', function () {
       await listing.connect(user1)['createListing'](listingParams);
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1384,8 +1380,7 @@ describe('Listing', function () {
 
       expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18), {
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18), {
             value: ethers.parseUnits('0.9', 18),
           }),
       ).to.be.revertedWith('msg.value must be 0 for ERC20 transactions');
@@ -1419,8 +1414,7 @@ describe('Listing', function () {
       await listing.connect(user1)['createListing'](listingParams);
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1459,8 +1453,7 @@ describe('Listing', function () {
       await listing.connect(user1)['createListing'](listingParams);
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1468,8 +1461,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, ethers.ZeroAddress, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, ethers.ZeroAddress, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWithCustomError(listing, 'InvalidRecipientAddress');
     });
 
@@ -1502,8 +1494,7 @@ describe('Listing', function () {
       await listing.connect(user1)['createListing'](listingParams);
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1516,8 +1507,7 @@ describe('Listing', function () {
       }
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'ListingNotAvailable')
         .withArgs();
@@ -1554,8 +1544,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1563,8 +1552,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWithCustomError(listing, 'ListingNotAvailable');
     });
 
@@ -1599,15 +1587,13 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 2, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 2, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'InvalidQuantity')
         .withArgs(2, 1);
@@ -1644,15 +1630,13 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken2.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken2.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'CurrencyNotApprovedForListing')
         .withArgs(await mockToken2.getAddress());
@@ -1689,15 +1673,13 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('0.5', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('0.5', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'IncorrectTotalPrice')
         .withArgs(ethers.parseUnits('1', 18), ethers.parseUnits('0.5', 18));
@@ -1734,8 +1716,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1743,8 +1724,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWith('Payment transfer failed');
     });
 
@@ -1779,8 +1759,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1788,8 +1767,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWith('Fee transfer failed');
     });
 
@@ -1941,8 +1919,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1950,8 +1927,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'SellerDoesNotOwnToken')
         .withArgs(0, user1.address);
@@ -1988,8 +1964,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -1997,8 +1972,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 6, await mockToken.getAddress(), ethers.parseUnits('6', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 6, await mockToken.getAddress(), ethers.parseUnits('6', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'SellerInsufficientTokens')
         .withArgs(5, 10);
@@ -2035,8 +2009,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -2044,8 +2017,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWithCustomError(listing, 'ContractNotApprovedForERC721');
     });
 
@@ -2080,8 +2052,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -2089,8 +2060,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 6, await mockToken.getAddress(), ethers.parseUnits('6', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 6, await mockToken.getAddress(), ethers.parseUnits('6', 18)),
       ).to.be.revertedWithCustomError(listing, 'ContractNotApprovedForERC1155');
     });
 
@@ -2125,8 +2095,7 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
@@ -2134,8 +2103,7 @@ describe('Listing', function () {
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWithCustomError(listing, 'ContractNotApprovedForERC721');
     });
 
@@ -2170,15 +2138,13 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       ).to.be.revertedWithCustomError(listing, 'BuyerNotApproved');
     });
     it('Should revert if buyer has not approved enough currency', async function () {
@@ -2212,15 +2178,13 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('0.5', 18));
 
       await expect(
         listing
-          .connect(user3)
-          ['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user3)['buyFromListing'](listingId, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'BuyerInsufficientAllowance')
         .withArgs(ethers.parseUnits('0.5', 18), ethers.parseUnits('1', 18));
@@ -2257,15 +2221,13 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user2)['approve'](await listing.getAddress(), ethers.parseUnits('0.01', 18));
 
       await expect(
         listing
-          .connect(user2)
-          ['buyFromListing'](listingId, user2.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
+          .connect(user2)['buyFromListing'](listingId, user2.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18)),
       )
         .to.be.revertedWithCustomError(listing, 'InsufficientBalance')
         .withArgs(ethers.parseUnits('0.01', 18), ethers.parseUnits('1', 18));
@@ -2424,7 +2386,7 @@ describe('Listing', function () {
       await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
       await listing.connect(user1)['createListing'](listingParams);
 
-      const allListings = await listing['getUserOwnedListings'](user1.address);
+      const allListings = await listing['userOwnedListings'](user1.address);
       expect(allListings.length).to.equal(1);
     });
 
@@ -2550,16 +2512,14 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
       const beforeAdminBalance = await mockToken['balanceOf'](admin.address);
 
       await listing
-        .connect(user3)
-        ['buyFromListing'](0, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user3)['buyFromListing'](0, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18));
       await listing.connect(admin)['withdrawFees'](await mockToken.getAddress());
       const afterAdminBalance = await mockToken['balanceOf'](admin.address);
       expect(afterAdminBalance).to.equal(beforeAdminBalance + ethers.parseUnits('0.05', 18));
@@ -2600,8 +2560,7 @@ describe('Listing', function () {
       const beforeAdminBalance = await ethers.provider.getBalance(admin);
 
       await listing
-        .connect(user3)
-        ['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
+        .connect(user3)['buyFromListing'](listingId, user3.address, 1, ethers.ZeroAddress, ethers.parseUnits('1', 18), {
           value: ethers.parseUnits('1', 18),
         });
 
@@ -2647,19 +2606,17 @@ describe('Listing', function () {
       await network.provider.send('evm_mine');
 
       await listing
-        .connect(user1)
-        ['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+        .connect(user1)['approveCurrencyForListing'](listingId, await mockToken.getAddress(), ethers.parseUnits('1', 18));
 
       await mockToken.connect(user3)['approve'](await listing.getAddress(), ethers.parseUnits('1', 18));
 
       const beforeAdminBalance = await mockToken['balanceOf'](admin.address);
 
       await listing
-        .connect(user3)
-        ['buyFromListing'](0, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18));
-      await expect(listing.connect(user1)['withdrawFees'](await mockToken.getAddress()))
-        .to.be.revertedWithCustomError(listing, 'OwnableUnauthorizedAccount')
-        .withArgs(user1.address);
+        .connect(user3)['buyFromListing'](0, user3.address, 1, await mockToken.getAddress(), ethers.parseUnits('1', 18));
+      await expect(listing.connect(user1)['withdrawFees'](await mockToken.getAddress())).to.be.revertedWith(
+        'Caller does not have MANAGEMENT_ROLE',
+      );
     });
 
     it('Should revert if no fees to withdraw', async function () {
@@ -2696,13 +2653,12 @@ describe('Listing', function () {
     });
   });
   describe('Permission Integration Tests', function () {
-
     describe('createListing Permission Checks', function () {
       it('Should revert if user does not have LISTING_ROLE', async function () {
         const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
-        
-        const [,,,, user4] = await ethers.getSigners();
-        
+
+        const [, , , , user4] = await ethers.getSigners();
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -2722,7 +2678,7 @@ describe('Listing', function () {
 
         await mockERC721.connect(user1)['mint'](user4.address, 3);
         await mockERC721.connect(user4)['setApprovalForAll'](await listing.getAddress(), true);
-        
+
         await expect(listing.connect(user4)['createListing'](listingParams))
           .to.be.revertedWithCustomError(listing, 'UserNotAuthorizedToCreateListing')
           .withArgs(user4.address);
@@ -2730,12 +2686,12 @@ describe('Listing', function () {
 
       it('Should revert if NFT contract is not whitelisted', async function () {
         const { listing, mockToken, admin, user1 } = await loadFixture(setup);
-        
+
         const MockERC721Factory = await ethers.getContractFactory('MockERC721');
         const nonWhitelistedNFT = await MockERC721Factory.deploy();
         await nonWhitelistedNFT.waitForDeployment();
         await nonWhitelistedNFT.connect(admin)['mint'](user1.address, 0);
-        
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -2754,7 +2710,7 @@ describe('Listing', function () {
         };
 
         await nonWhitelistedNFT.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
-        
+
         await expect(listing.connect(user1)['createListing'](listingParams))
           .to.be.revertedWithCustomError(listing, 'NFTNotWhitelistedForListing')
           .withArgs(await nonWhitelistedNFT.getAddress());
@@ -2762,11 +2718,11 @@ describe('Listing', function () {
 
       it('Should revert if currency is not supported', async function () {
         const { listing, mockERC721, admin, user1 } = await loadFixture(setup);
-        
+
         const MockTokenFactory = await ethers.getContractFactory('MockToken');
         const unsupportedToken = await MockTokenFactory.deploy(admin.address);
         await unsupportedToken.waitForDeployment();
-        
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -2785,7 +2741,7 @@ describe('Listing', function () {
         };
 
         await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
-        
+
         await expect(listing.connect(user1)['createListing'](listingParams))
           .to.be.revertedWithCustomError(listing, 'CurrencyNotSupportedForListing')
           .withArgs(await unsupportedToken.getAddress());
@@ -2795,7 +2751,7 @@ describe('Listing', function () {
     describe('updateListing Permission Checks', function () {
       it('Should revert if new currency is not supported', async function () {
         const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
-        
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -2812,7 +2768,7 @@ describe('Listing', function () {
           endTimestamp: currentTimestamp + 604800,
           reserved: false,
         };
-        
+
         await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
         await listing.connect(user1)['createListing'](listingParams);
 
@@ -2833,7 +2789,7 @@ describe('Listing', function () {
 
       it('Should revert if new NFT contract is not whitelisted when changing asset contract', async function () {
         const { listing, mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
-        
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -2850,7 +2806,7 @@ describe('Listing', function () {
           endTimestamp: currentTimestamp + 604800,
           reserved: false,
         };
-        
+
         await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
         await listing.connect(user1)['createListing'](listingParams);
 
@@ -2874,7 +2830,7 @@ describe('Listing', function () {
     describe('approveCurrencyForListing Permission Checks', function () {
       it('Should revert if currency is not supported', async function () {
         const { listing, mockERC721, admin, user1 } = await loadFixture(setup);
-        
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -2891,7 +2847,7 @@ describe('Listing', function () {
           endTimestamp: currentTimestamp + 604800,
           reserved: false,
         };
-        
+
         await mockERC721.connect(user1)['setApprovalForAll'](await listing.getAddress(), true);
         await listing.connect(user1)['createListing'](listingParams);
 
@@ -2903,8 +2859,10 @@ describe('Listing', function () {
         const pricePerTokenInCurrency = ethers.parseUnits('2', 18);
 
         await expect(
-          listing.connect(user1)['approveCurrencyForListing'](listingId, await unsupportedToken.getAddress(), pricePerTokenInCurrency)
-        ).to.be.revertedWithCustomError(listing, 'CurrencyNotSupportedForListing')
+          listing
+            .connect(user1)['approveCurrencyForListing'](listingId, await unsupportedToken.getAddress(), pricePerTokenInCurrency),
+        )
+          .to.be.revertedWithCustomError(listing, 'CurrencyNotSupportedForListing')
           .withArgs(await unsupportedToken.getAddress());
       });
     });
@@ -2912,46 +2870,46 @@ describe('Listing', function () {
     describe('Permission Helper Functions', function () {
       it('Should correctly check if user has listing permission', async function () {
         const { listing, admin, user1 } = await loadFixture(setup);
-        
+
         expect(await listing['hasListingPermission'](user1.address)).to.be.true;
-        
-        const [,,,, user4] = await ethers.getSigners();
+
+        const [, , , , user4] = await ethers.getSigners();
         expect(await listing['hasListingPermission'](user4.address)).to.be.false;
       });
 
       it('Should correctly check if NFT contract is whitelisted', async function () {
         const { listing, mockERC721, admin } = await loadFixture(setup);
-        
+
         expect(await listing['isNFTWhitelisted'](await mockERC721.getAddress())).to.be.true;
-        
+
         const MockERC721Factory = await ethers.getContractFactory('MockERC721');
         const nonWhitelistedNFT = await MockERC721Factory.deploy();
         await nonWhitelistedNFT.waitForDeployment();
-        
+
         expect(await listing['isNFTWhitelisted'](await nonWhitelistedNFT.getAddress())).to.be.false;
       });
 
       it('Should correctly check if currency is supported', async function () {
         const { listing, mockToken, admin } = await loadFixture(setup);
-        
+
         expect(await listing['isCurrencySupported'](await mockToken.getAddress())).to.be.true;
-        
+
         expect(await listing['isCurrencySupported'](ethers.ZeroAddress)).to.be.true;
-        
+
         const MockTokenFactory = await ethers.getContractFactory('MockToken');
         const unsupportedToken = await MockTokenFactory.deploy(admin.address);
         await unsupportedToken.waitForDeployment();
-        
+
         expect(await listing['isCurrencySupported'](await unsupportedToken.getAddress())).to.be.false;
       });
 
       it('Should return false for all permission checks when permission contract is not set', async function () {
         const { mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
-        
+
         const ListingFactory = await ethers.getContractFactory('Listing');
-        const listingWithoutPermissions = await ListingFactory.deploy(admin.address, ethers.ZeroAddress);
+        const listingWithoutPermissions = await ListingFactory.deploy();
         await listingWithoutPermissions.waitForDeployment();
-        
+
         expect(await listingWithoutPermissions['hasListingPermission'](user1.address)).to.be.false;
         expect(await listingWithoutPermissions['isNFTWhitelisted'](await mockERC721.getAddress())).to.be.false;
         expect(await listingWithoutPermissions['isCurrencySupported'](await mockToken.getAddress())).to.be.false;
@@ -2961,39 +2919,41 @@ describe('Listing', function () {
     describe('setPermissionContract Function', function () {
       it('Should allow owner to set permission contract', async function () {
         const { listing, admin } = await loadFixture(setup);
-        
+
         const PermissionsFactory = await ethers.getContractFactory('Permissions');
-        const newPermissions = await PermissionsFactory.deploy(admin.address);
+        const newPermissions = await PermissionsFactory.deploy();
         await newPermissions.waitForDeployment();
-        
+        await newPermissions['initialize'](admin.address);
+
         const oldPermissionAddress = await listing['permissionContract']();
-        
+
         await expect(listing.connect(admin)['setPermissionContract'](await newPermissions.getAddress()))
           .to.emit(listing, 'PermissionContractUpdated')
           .withArgs(oldPermissionAddress, await newPermissions.getAddress());
-        
+
         expect(await listing['permissionContract']()).to.equal(await newPermissions.getAddress());
       });
 
       it('Should revert if non-owner tries to set permission contract', async function () {
         const { listing, admin, user1 } = await loadFixture(setup);
-        
+
         const PermissionsFactory = await ethers.getContractFactory('Permissions');
-        const newPermissions = await PermissionsFactory.deploy(admin.address);
+        const newPermissions = await PermissionsFactory.deploy();
         await newPermissions.waitForDeployment();
-        
-        await expect(listing.connect(user1)['setPermissionContract'](await newPermissions.getAddress()))
-          .to.be.revertedWithCustomError(listing, 'OwnableUnauthorizedAccount')
-          .withArgs(user1.address);
+        await newPermissions['initialize'](admin.address);
+
+        await expect(listing.connect(user1)['setPermissionContract'](await newPermissions.getAddress())).to.be.revertedWith(
+          'Caller does not have MANAGEMENT_ROLE',
+        );
       });
 
       it('Should revert operations when permission contract is not set', async function () {
         const { mockToken, mockERC721, admin, user1 } = await loadFixture(setup);
-        
+
         const ListingFactory = await ethers.getContractFactory('Listing');
-        const listingWithoutPermissions = await ListingFactory.deploy(admin.address, ethers.ZeroAddress);
+        const listingWithoutPermissions = await ListingFactory.deploy();
         await listingWithoutPermissions.waitForDeployment();
-        
+
         const block = await ethers.provider.getBlock('latest');
         if (!block) {
           throw new Error('Failed to get block');
@@ -3012,9 +2972,11 @@ describe('Listing', function () {
         };
 
         await mockERC721.connect(user1)['setApprovalForAll'](await listingWithoutPermissions.getAddress(), true);
-        
-        await expect(listingWithoutPermissions.connect(user1)['createListing'](listingParams))
-          .to.be.revertedWithCustomError(listingWithoutPermissions, 'PermissionContractNotSet');
+
+        await expect(listingWithoutPermissions.connect(user1)['createListing'](listingParams)).to.be.revertedWithCustomError(
+          listingWithoutPermissions,
+          'PermissionContractNotSet',
+        );
       });
     });
   });
