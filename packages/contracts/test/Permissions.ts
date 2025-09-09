@@ -2,7 +2,7 @@ import { time, loadFixture } from '@nomicfoundation/hardhat-toolbox/network-help
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 
-describe('Listing', function () {
+describe('Permissions', function () {
   async function setup() {
     const [admin, user1, user2, user3] = await ethers.getSigners();
 
@@ -37,8 +37,9 @@ describe('Listing', function () {
     await mockERC1155.connect(admin)['mint'](user3.address, 2, 3);
 
     const PermissionsFactory = await ethers.getContractFactory('Permissions');
-    const permissions = await PermissionsFactory.deploy(admin.address);
+    const permissions = await PermissionsFactory.deploy();
     await permissions.waitForDeployment();
+    await permissions['initialize'](admin.address)
 
     return {
       permissions,
@@ -53,10 +54,79 @@ describe('Listing', function () {
     };
   }
 
+  describe('Initialization', function () {
+    it('Should initialize contract with correct roles and permissions', async function () {
+      const [admin, user1] = await ethers.getSigners();
+      
+      const PermissionsFactory = await ethers.getContractFactory('Permissions');
+      const permissions = await PermissionsFactory.deploy();
+      await permissions.waitForDeployment();
+      
+      // Initialize contract
+      await permissions['initialize'](admin.address);
+      
+      // Check admin has DEFAULT_ADMIN_ROLE
+      const defaultAdminRole = await permissions['DEFAULT_ADMIN_ROLE']();
+      expect(await permissions['hasRole'](defaultAdminRole, admin.address)).to.be.true;
+      
+      // Check admin has MANAGEMENT_ROLE
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
+      expect(await permissions['hasRole'](managementRole, admin.address)).to.be.true;
+      
+      // Check role admins are set correctly
+      expect(await permissions['getRoleAdmin'](managementRole)).to.equal(defaultAdminRole);
+      
+      const listingRole = await permissions['LISTING_ROLE']();
+      const auctionRole = await permissions['AUCTION_ROLE']();
+      const offerRole = await permissions['OFFER_ROLE']();
+      const nftRole = await permissions['NFT_ROLE']();
+      
+      expect(await permissions['getRoleAdmin'](listingRole)).to.equal(managementRole);
+      expect(await permissions['getRoleAdmin'](auctionRole)).to.equal(managementRole);
+      expect(await permissions['getRoleAdmin'](offerRole)).to.equal(managementRole);
+      expect(await permissions['getRoleAdmin'](nftRole)).to.equal(managementRole);
+    });
+    
+    it('Should revert when trying to initialize twice', async function () {
+      const [admin] = await ethers.getSigners();
+      
+      const PermissionsFactory = await ethers.getContractFactory('Permissions');
+      const permissions = await PermissionsFactory.deploy();
+      await permissions.waitForDeployment();
+      
+      // First initialization
+      await permissions['initialize'](admin.address);
+      
+      // Second initialization should fail
+      await expect(permissions['initialize'](admin.address))
+        .to.be.revertedWith('Already initialized');
+    });
+    
+    it('Should allow different admin address during initialization', async function () {
+      const [deployer, admin] = await ethers.getSigners();
+      
+      const PermissionsFactory = await ethers.getContractFactory('Permissions');
+      const permissions = await PermissionsFactory.connect(deployer).deploy();
+      await permissions.waitForDeployment();
+      
+      // Initialize with different admin
+      await permissions.connect(deployer)['initialize'](admin.address);
+      
+      // Check admin has roles, not deployer
+      const defaultAdminRole = await permissions['DEFAULT_ADMIN_ROLE']();
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
+      
+      expect(await permissions['hasRole'](defaultAdminRole, admin.address)).to.be.true;
+      expect(await permissions['hasRole'](managementRole, admin.address)).to.be.true;
+      expect(await permissions['hasRole'](defaultAdminRole, deployer.address)).to.be.false;
+      expect(await permissions['hasRole'](managementRole, deployer.address)).to.be.false;
+    });
+  });
+
   describe('Currencies', function () {
-    it('Should allow MANAGE_CURRENCY_ROLE to add currencies', async function () {
+    it('Should allow MANAGEMENT_ROLE to add currencies', async function () {
       const { permissions, mockToken, mockToken2, admin } = await loadFixture(setup);
-      const manageCurrencyRole = await permissions['MANAGE_CURRENCY_ROLE']();
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
 
       await expect(
         permissions.connect(admin)['addCurrency']([await mockToken.getAddress(), await mockToken2.getAddress()]),
@@ -66,7 +136,7 @@ describe('Listing', function () {
       expect(await permissions['supportedCurrencies'](await mockToken2.getAddress())).to.be.true;
     });
 
-    it('Should allow MANAGE_CURRENCY_ROLE to remove currencies', async function () {
+    it('Should allow MANAGEMENT_ROLE to remove currencies', async function () {
       const { permissions, mockToken, mockToken2, admin } = await loadFixture(setup);
 
       await permissions.connect(admin)['addCurrency']([await mockToken.getAddress(), await mockToken2.getAddress()]);
@@ -78,27 +148,32 @@ describe('Listing', function () {
       expect(await permissions['supportedCurrencies'](await mockToken2.getAddress())).to.be.false;
     });
 
+    it('Should revert addCurrency when empty array is provided', async function () {
+      const { permissions, admin } = await loadFixture(setup);
+
+      await expect(permissions.connect(admin)['addCurrency']([]))
+        .to.be.revertedWith('Empty currency array');
+    });
+
     it('Should revert addCurrency when called by non-authorized account', async function () {
       const { permissions, mockToken, mockToken2, user1 } = await loadFixture(setup);
-      const manageCurrencyRole = await permissions['MANAGE_CURRENCY_ROLE']();
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
 
       await expect(permissions.connect(user1)['addCurrency']([await mockToken.getAddress(), await mockToken2.getAddress()]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user1.address, manageCurrencyRole);
+        .to.be.revertedWith('AccessControl: account is missing role');
     });
 
     it('Should revert removeCurrency when called by non-authorized account', async function () {
       const { permissions, mockToken, mockToken2, user1 } = await loadFixture(setup);
-      const manageCurrencyRole = await permissions['MANAGE_CURRENCY_ROLE']();
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
 
       await expect(permissions.connect(user1)['removeCurrency']([await mockToken.getAddress(), await mockToken2.getAddress()]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user1.address, manageCurrencyRole);
+        .to.be.revertedWith('AccessControl: account is missing role');
     });
   });
 
   describe('Assets Roles', function () {
-    it('Should allow MANAGE_ASSET_ROLE to assign and revoke NFT role', async function () {
+    it('Should allow MANAGEMENT_ROLE to assign and revoke NFT role', async function () {
       const { permissions, mockERC721, admin } = await loadFixture(setup);
 
       await expect(permissions.connect(admin)['assignNFTRole']([await mockERC721.getAddress()]))
@@ -114,15 +189,13 @@ describe('Listing', function () {
 
     it('Should revert NFT role assignment/revocation when called by non-authorized account', async function () {
       const { permissions, mockERC721, user1 } = await loadFixture(setup);
-      const manageAssetRole = await permissions['MANAGE_ASSET_ROLE']();
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
 
       await expect(permissions.connect(user1)['assignNFTRole']([await mockERC721.getAddress()]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user1.address, manageAssetRole);
+        .to.be.revertedWith('AccessControl: account is missing role');
 
       await expect(permissions.connect(user1)['revokeNFTRole']([await mockERC721.getAddress()]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user1.address, manageAssetRole);
+        .to.be.revertedWith('AccessControl: account is missing role');
     });
 
     it('Should allow assigning NFT role to address(0) and reflect as global', async function () {
@@ -135,117 +208,106 @@ describe('Listing', function () {
     });
   });
 
-  describe('Listing Role', function () {
-    it('Should allow MANAGE_USER_ROLE to assign and revoke listing role', async function () {
+  describe('User Role Management', function () {
+    it('Should allow MANAGEMENT_ROLE to register new roles', async function () {
+      const { permissions, admin } = await loadFixture(setup);
+      const newRole = ethers.keccak256(ethers.toUtf8Bytes('NEW_ROLE'));
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
+
+      await expect(permissions.connect(admin)['registerRole'](newRole, managementRole))
+        .to.emit(permissions, 'RoleRegistered')
+        .withArgs(newRole, managementRole);
+    });
+
+    it('Should revert registerRole when called by non-MANAGEMENT_ROLE', async function () {
+      const { permissions, user1 } = await loadFixture(setup);
+      const newRole = ethers.keccak256(ethers.toUtf8Bytes('NEW_ROLE'));
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
+
+      await expect(permissions.connect(user1)['registerRole'](newRole, managementRole))
+        .to.be.revertedWith('AccessControl: account is missing role');
+    });
+
+    it('Should revert when trying to register an already registered role', async function () {
+      const { permissions, admin } = await loadFixture(setup);
+      const listingRole = await permissions['LISTING_ROLE']();
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
+
+      // LISTING_ROLE is already registered during initialization
+      await expect(permissions.connect(admin)['registerRole'](listingRole, managementRole))
+        .to.be.revertedWith('Role already registered');
+    });
+
+    it('Should allow MANAGEMENT_ROLE to assign and revoke listing role', async function () {
       const { permissions, user1, admin } = await loadFixture(setup);
+      const listingRole = await permissions['LISTING_ROLE']();
 
-      await expect(permissions.connect(admin)['assignListingRole']([user1.address]))
-        .to.emit(permissions, 'ListingRoleAssigned')
-        .withArgs(user1.address);
-      expect(await permissions['hasRole'](await permissions['LISTING_ROLE'](), user1.address)).to.be.true;
+      await expect(permissions.connect(admin)['assignRole'](listingRole, [user1.address]))
+        .to.emit(permissions, 'UserRoleAssigned')
+        .withArgs(listingRole, user1.address);
+      expect(await permissions['hasRole'](listingRole, user1.address)).to.be.true;
 
-      await expect(permissions.connect(admin)['revokeListingRole']([user1.address]))
-        .to.emit(permissions, 'ListingRoleRevoked')
-        .withArgs(user1.address);
-      expect(await permissions['hasRole'](await permissions['LISTING_ROLE'](), user1.address)).to.be.false;
+      await permissions.connect(admin)['revokeRole(bytes32,address[])'](listingRole, [user1.address]);
+      expect(await permissions['hasRole'](listingRole, user1.address)).to.be.false;
     });
 
-    it('Should revert listing role assignment/revocation when called by non-authorized account', async function () {
-      const { permissions, user1, user2 } = await loadFixture(setup);
-      const manageUserRole = await permissions['MANAGE_USER_ROLE']();
-
-      await expect(permissions.connect(user2)['assignListingRole']([user1.address]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user2.address, manageUserRole);
-
-      await expect(permissions.connect(user2)['revokeListingRole']([user1.address]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user2.address, manageUserRole);
-    });
-
-    it('Should allow assigning listing role to address(0) and reflect as global', async function () {
-      const { permissions, admin, user2 } = await loadFixture(setup);
-
-      await expect(permissions.connect(admin)['assignListingRole']([ethers.ZeroAddress]))
-        .to.emit(permissions, 'ListingRoleAssigned')
-        .withArgs(ethers.ZeroAddress);
-      expect(await permissions['hasRole'](await permissions['LISTING_ROLE'](), user2.address)).to.be.true;
-    });
-  });
-
-  describe('Auction Role', function () {
-    it('Should allow MANAGE_USER_ROLE to assign and revoke auction role', async function () {
+    it('Should allow MANAGEMENT_ROLE to assign and revoke auction role', async function () {
       const { permissions, user2, admin } = await loadFixture(setup);
+      const auctionRole = await permissions['AUCTION_ROLE']();
 
-      await expect(permissions.connect(admin)['assignAuctionRole']([user2.address]))
-        .to.emit(permissions, 'AuctionRoleAssigned')
-        .withArgs(user2.address);
-      expect(await permissions['hasRole'](await permissions['AUCTION_ROLE'](), user2.address)).to.be.true;
+      await expect(permissions.connect(admin)['assignRole'](auctionRole, [user2.address]))
+        .to.emit(permissions, 'UserRoleAssigned')
+        .withArgs(auctionRole, user2.address);
+      expect(await permissions['hasRole'](auctionRole, user2.address)).to.be.true;
 
-      await expect(permissions.connect(admin)['revokeAuctionRole']([user2.address]))
-        .to.emit(permissions, 'AuctionRoleRevoked')
-        .withArgs(user2.address);
-      expect(await permissions['hasRole'](await permissions['AUCTION_ROLE'](), user2.address)).to.be.false;
+      await permissions.connect(admin)['revokeRole(bytes32,address[])'](auctionRole, [user2.address]);
+      expect(await permissions['hasRole'](auctionRole, user2.address)).to.be.false;
     });
 
-    it('Should revert auction role assignment/revocation when called by non-authorized account', async function () {
-      const { permissions, user1, user2 } = await loadFixture(setup);
-      const manageUserRole = await permissions['MANAGE_USER_ROLE']();
-
-      await expect(permissions.connect(user1)['assignAuctionRole']([user2.address]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user1.address, manageUserRole);
-
-      await expect(permissions.connect(user1)['revokeAuctionRole']([user2.address]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user1.address, manageUserRole);
-    });
-
-    it('Should allow assigning auction role to address(0) and reflect as global', async function () {
-      const { permissions, admin, user3 } = await loadFixture(setup);
-
-      await expect(permissions.connect(admin)['assignAuctionRole']([ethers.ZeroAddress]))
-        .to.emit(permissions, 'AuctionRoleAssigned')
-        .withArgs(ethers.ZeroAddress);
-      expect(await permissions['hasRole'](await permissions['AUCTION_ROLE'](), user3.address)).to.be.true;
-    });
-  });
-
-  describe('Offer Role', function () {
-    it('Should allow MANAGE_USER_ROLE to assign and revoke offer role', async function () {
+    it('Should allow MANAGEMENT_ROLE to assign and revoke offer role', async function () {
       const { permissions, user3, admin } = await loadFixture(setup);
+      const offerRole = await permissions['OFFER_ROLE']();
 
-      await expect(permissions.connect(admin)['assignOfferRole']([user3.address]))
-        .to.emit(permissions, 'OfferRoleAssigned')
-        .withArgs(user3.address);
-      expect(await permissions['hasRole'](await permissions['OFFER_ROLE'](), user3.address)).to.be.true;
+      await expect(permissions.connect(admin)['assignRole'](offerRole, [user3.address]))
+        .to.emit(permissions, 'UserRoleAssigned')
+        .withArgs(offerRole, user3.address);
+      expect(await permissions['hasRole'](offerRole, user3.address)).to.be.true;
 
-      await expect(permissions.connect(admin)['revokeOfferRole']([user3.address]))
-        .to.emit(permissions, 'OfferRoleRevoked')
-        .withArgs(user3.address);
-      expect(await permissions['hasRole'](await permissions['OFFER_ROLE'](), user3.address)).to.be.false;
+      await permissions.connect(admin)['revokeRole(bytes32,address[])'](offerRole, [user3.address]);
+      expect(await permissions['hasRole'](offerRole, user3.address)).to.be.false;
     });
 
-    it('Should revert offer role assignment/revocation when called by non-authorized account', async function () {
-      const { permissions, user2, user3 } = await loadFixture(setup);
-      const manageUserRole = await permissions['MANAGE_USER_ROLE']();
+    it('Should revert role assignment/revocation when called by non-authorized account', async function () {
+      const { permissions, user1, user2 } = await loadFixture(setup);
+      const managementRole = await permissions['MANAGEMENT_ROLE']();
+      const listingRole = await permissions['LISTING_ROLE']();
 
-      await expect(permissions.connect(user2)['assignOfferRole']([user3.address]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user2.address, manageUserRole);
+      await expect(permissions.connect(user2)['assignRole'](listingRole, [user1.address]))
+        .to.be.revertedWith('AccessControl: account is missing role');
 
-      await expect(permissions.connect(user2)['revokeOfferRole']([user3.address]))
-        .to.be.revertedWithCustomError(permissions, 'AccessControlUnauthorizedAccount')
-        .withArgs(user2.address, manageUserRole);
+      await expect(permissions.connect(user2)['revokeRole(bytes32,address[])'](listingRole, [user1.address]))
+        .to.be.revertedWith('AccessControl: account is missing role');
     });
 
-    it('Should allow assigning offer role to address(0) and reflect as global', async function () {
+    it('Should allow assigning role to address(0) and reflect as global', async function () {
+      const { permissions, admin, user2 } = await loadFixture(setup);
+      const listingRole = await permissions['LISTING_ROLE']();
+
+      await expect(permissions.connect(admin)['assignRole'](listingRole, [ethers.ZeroAddress]))
+        .to.emit(permissions, 'UserRoleAssigned')
+        .withArgs(listingRole, ethers.ZeroAddress);
+      expect(await permissions['hasRole'](listingRole, user2.address)).to.be.true;
+    });
+
+    it('Should revert when trying to assign or revoke invalid role', async function () {
       const { permissions, admin, user1 } = await loadFixture(setup);
+      const invalidRole = ethers.keccak256(ethers.toUtf8Bytes('INVALID_ROLE'));
 
-      await expect(permissions.connect(admin)['assignOfferRole']([ethers.ZeroAddress]))
-        .to.emit(permissions, 'OfferRoleAssigned')
-        .withArgs(ethers.ZeroAddress);
-      expect(await permissions['hasRole'](await permissions['OFFER_ROLE'](), user1.address)).to.be.true;
+      await expect(permissions.connect(admin)['assignRole'](invalidRole, [user1.address]))
+        .to.be.revertedWith('InvalidRole');
+
+      await expect(permissions.connect(admin)['revokeRole(bytes32,address[])'](invalidRole, [user1.address]))
+        .to.be.revertedWith('InvalidRole');
     });
   });
 
@@ -265,18 +327,18 @@ describe('Listing', function () {
 
       it('Should revert if any role is invalid', async function () {
         const { permissions, user1 } = await loadFixture(setup);
-        const nftRole = await permissions['NFT_ROLE']();
+        const invalidRole = ethers.keccak256(ethers.toUtf8Bytes('INVALID_ROLE'));
 
-        await expect(permissions.connect(user1)['requestUserRoles']([nftRole]))
+        await expect(permissions.connect(user1)['requestUserRoles']([invalidRole]))
           .to.be.revertedWithCustomError(permissions, 'InvalidRole')
-          .withArgs(nftRole);
+          .withArgs(invalidRole);
       });
 
       it('Should revert if role is already granted globally', async function () {
         const { permissions, admin, user1 } = await loadFixture(setup);
         const listingRole = await permissions['LISTING_ROLE']();
 
-        await permissions.connect(admin)['assignListingRole']([ethers.ZeroAddress]);
+        await permissions.connect(admin)['assignRole'](listingRole, [ethers.ZeroAddress]);
         await expect(permissions.connect(user1)['requestUserRoles']([listingRole]))
           .to.be.revertedWithCustomError(permissions, 'RoleAlreadyGrantedGlobally')
           .withArgs(listingRole);
@@ -286,7 +348,7 @@ describe('Listing', function () {
         const { permissions, admin, user1 } = await loadFixture(setup);
         const offerRole = await permissions['OFFER_ROLE']();
 
-        await permissions.connect(admin)['assignOfferRole']([user1.address]);
+        await permissions.connect(admin)['assignRole'](offerRole, [user1.address]);
         await expect(permissions.connect(user1)['requestUserRoles']([offerRole]))
           .to.be.revertedWithCustomError(permissions, 'RoleAlreadyGranted')
           .withArgs(user1.address, offerRole);
