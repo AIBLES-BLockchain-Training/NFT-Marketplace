@@ -389,45 +389,53 @@ describe('Auction', function () {
         ).to.be.revertedWith('Currency is not whitelisted');
       });
 
-      describe('Should test function cancelAuction', function () {
-        beforeEach(async function () {
-          await createAuction(1);
-        });
+      it('Should check contract is owner of nft if auction expired', async function () {
+        await createAuction(1);
+        // inc time to 3600 to auction is expired
+        await time.increase(3600);
+        // check that NFT is back to seller
+        expect(await mockERC721.ownerOf(1)).to.equal(addressSystem);
+      });
+    });
 
-        it('Should cancel an auction', async function () {
-          await nftAuction.connect(seller).cancelAuction(0);
+    describe('Should test function cancelAuction', function () {
+      beforeEach(async function () {
+        await createAuction(1);
+      });
 
-          const auction = await nftAuction.auctions(0);
-          expect(auction.status).to.equal(2);
-        });
+      it('Should cancel an auction', async function () {
+        await nftAuction.connect(seller).cancelAuction(0);
 
-        it('Should check transfer back NFT 721 to auction creator', async function () {
-          await nftAuction.connect(seller).cancelAuction(0);
-          expect(await mockERC721.ownerOf(1)).to.equal(seller.address);
-        });
+        const auction = await nftAuction.auctions(0);
+        expect(auction.status).to.equal(2);
+      });
 
-        it('Should check nft of system if cancel failed', async function () {
-          expect(await mockERC721.ownerOf(1)).to.equal(addressSystem);
-        });
+      it('Should check transfer back NFT 721 to auction creator', async function () {
+        await nftAuction.connect(seller).cancelAuction(0);
+        expect(await mockERC721.ownerOf(1)).to.equal(seller.address);
+      });
 
-        it('Should revert if not the auction creator', async function () {
-          await expect(nftAuction.connect(bidder1).cancelAuction(0)).to.be.revertedWith('You are not creator of this auction');
-        });
+      it('Should check nft of system if cancel failed', async function () {
+        expect(await mockERC721.ownerOf(1)).to.equal(addressSystem);
+      });
 
-        it('Should revert if auction is not exists', async function () {
-          await expect(nftAuction.cancelAuction(2)).to.be.revertedWith('Auction does not exist');
-        });
+      it('Should revert if not the auction creator', async function () {
+        await expect(nftAuction.connect(bidder1).cancelAuction(0)).to.be.revertedWith('You are not creator of this auction');
+      });
 
-        it('Should revert if auction has bidder', async function () {
-          await bid(0, bidder1, '11');
-          await expect(nftAuction.connect(seller).cancelAuction(0)).to.be.revertedWith('Auction has bidders');
-        });
+      it('Should revert if auction is not exists', async function () {
+        await expect(nftAuction.cancelAuction(2)).to.be.revertedWith('Auction does not exist');
+      });
 
-        it('Should revert if auction is expired', async function () {
-          // Cancel auction after 2 hours
-          await time.increase(7200);
-          await expect(nftAuction.connect(seller).cancelAuction(0)).to.be.revertedWith('Auction is expired');
-        });
+      it('Should revert if auction has bidder', async function () {
+        await bid(0, bidder1, '11');
+        await expect(nftAuction.connect(seller).cancelAuction(0)).to.be.revertedWith('Auction has bidders');
+      });
+
+      it('Should revert if auction is expired', async function () {
+        // Cancel auction after 2 hours
+        await time.increase(7200);
+        await expect(nftAuction.connect(seller).cancelAuction(0)).to.be.revertedWith('Auction is expired');
       });
     });
 
@@ -644,7 +652,37 @@ describe('Auction', function () {
       });
     });
 
-    describe('Should test function claim nft', function () {
+    describe('Should test claim nft if has no bidder', function () {
+      
+      it('Should seller claim nft', async function () {
+        await createAuction(1);
+        const firstAddr = await mockERC721.ownerOf(1);
+        await time.increase(3610); // 1 hour later
+        await nftAuction.connect(seller).collectAuctionToken(0);
+        const secondAddr = await mockERC721.ownerOf(1);
+
+        expect(firstAddr).to.equal(addressSystem);
+        expect(secondAddr).to.equal(seller.address);
+      });
+
+      it('Should revert if auction is not exists', async function () {
+        await expect(nftAuction.connect(seller).collectAuctionToken(2)).to.be.revertedWith('Auction does not exist');
+      });
+
+      it('Should revert if auction is not expired', async function () {
+        await createAuction(1);
+        await expect(nftAuction.connect(seller).collectAuctionToken(0)).to.be.revertedWith('Auction is not expired');
+      });
+
+      it('Should revert if seller double claim', async function() {
+        await createAuction(1);
+        await time.increase(3610); 
+        await nftAuction.connect(seller).collectAuctionToken(0);
+        await expect(nftAuction.connect(seller).collectAuctionToken(0)).to.be.revertedWith('Token NFT already collected');
+      });
+    });
+
+    describe('Should test function claim nft if has bidder', function () {
       beforeEach(async function () {
         await createAuction(1);
         await bid(0, bidder1, '11');
@@ -757,9 +795,7 @@ describe('Auction', function () {
         };
 
         // Should fail with insufficient balance
-        await expect(nftAuction.connect(seller).createAuction(auctionArgs)).to.be.revertedWith(
-          'Insufficient NFT balance',
-        );
+        await expect(nftAuction.connect(seller).createAuction(auctionArgs)).to.be.revertedWith('Insufficient NFT balance');
       });
 
       it('Should revert if nft is not whitelisted', async function () {
@@ -869,28 +905,43 @@ describe('Auction', function () {
         const balance = await mockERC1155.balanceOf(bidder1.address, 1);
         expect(balance).to.equal(10);
       });
+
       it('Should revert if not winning bidder', async function () {
         await createAuctionWithERC1155(1);
+        // first address of nft
+        const firstBalanceSeller = await mockERC1155.balanceOf(seller.address, 1);
         await time.increase(3610); // 1 hour later
-        await expect(nftAuction.connect(bidder2).collectAuctionToken(0)).to.be.revertedWith(
-          'Only winning bidder can collect token',
-        );
+        await nftAuction.connect(seller).collectAuctionToken(0);
+        const secondBalanceSeller = await mockERC1155.balanceOf(seller.address, 1);
+
+        // console.log('firstBalanceSeller:', firstBalanceSeller.toString());
+        // console.log('secondBalanceSeller:', secondBalanceSeller.toString());
+        expect(firstBalanceSeller).to.equal(0);
+        expect(secondBalanceSeller).to.equal(10);
       });
+
       it('Should revert if auction is not exists', async function () {
         await expect(nftAuction.collectAuctionToken(2)).to.be.revertedWith('Auction does not exist');
       });
+
       it('Should revert if auction is not expired', async function () {
         await expect(nftAuction.collectAuctionToken(0)).to.be.revertedWith('Auction does not exist');
       });
-      it('Should revert if double claim', async function () {
+
+      it('Should revert if winner double claim', async function () {
         await createAuctionWithERC1155(1);
-        await bid(0, bidder1, '11');
-        await time.increase(3610); // 1 hour later
+        await bid(0, bidder1, '11'); // has bidder
+        await time.increase(3610);
         await nftAuction.connect(bidder1).collectAuctionToken(0);
         await expect(nftAuction.connect(bidder1).collectAuctionToken(0)).to.be.revertedWith('Token NFT already collected');
+      });
+
+      it('Should revert if seller double claim', async function () {
+        await createAuctionWithERC1155(1);
+        await time.increase(3610);
+        await nftAuction.connect(seller).collectAuctionToken(0);
+        await expect(nftAuction.connect(seller).collectAuctionToken(0)).to.be.revertedWith('Token NFT already collected');
       });
     });
   });
 });
-
-
