@@ -52,6 +52,7 @@ out
 
 # Env
 .env
+.env.local
 coverage
 coverage.json
 typechain-types
