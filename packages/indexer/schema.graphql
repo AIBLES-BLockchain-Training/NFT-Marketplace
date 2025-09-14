@@ -1,0 +1,308 @@
+type Subject @entity {
+  id: ID! @index # address
+  subjectType: SubjectType! @index
+  name: String!
+  avatarUrl: String
+  backgroundUrl: String
+  bio: String
+  createdAt: DateTime! @index
+
+  # Relations
+  collections: [Collection]! @derivedFrom(field: "creator")
+  listings: [Listing]! @derivedFrom(field: "owner")
+  roleAssignments: [RoleAssignment]! @derivedFrom(field: "subject")
+  purchaseHistoryAsSeller: [PurchaseHistory]! @derivedFrom(field: "seller")
+  purchaseHistoryAsBuyer: [PurchaseHistory]! @derivedFrom(field: "buyer")
+}
+
+type Role @entity {
+  id: ID! @index
+  roleName: String! @index
+  roleHash: String! @unique
+  description: String
+
+  # Relations
+  assignments: [RoleAssignment]! @derivedFrom(field: "role")
+}
+
+# RoleAssignment entity - mapping users voi roles
+type RoleAssignment @entity {
+  id: ID! @index # combination cua subjectAddress_roleId
+  subject: Subject! @index
+  role: Role! @index
+  assignedAt: DateTime!
+  assignedBy: String
+  transactionHash: String @index
+}
+
+# Collection entity - NFT collections/contracts
+type Collection @entity {
+  id: ID! @index # contract address
+  name: String!
+  symbol: String! @index
+  description: String
+  logoUrl: String
+  bannerUrl: String
+  collectionType: CollectionType!
+  creator: Subject! @index
+  totalSupply: BigInt!
+  floorPrice: BigInt
+  createdAt: DateTime! @index
+
+  # Relations
+  nfts: [NFT]! @derivedFrom(field: "collection")
+  traits: [Trait]! @derivedFrom(field: "collection")
+  traitStats: [CollectionTraitStat]! @derivedFrom(field: "collection")
+}
+
+# NFT entity - cac NFT token rieng le
+type NFT @entity {
+  id: ID! @index # combination cua contractAddress_tokenId
+  collection: Collection! @index
+  tokenId: BigInt! @index
+  name: String!
+  imageUrl: String
+  description: String
+  metadataUri: String
+
+  # Relations
+  listings: [Listing]! @derivedFrom(field: "nft")
+  purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "nft")
+  traits: [Trait]! @derivedFrom(field: "nft")
+  extensions: [Extension]! @derivedFrom(field: "nft")
+  owners: [TokenOwnership]! @derivedFrom(field: "nft")
+}
+
+type TokenOwnership @entity {
+  id: ID! # nft id + owner address
+  nft: NFT!
+  ownerAddress: String!
+  balance: BigInt! # for ERC1155, balance > 1 | for ERC721, balance = 1
+  updatedAt: DateTime!
+}
+
+# Trait entity - NFT attributes
+type Trait @entity {
+  id: ID! @index
+  collection: Collection! @index
+  nft: NFT! @index
+  displayType: String
+  traitType: String! @index
+  value: String! @index
+}
+
+# CollectionTraitStat entity - thong ke trait
+type CollectionTraitStat @entity {
+  id: ID! @index
+  collection: Collection! @index
+  traitType: String! @index
+  traitValue: String! @index
+  nftCount: Int!
+}
+
+# SupportedCurrency entity - cac payment tokens duoc ho tro
+type SupportedCurrency @entity {
+  id: ID! @index # currency address
+  name: String!
+  symbol: String! @index
+  decimals: Int!
+  isActive: Boolean! @index
+  feePercentage: Float!
+  totalAmountFee: BigInt!
+
+  # Relations
+  currencyApprovals: [CurrencyApproval]! @derivedFrom(field: "currency")
+  purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "currency")
+}
+
+# CurrencyApproval entity - cac currencies duoc approve cho listings
+type CurrencyApproval @entity {
+  id: ID! @index
+  listing: Listing! @index
+  currency: SupportedCurrency! @index
+  pricePerToken: BigInt!
+  approvedBy: String! @index
+  transactionHash: String @index
+  createdAt: DateTime!
+  updatedAt: DateTime
+}
+
+# Listing entity - direct sale listings
+type Listing @entity {
+  id: ID! @index
+  owner: Subject! @index
+  nft: NFT! @index
+  quantity: BigInt!
+  pricePerToken: BigInt! @index
+  startTimestamp: DateTime! @index
+  endTimestamp: DateTime! @index
+  isReserved: Boolean! @index
+  status: ListingStatus! @index
+  createdAt: DateTime! @index
+  updatedAt: DateTime
+  transactionHash: String @index
+
+  # Relations
+  currencyApprovals: [CurrencyApproval]! @derivedFrom(field: "listing")
+  buyerApprovals: [BuyerApproval]! @derivedFrom(field: "listing")
+  purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "listing")
+}
+
+type Auction @entity {
+  id: ID! @index
+  nftId: NFT!
+  sellerAddress: String! @index
+  quantity: BigInt!
+  currency: SupportedCurrency! @index
+  startPrice: BigInt! @index
+  stepAmount: BigInt! @index
+  ceilingPrice: BigInt @index
+  startTime: DateTime
+  endTime: DateTime
+  timeBufferInSeconds: Int!
+  status: AuctionStatus!
+
+  # Relations
+  winningBid: Bid
+  bids: [Bid]! @derivedFrom(field: "auction")
+  purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "auction")
+}
+
+type Bid @entity {
+  id: ID! @index
+  auction: Auction! @index
+  bidderAddress: String! @index
+  bidAmount: BigInt! @index
+  timestamp: DateTime!
+}
+
+type Offer @entity {
+  id: ID! @index
+  buyerAddress: String! @index
+  nftId: NFT! @index
+  quantity: BigInt!
+  totalPrice: BigInt!
+  currency: SupportedCurrency! @index
+  expirationTime: DateTime!
+  status: OfferStatus! @index
+}
+
+# BuyerApproval entity - cac buyers duoc approve cho reserved listings
+type BuyerApproval @entity {
+  id: ID! @index
+  listing: Listing! @index
+  buyerAddress: String! @index
+  isApproved: Boolean!
+  approvedBy: String! @index
+  transactionHash: String @index
+  createdAt: DateTime!
+  updatedAt: DateTime
+}
+
+# PurchaseHistory entity - lich su giao dich hoan tat
+type PurchaseHistory @entity {
+  id: ID! @index
+  transactionHash: String! @unique
+  nft: NFT! @index
+  seller: Subject! @index
+  buyer: Subject! @index
+  quantity: BigInt!
+  currency: SupportedCurrency! @index
+  totalPrice: BigInt! @index
+  tradeType: TradeType! @index
+  timestamp: DateTime! @index
+  blockNumber: Int! @index
+  
+  # Relation
+  auction: Auction 
+  listing: Listing
+}
+
+# Router events cho routing tracking
+type RouterEvent @entity {
+  id: ID! @index
+  eventType: RouterEventType! @index
+  contractAddress: String! @index
+  selector: String! @index
+  data: String
+  sender: String! @index
+  value: BigInt
+  timestamp: DateTime! @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
+# Extension entity cho NFT extensions tu ExtensionManager
+type Extension @entity {
+  id: ID! @index
+  name: String! @index
+  contractAddress: String! @index
+  nft: NFT @index
+  isEnabled: Boolean! @index
+  metadata: String
+  createdAt: DateTime! @index
+  updatedAt: DateTime
+  transactionHash: String @index
+}
+
+# Permission change events tu Permissions contract
+type PermissionEvent @entity {
+  id: ID! @index
+  eventType: PermissionEventType! @index
+  role: Role
+  subject: Subject
+  granted: Boolean!
+  grantedBy: String! @index
+  timestamp: DateTime! @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
+# Enums
+enum SubjectType {
+  USER
+  CONTRACT
+}
+
+enum CollectionType {
+  ERC721
+  ERC1155
+}
+
+enum ListingStatus {
+  UNSET
+  CREATED
+  COMPLETED
+  CANCELED
+}
+
+enum AuctionStatus {
+  CREATED
+  ACTIVE
+  CANCELLED
+  ENDED
+}
+
+enum OfferStatus {
+  UNSET
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TradeType {
+  AUCTION
+  LISTING
+}
+
+enum RouterEventType {
+  ROUTE_CREATED
+  ROUTE_EXECUTED
+  ROUTE_FAILED
+}
+
+enum PermissionEventType {
+  ROLE_GRANTED
+  ROLE_REVOKED
+  ADMIN_ROLE_CHANGED
+}
