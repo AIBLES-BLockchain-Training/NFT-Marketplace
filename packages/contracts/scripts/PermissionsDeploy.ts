@@ -8,10 +8,15 @@ async function main() {
     const owner = "0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a";
 
     const Permissions = await ethers.getContractFactory("Permissions");
-    const permissions = await Permissions.deploy(owner);
+    const permissions = await Permissions.deploy();
     
     const permissionsAddr = await permissions.getAddress();
     console.log("Permissions deployed to:", permissionsAddr);
+    
+    console.log("Initializing Permissions contract...");
+    const tx = await permissions['initialize'](owner);
+    await tx.wait();
+    console.log("Permissions initialized with admin:", owner);
 
     console.log("Wait to verify contract");
 
@@ -20,7 +25,7 @@ async function main() {
     });
     await run("verify:verify", {
         address: permissionsAddr,
-        constructorArguments: [owner],
+        constructorArguments: [],
     });
 }
 

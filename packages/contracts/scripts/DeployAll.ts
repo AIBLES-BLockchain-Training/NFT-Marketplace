@@ -192,8 +192,8 @@ async function main() {
   console.log(`   Fee Percentage: ${FEE_PERCENTAGE / 100}%\n`);
   
   try {
-    // const permissionsAddress = await deployPermissions(ADMIN_ADDRESS, signer);
-    // console.log("-".repeat(60));
+    const permissionsAddress = await deployPermissions(ADMIN_ADDRESS, signer);
+    console.log("-".repeat(60));
     
     const extensionManagerAddress = await deployExtensionManager(ADMIN_ADDRESS, signer);
     console.log("-".repeat(60));
@@ -201,7 +201,7 @@ async function main() {
     const routerAddress = await deployRouter(extensionManagerAddress, signer);
     console.log("-".repeat(60));
     
-    const listingAddress = await deployListing("0x3FdBdDFB20695921F8521D59B209c82fc902775B", signer);
+    const listingAddress = await deployListing(permissionsAddress, signer);
     console.log("-".repeat(60));
     
     // const offerAddress = await deployOffer(FEE_RECIPIENT, FEE_PERCENTAGE, permissionsAddress);
@@ -212,7 +212,7 @@ async function main() {
     
     console.log("ALL CONTRACTS DEPLOYED SUCCESSFULLY!");
     console.log("\nContract Addresses:");
-    // console.log(`   Permissions:      ${permissionsAddress}`);
+    console.log(`   Permissions:      ${permissionsAddress}`);
     console.log(`   ExtensionManager: ${extensionManagerAddress}`);
     console.log(`   Router:           ${routerAddress}`);
     console.log(`   Listing:          ${listingAddress}`);
