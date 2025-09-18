@@ -1,8 +1,10 @@
 /.git
 /node_modules
+/.env
 /lib
+/packages/contract
+
 /*Versions.json
 npm-debug.log
 
-# OS Files
 .DS_Store

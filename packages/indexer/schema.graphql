@@ -75,7 +75,7 @@ type NFT @entity {
 
 type TokenOwnership @entity {
   id: ID! # nft id + owner address
-  nft: Nft!
+  nft: NFT!
   ownerAddress: String!
   balance: BigInt! # for ERC1155, balance > 1 | for ERC721, balance = 1
   updatedAt: DateTime!
@@ -98,8 +98,6 @@ type CollectionTraitStat @entity {
   traitType: String! @index
   traitValue: String! @index
   nftCount: Int!
-
-  trait: Trait! @derivedFrom(field: "id")
 }
 
 # SupportedCurrency entity - cac payment tokens duoc ho tro
@@ -152,7 +150,7 @@ type Listing @entity {
 
 type Auction @entity {
   id: ID! @index
-  nftId: Nft!
+  nftId: NFT!
   sellerAddress: String! @index
   quantity: BigInt!
   currency: SupportedCurrency! @index
@@ -181,7 +179,7 @@ type Bid @entity {
 type Offer @entity {
   id: ID! @index
   buyerAddress: String! @index
-  nftId: Nft! @index
+  nftId: NFT! @index
   quantity: BigInt!
   totalPrice: BigInt!
   currency: SupportedCurrency! @index
