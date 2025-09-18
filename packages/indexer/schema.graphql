@@ -139,7 +139,7 @@ type Listing @entity {
   startTimestamp: DateTime! @index
   endTimestamp: DateTime! @index
   isReserved: Boolean! @index
-  status: ListingStatus! @index
+  status: ListingStatus! @index 
   createdAt: DateTime! @index
   updatedAt: DateTime
   transactionHash: String @index
