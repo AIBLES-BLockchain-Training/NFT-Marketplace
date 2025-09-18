@@ -90,21 +90,28 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     uint256 public constant MIN_TIME_AUCTION = 1 hours; // 1 hour
 
     // ============= EVENTS =============
-    event NewAuction(address auctionCreator, uint256 auctionId, address assetContract, Auction auction);
-
-    event AuctionCloser(
-        uint256 auctionId,
-        address assetContract,
-        address closer,
+    event AuctionCreated(
+        uint256 indexed auctionId,
+        address indexed seller,
+        address indexed assetContract,
         uint256 tokenId,
-        address auctionCreater,
-        address winningBidder
+        uint256 quantity,
+        address currency,
+        uint256 startPrice,
+        uint256 ceilingPrice,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 timeBufferInSeconds,
+        uint256 stepAmount,
+        uint8 tokenType
     );
 
-    event CancelledAuction(address auctionCreator, uint256 auctionId);
-    event BidPlaced(uint256 auctionId, address bidder, uint256 amount);
-    event AuctionPayoutCollected(uint256 auctionId, address auctionCreator, uint256 amount);
-    event AuctionTokenCollected(uint256 auctionId, address bidder);
+    event AuctionFinalized(uint256 indexed auctionId, address indexed winner, uint256 winningBid, address currency);
+
+    event AuctionCancelled(uint256 indexed auctionId, address indexed seller);
+    event AuctionBidPlaced(uint256 indexed auctionId, address indexed bidder, uint256 bidAmount, address currency);
+    event AuctionPayoutCollected(uint256 indexed auctionId, address indexed seller, uint256 amount);
+    event AuctionTokenCollected(uint256 indexed auctionId, address indexed winner, uint256 tokenId);
     event NFTReceived(address operator, address from, uint256 tokenId, bytes data);
     event UpdatePermissionsContract(address oldPermissionsContract, address newPermissionsContract);
 
@@ -293,7 +300,21 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             //state variables
         });
 
-        emit NewAuction(msg.sender, totalAuction, _auctionParams._assetContract, s.auctionData.auctions[totalAuction]);
+        emit AuctionCreated(
+            totalAuction,
+            msg.sender,
+            _auctionParams._assetContract,
+            _auctionParams._tokenId,
+            _auctionParams._quantity,
+            _auctionParams._currency,
+            _auctionParams._startPrice,
+            _auctionParams._ceilingPrice,
+            _auctionParams._startTime,
+            _auctionParams._endTime,
+            _auctionParams._timeBufferInSeconds,
+            _auctionParams._stepAmount,
+            uint8(types)
+        );
         s.coreStorage.totalAuctions++;
     }
 
@@ -320,7 +341,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             IERC721(auction.assetContract).transferFrom(address(this), auction.auctionCreator, auction.tokenId);
         }
 
-        emit CancelledAuction(msg.sender, _auctionId);
+        emit AuctionCancelled(_auctionId, msg.sender);
     }
 
     // collect auction payout
@@ -338,6 +359,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         require(currency.transfer(auction.auctionCreator, auction.highestBid), "Payout transfer failed");
 
         emit AuctionPayoutCollected(_auctionId, msg.sender, auction.highestBid);
+        emit AuctionFinalized(_auctionId, auction.highestBidder, auction.highestBid, auction.currency);
     }
 
     // collect auction token
@@ -364,7 +386,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             IERC721(auction.assetContract).transferFrom(address(this), msg.sender, auction.tokenId);
         }
 
-        emit AuctionTokenCollected(_auctionId, msg.sender);
+        emit AuctionTokenCollected(_auctionId, msg.sender, auction.tokenId);
     }
 
     // bid in auction
@@ -411,7 +433,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             auction.endTime += auction.timeBufferInSeconds;
         }
 
-        emit BidPlaced(_auctionId, msg.sender, _bidAmount);
+        emit AuctionBidPlaced(_auctionId, msg.sender, _bidAmount, address(currency));
 
         // ======================== 3. INTERACTIONS (Tương tác với BÊN NGOÀI) ========================
         // Lấy tiền của người mới VÀO hợp đồng
