@@ -69,6 +69,7 @@ const config: HardhatUserConfig = {
       bsc: process.env['BSCSCAN_API_KEY'] || '',
       bscTestnet: process.env['BSCSCAN_API_KEY'] || '',
       sepolia: process.env['ETHERSCAN_API_KEY'] || '',
+      ethSepolia: process.env['ETHERSCAN_API_KEY'] || '',
     },
   },
   mocha: {

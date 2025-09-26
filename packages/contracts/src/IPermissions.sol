@@ -5,7 +5,7 @@ interface IPermission {
     // -------------------- CURRENCY --------------------
     function addCurrency(address[] calldata _currencies) external;
     function removeCurrency(address[] calldata _currencies) external;
-    
+
     function supportedCurrencies(address currency) external view returns (bool);
 
     // -------------------- NFT ROLE MANAGEMENT --------------------
@@ -13,15 +13,8 @@ interface IPermission {
     function revokeNFTRole(address[] calldata _nfts) external;
 
     // -------------------- USER ROLE MANAGEMENT --------------------
-    // Listing Role
-    function assignListingRole(address[] calldata _accounts) external;
-    function revokeListingRole(address[] calldata _accounts) external;
-    // Auction Role
-    function assignAuctionRole(address[] calldata _accounts) external;
-    function revokeAuctionRole(address[] calldata _accounts) external;
-    // Offer Role
-    function assignOfferRole(address[] calldata _accounts) external;
-    function revokeOfferRole(address[] calldata _accounts) external;
+    function assignRole(bytes32 role, address[] calldata _accounts) external;
+    function revokeRole(bytes32 role, address[] calldata _accounts) external;
 
     // -------------------- ROLE REQUESTS --------------------
     function requestUserRoles(bytes32[] calldata roles) external;
@@ -37,12 +30,9 @@ interface IPermission {
     event NFTRoleAssigned(address indexed nft);
     event NFTRoleRevoked(address indexed nft);
 
-    event ListingRoleAssigned(address indexed account);
-    event ListingRoleRevoked(address indexed account);
-    event AuctionRoleAssigned(address indexed account);
-    event AuctionRoleRevoked(address indexed account);
-    event OfferRoleAssigned(address indexed account);
-    event OfferRoleRevoked(address indexed account);
+    event UserRoleAssigned(bytes32 indexed role, address indexed account);
+    event UserRoleRevoked(bytes32 indexed role, address indexed account);
+    event RoleRegistered(bytes32 indexed role, bytes32 indexed adminRole);
 
     event RoleRequested(address indexed requester, bytes32 role);
     event NFTRoleRequested(address indexed nft, uint256 tokenId, address indexed requester);

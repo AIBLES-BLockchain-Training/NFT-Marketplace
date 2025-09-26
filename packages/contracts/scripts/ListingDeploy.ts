@@ -1,32 +1,32 @@
-import { ethers, run } from "hardhat";
+import { ethers, run } from 'hardhat';
 
 async function main() {
-    await run("compile");
-    console.log("Compiled contract...");
+  await run('compile');
+  console.log('Compiled contract...');
 
-    console.log("Deploying Listing...");
-    const owner = "0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a";
+  console.log('Deploying Listing...');
+  const owner = '0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a';
 
-    const Listing = await ethers.getContractFactory("Listing");
-    const listing = await Listing.deploy(owner, "0x992a59a46D3c450e2A00e3f1711475107F1B6E89");
-    
-    const listingAddr = await listing.getAddress();
-    console.log("Listing deployed to:", listingAddr);
+  const Listing = await ethers.getContractFactory('Listing');
+  const listing = await Listing.deploy(owner, '0x992a59a46D3c450e2A00e3f1711475107F1B6E89');
 
-    console.log("Wait to verify contract");
+  const listingAddr = await listing.getAddress();
+  console.log('Listing deployed to:', listingAddr);
 
-    await new Promise((resolve) => {
-        setTimeout(resolve, 60 * 1000);
-    });
-    await run("verify:verify", {
-        address: listingAddr,
-        constructorArguments: [owner, "0x992a59a46D3c450e2A00e3f1711475107F1B6E89"],
-    });
+  console.log('Wait to verify contract');
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 60 * 1000);
+  });
+  await run('verify:verify', {
+    address: listingAddr,
+    constructorArguments: [owner, '0x992a59a46D3c450e2A00e3f1711475107F1B6E89'],
+  });
 }
 
 main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        console.error(error);
-        process.exit(1);
-    });
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

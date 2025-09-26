@@ -5,16 +5,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "./IPermissions.sol";
 
-interface IPermissions {
-    function hasRole(bytes32 role, address account) external view returns (bool);
-    function supportedCurrencies(address currency) external view returns (bool);
-    function OFFER_ROLE() external view returns (bytes32);
-    function NFT_ROLE() external view returns (bytes32);
-}
-
-contract NFTOffer is ReentrancyGuard, Ownable {
+contract NFTOffer is ReentrancyGuard {
+    // Role constants
+    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
+    bytes32 public constant OFFER_ROLE = keccak256("OFFER_ROLE");
+    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
     enum Status {
         UNSET,
         ACTIVE,
@@ -57,7 +54,7 @@ contract NFTOffer is ReentrancyGuard, Ownable {
     uint256 public feePercentage;
     uint256 private constant BASIS_POINTS = 10000;
 
-    IPermissions public permissions;
+    IPermission public permissions;
 
     // Errors
     error ZeroQuantity();
@@ -77,8 +74,10 @@ contract NFTOffer is ReentrancyGuard, Ownable {
     error InvalidRange();
     error OfferIdOutOfRange();
     error CallerDoesNotHaveOfferRole();
+    error CallerDoesNotHaveManagementRole();
     error NFTNotWhitelisted();
     error CurrencyNotSupported();
+    error ZeroAddress();
 
     // Events
     event OfferCreated(
@@ -105,26 +104,29 @@ contract NFTOffer is ReentrancyGuard, Ownable {
         uint256 totalPrice
     );
 
-    constructor(address _feeRecipient, uint256 _feePercentage, address _permissions) Ownable(msg.sender) {
+    constructor(address _feeRecipient, uint256 _feePercentage, address _permissions) {
+        if (_feeRecipient == address(0)) revert ZeroAddress();
+        if (_permissions == address(0)) revert ZeroAddress();
+        require(_feePercentage <= 1000, "Fee too high");
+
         feeRecipient = _feeRecipient;
         feePercentage = _feePercentage;
-        permissions = IPermissions(_permissions);
+        permissions = IPermission(_permissions);
     }
 
     modifier onlyOfferRole() {
-        if (!permissions.hasRole(permissions.OFFER_ROLE(), msg.sender)) revert CallerDoesNotHaveOfferRole();
+        if (!permissions.hasRole(OFFER_ROLE, msg.sender)) revert CallerDoesNotHaveOfferRole();
         _;
     }
 
     function makeOffer(OfferParams memory params) external nonReentrant onlyOfferRole returns (uint256 offerId) {
-        if (!permissions.hasRole(permissions.NFT_ROLE(), params.assetContract)) revert NFTNotWhitelisted();
+        if (!permissions.hasRole(NFT_ROLE, params.assetContract)) revert NFTNotWhitelisted();
 
         if (!permissions.supportedCurrencies(params.currency)) revert CurrencyNotSupported();
 
         if (params.quantity == 0) revert ZeroQuantity();
         if (params.totalPrice == 0) revert ZeroPrice();
-        if (params.expirationTimestamp <= block.timestamp || params.expirationTimestamp > block.timestamp + 1 hours)
-            revert InvalidExpirationTimestamp();
+        if (params.expirationTimestamp <= block.timestamp) revert InvalidExpirationTimestamp();
 
         TokenType tokenType;
         try IERC721(params.assetContract).supportsInterface(type(IERC721).interfaceId) returns (bool isERC721) {
@@ -240,7 +242,7 @@ contract NFTOffer is ReentrancyGuard, Ownable {
     }
 
     function getOffer(uint256 offerId) external view returns (Offer memory offer) {
-        if (offerId > _offerIdCounter) revert OfferIdOutOfRange();
+        if (offerId == 0 || offerId > _offerIdCounter) revert OfferIdOutOfRange();
         return _offers[offerId];
     }
 
@@ -258,7 +260,7 @@ contract NFTOffer is ReentrancyGuard, Ownable {
         return offers;
     }
 
-    function getAllValidOffer(uint256 startId, uint256 endId) external view returns (Offer[] memory offers) {
+    function getAllValidOffers(uint256 startId, uint256 endId) external view returns (Offer[] memory offers) {
         if (startId > endId) revert InvalidRange();
         if (endId > _offerIdCounter) revert OfferIdOutOfRange();
 
@@ -293,5 +295,18 @@ contract NFTOffer is ReentrancyGuard, Ownable {
         IERC20 currency = IERC20(offer.currency);
         return (currency.balanceOf(offer.offeror) >= offer.totalPrice &&
             currency.allowance(offer.offeror, address(this)) >= offer.totalPrice);
+    }
+
+    // Admin functions
+    function setFeeRecipient(address _feeRecipient) external {
+        if (!permissions.hasRole(MANAGEMENT_ROLE, msg.sender)) revert CallerDoesNotHaveManagementRole();
+        if (_feeRecipient == address(0)) revert ZeroAddress();
+        feeRecipient = _feeRecipient;
+    }
+
+    function setFeePercentage(uint256 _feePercentage) external {
+        if (!permissions.hasRole(MANAGEMENT_ROLE, msg.sender)) revert CallerDoesNotHaveManagementRole();
+        require(_feePercentage <= 1000, "Fee too high"); 
+        feePercentage = _feePercentage;
     }
 }
