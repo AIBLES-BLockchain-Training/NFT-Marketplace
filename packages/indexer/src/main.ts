@@ -1,14 +1,33 @@
 import "reflect-metadata"
+import { EvmBatchProcessor } from '@subsquid/evm-processor'
 import { TypeormDatabase } from '@subsquid/typeorm-store'
-import { PermissionsProcessor } from './processors/permissions.processor'
-import { RouterProcessor } from './processors/router.processor'
-import { ListingProcessor } from './processors/listing.processor'
-import { ExtensionManagerProcessor } from './processors/extensionManager.processor'
+import {
+  Listing,
+  Subject,
+  Collection,
+  NFT,
+  SupportedCurrency,
+  Role,
+  RoleAssignment,
+  PermissionEvent,
+  PurchaseHistory,
+  CurrencyApproval,
+  BuyerApproval
+} from './model'
 
-import * as permissionsAbi from './abi/permissions'
-import * as routerAbi from './abi/router'
-import * as listingAbi from './abi/listing'
-import * as extensionManagerAbi from './abi/extension-manager'
+import {
+  processPermissionsEvents,
+  getPermissionsTopics,
+  type PermissionsABI
+} from './processors/permissions.processor'
+import {
+  processListingEvents,
+  getListingTopics,
+  type ListingABI
+} from './processors/listing.processor'
+
+import * as permissionsAbi from './abi/Permissions'
+import * as listingAbi from './abi/Listing'
 
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
@@ -16,137 +35,153 @@ const NETWORK_CONFIG = {
 }
 
 const CONTRACT_ADDRESSES = {
-  permissions: process.env.PERMISSIONS_CONTRACT || '0x0000000000000000000000000000000000000001',
-  router: process.env.ROUTER_CONTRACT || '0x0000000000000000000000000000000000000002',
-  listing: process.env.LISTING_CONTRACT || '0x0000000000000000000000000000000000000003',
-  extensionManager: process.env.EXTENSION_MANAGER_CONTRACT || '0x0000000000000000000000000000000000000004'
+  permissions: process.env.PERMISSIONS_CONTRACT || '0xbc07643c3300a45a8ACc8761EdE748403E9Df35f',
+  listing: process.env.LISTING_CONTRACT || '0x6903F6ACBEcF95756040Ecd96714d34e30694649'
 }
 
-class MultiContractIndexer {
-  private db: TypeormDatabase
-  private processors: Map<string, any>
+class CombinedIndexer {
+  private processor: EvmBatchProcessor
 
   constructor() {
-    this.db = new TypeormDatabase()
-    this.processors = new Map()
-    this.initializeProcessors()
-  }
+    this.processor = new EvmBatchProcessor()
+      .setGateway(NETWORK_CONFIG.gateway)
+      .setFinalityConfirmation(12)
+      .setBlockRange({ from: 0 })
 
-  private initializeProcessors() {
-    const permissionsProcessor = new PermissionsProcessor(
-      CONTRACT_ADDRESSES.permissions,
-      permissionsAbi,
-      NETWORK_CONFIG.gateway,
-      NETWORK_CONFIG.rpcEndpoint
-    )
-    this.processors.set('permissions', permissionsProcessor)
+    if (NETWORK_CONFIG.rpcEndpoint) {
+      this.processor.setRpcEndpoint({
+        url: NETWORK_CONFIG.rpcEndpoint,
+        rateLimit: 5
+      })
+    }
 
-    const routerProcessor = new RouterProcessor(
-      CONTRACT_ADDRESSES.router,
-      routerAbi,
-      NETWORK_CONFIG.gateway,
-      NETWORK_CONFIG.rpcEndpoint
-    )
-    this.processors.set('router', routerProcessor)
+    this.processor.setFields({
+      log: {
+        topics: true,
+        data: true,
+        transactionHash: true,
+        address: true
+      },
+      block: {
+        timestamp: true,
+        height: true
+      },
+      transaction: {
+        hash: true
+      }
+    })
 
-    const listingProcessor = new ListingProcessor(
-      CONTRACT_ADDRESSES.listing,
-      listingAbi,
-      NETWORK_CONFIG.gateway,
-      NETWORK_CONFIG.rpcEndpoint
-    )
-    this.processors.set('listing', listingProcessor)
+    // Add logs for permissions contract
+    const permissionsTopics = getPermissionsTopics(permissionsAbi as PermissionsABI)
+    if (permissionsTopics.length > 0) {
+      this.processor.addLog({
+        address: [CONTRACT_ADDRESSES.permissions.toLowerCase()],
+        topic0: permissionsTopics
+      })
+    }
 
-    const extensionManagerProcessor = new ExtensionManagerProcessor(
-      CONTRACT_ADDRESSES.extensionManager,
-      extensionManagerAbi,
-      NETWORK_CONFIG.gateway,
-      NETWORK_CONFIG.rpcEndpoint
-    )
-    this.processors.set('extensionManager', extensionManagerProcessor)
+    // Add logs for listing contract
+    const listingTopics = getListingTopics(listingAbi as ListingABI)
+    if (listingTopics.length > 0) {
+      this.processor.addLog({
+        address: [CONTRACT_ADDRESSES.listing.toLowerCase()],
+        topic0: listingTopics
+      })
+    }
   }
 
   async run() {
-    console.log('Starting multi-contract indexer...')
+    console.log('Starting combined NFT marketplace indexer...')
     console.log('Processing contracts:', Object.keys(CONTRACT_ADDRESSES))
+    console.log('Contracts addresses:', CONTRACT_ADDRESSES)
 
-    const processingMode = process.env.PROCESSING_MODE || 'parallel'
+    const db = new TypeormDatabase()
 
-    if (processingMode === 'parallel') {
-      await this.runParallel()
-    } else {
-      await this.runSequential()
-    }
-  }
+    await this.processor.run(db, async (ctx) => {
+      const listingMap: Map<string, Listing> = new Map()
+      const subjectMap: Map<string, Subject> = new Map()
+      const collectionMap: Map<string, Collection> = new Map()
+      const nftMap: Map<string, NFT> = new Map()
+      const currencyMap: Map<string, SupportedCurrency> = new Map()
+      const roleMap: Map<string, Role> = new Map()
 
-  private async runParallel() {
-    console.log('Running processors in parallel mode...')
+      const roleAssignments: RoleAssignment[] = []
+      const permissionEvents: PermissionEvent[] = []
+      const purchaseHistories: PurchaseHistory[] = []
+      const currencyApprovals: CurrencyApproval[] = []
+      const buyerApprovals: BuyerApproval[] = []
 
-    const processorPromises = Array.from(this.processors.entries()).map(
-      async ([name, processor]) => {
-        try {
-          console.log(`Starting ${name} processor...`)
-          await processor.process(this.db)
-          console.log(`${name} processor completed successfully`)
-        } catch (error) {
-          console.error(`Error in ${name} processor:`, error)
-          throw error
+      const permissionsLogs: any[] = []
+      const listingLogs: any[] = []
+
+      for (let block of ctx.blocks) {
+        for (let log of block.logs) {
+          const logAddress = log.address.toLowerCase()
+
+          if (logAddress === CONTRACT_ADDRESSES.permissions.toLowerCase()) {
+            permissionsLogs.push(log)
+          } else if (logAddress === CONTRACT_ADDRESSES.listing.toLowerCase()) {
+            listingLogs.push(log)
+          }
         }
       }
-    )
 
-    try {
-      await Promise.all(processorPromises)
-      console.log('All processors completed successfully')
-    } catch (error) {
-      console.error('Error during parallel processing:', error)
-      throw error
-    }
-  }
-
-  private async runSequential() {
-    console.log('Running processors in sequential mode...')
-
-    for (const [name, processor] of this.processors.entries()) {
-      try {
-        console.log(`Starting ${name} processor...`)
-        await processor.process(this.db)
-        console.log(`${name} processor completed successfully`)
-      } catch (error) {
-        console.error(`Error in ${name} processor:`, error)
-        throw error
+      // Process permissions events
+      if (permissionsLogs.length > 0) {
+        console.log(`Processing ${permissionsLogs.length} permissions events`)
+        await processPermissionsEvents(
+          permissionsLogs,
+          ctx,
+          permissionsAbi as PermissionsABI,
+          CONTRACT_ADDRESSES.permissions.toLowerCase(),
+          roleMap,
+          subjectMap,
+          currencyMap,
+          roleAssignments,
+          permissionEvents
+        )
       }
-    }
 
-    console.log('All processors completed successfully')
-  }
+      // Process listing events
+      if (listingLogs.length > 0) {
+        console.log(`Processing ${listingLogs.length} listing events`)
+        await processListingEvents(
+          listingLogs,
+          ctx,
+          listingAbi as ListingABI,
+          CONTRACT_ADDRESSES.listing.toLowerCase(),
+          listingMap,
+          subjectMap,
+          collectionMap,
+          nftMap,
+          currencyMap,
+          purchaseHistories,
+          currencyApprovals,
+          buyerApprovals
+        )
+      }
 
-  async runSpecificProcessor(processorName: string) {
-    const processor = this.processors.get(processorName)
-    if (!processor) {
-      throw new Error(`Processor ${processorName} not found`)
-    }
+      console.log('Saving entities to database...')
+      await ctx.store.save(Array.from(subjectMap.values()))
+      await ctx.store.save(Array.from(roleMap.values()))
+      await ctx.store.save(Array.from(collectionMap.values()))
+      await ctx.store.save(Array.from(nftMap.values()))
+      await ctx.store.save(Array.from(currencyMap.values()))
+      await ctx.store.save(Array.from(listingMap.values()))
+      await ctx.store.save(roleAssignments)
+      await ctx.store.save(permissionEvents)
+      await ctx.store.save(currencyApprovals)
+      await ctx.store.save(buyerApprovals)
+      await ctx.store.save(purchaseHistories)
 
-    console.log(`Running ${processorName} processor...`)
-    try {
-      await processor.process(this.db)
-      console.log(`${processorName} processor completed successfully`)
-    } catch (error) {
-      console.error(`Error in ${processorName} processor:`, error)
-      throw error
-    }
+      console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
+    })
   }
 }
 
 async function main() {
-  const indexer = new MultiContractIndexer()
-
-  const specificProcessor = process.env.RUN_PROCESSOR
-  if (specificProcessor) {
-    await indexer.runSpecificProcessor(specificProcessor)
-  } else {
-    await indexer.run()
-  }
+  const indexer = new CombinedIndexer()
+  await indexer.run()
 }
 
 main().catch((error) => {
