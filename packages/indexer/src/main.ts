@@ -36,7 +36,9 @@ const NETWORK_CONFIG = {
 
 const CONTRACT_ADDRESSES = {
   permissions: process.env.PERMISSIONS_CONTRACT || '0xbc07643c3300a45a8ACc8761EdE748403E9Df35f',
-  listing: process.env.LISTING_CONTRACT || '0x6903F6ACBEcF95756040Ecd96714d34e30694649'
+  // IMPORTANT: Use Router address, not Listing address!
+  // Events are emitted from Router when using delegatecall
+  router: process.env.ROUTER_CONTRACT || '0x1279e1f267968eC70841dFa26Fbab60F65CdF717'
 }
 
 class CombinedIndexer {
@@ -46,7 +48,7 @@ class CombinedIndexer {
     this.processor = new EvmBatchProcessor()
       .setGateway(NETWORK_CONFIG.gateway)
       .setFinalityConfirmation(12)
-      .setBlockRange({ from: 0 })
+      .setBlockRange({ from: 9347902 })
 
     if (NETWORK_CONFIG.rpcEndpoint) {
       this.processor.setRpcEndpoint({
@@ -84,7 +86,7 @@ class CombinedIndexer {
     const listingTopics = getListingTopics(listingAbi as ListingABI)
     if (listingTopics.length > 0) {
       this.processor.addLog({
-        address: [CONTRACT_ADDRESSES.listing.toLowerCase()],
+        address: [CONTRACT_ADDRESSES.router.toLowerCase()],
         topic0: listingTopics
       })
     }
@@ -119,9 +121,9 @@ class CombinedIndexer {
           const logAddress = log.address.toLowerCase()
 
           if (logAddress === CONTRACT_ADDRESSES.permissions.toLowerCase()) {
-            permissionsLogs.push(log)
-          } else if (logAddress === CONTRACT_ADDRESSES.listing.toLowerCase()) {
-            listingLogs.push(log)
+            permissionsLogs.push({ ...log, block })
+          } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
+            listingLogs.push({ ...log, block })
           }
         }
       }
@@ -149,7 +151,7 @@ class CombinedIndexer {
           listingLogs,
           ctx,
           listingAbi as ListingABI,
-          CONTRACT_ADDRESSES.listing.toLowerCase(),
+          CONTRACT_ADDRESSES.router.toLowerCase(),
           listingMap,
           subjectMap,
           collectionMap,

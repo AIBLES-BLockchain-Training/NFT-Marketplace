@@ -36,9 +36,20 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     }
 
     // ============= CONSTANTS & ENUMS =============
-    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
-    bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
-    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
+    // Use functions instead of constants to work with delegatecall
+    function MANAGEMENT_ROLE() public pure returns (bytes32) {
+        return keccak256("MANAGEMENT_ROLE");
+    }
+
+    function AUCTION_ROLE() public pure returns (bytes32) {
+        return keccak256("AUCTION_ROLE");
+    }
+
+    function NFT_ROLE() public pure returns (bytes32) {
+        return keccak256("NFT_ROLE");
+    }
+
+    uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
     enum AuctionStatus {
         CREATED, // Created: when auction is created
@@ -129,14 +140,14 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     function hasAuctionRole(address _account) internal view {
         AuctionStorage storage s = _auctionStorage();
         if (address(s.coreStorage.permissionsContract) == address(0)) revert("Caller does not have the auction role");
-        if (!s.coreStorage.permissionsContract.hasRole(AUCTION_ROLE, _account)) {
+        if (!s.coreStorage.permissionsContract.hasRole(AUCTION_ROLE(), _account)) {
             revert("Caller does not have the auction role");
         }
     }
 
     function hasAuctionNFTRole(address _nft) internal view {
         AuctionStorage storage s = _auctionStorage();
-        if (!s.coreStorage.permissionsContract.hasRole(NFT_ROLE, _nft)) {
+        if (!s.coreStorage.permissionsContract.hasRole(NFT_ROLE(), _nft)) {
             revert("NFT contract is not whitelisted");
         }
     }
@@ -150,7 +161,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
 
     function _checkManagementPermission() internal view {
         AuctionStorage storage s = _auctionStorage();
-        if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE, msg.sender)) {
+        if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE(), msg.sender)) {
             revert("Caller does not have MANAGEMENT_ROLE");
         }
     }
@@ -345,26 +356,52 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         AuctionStorage storage s = _auctionStorage();
         Auction storage auction = s.auctionData.auctions[_auctionId];
         require(isAuctionExpired(_auctionId), "Auction is not expired");
-        require(auction.highestBidder == msg.sender, "Only winning bidder can collect token");
+
+        // check reentrancy
         require(!auction.isTokenCollected, "Token NFT already collected");
+        auction.isTokenCollected = true; // 2 role is seller | winner
 
-        auction.isTokenCollected = true;
-
-        if (auction.tokenType == TokenType.ERC1155) {
-            // Transfer NFT to winning bidder
-            IERC1155(auction.assetContract).safeTransferFrom(
+        if (auction.highestBidder == address(0)) {
+            // back nft for seller
+            transferNft(
+                auction.assetContract,
+                address(this),
+                auction.auctionCreator,
+                auction.tokenId,
+                auction.quantity,
+                auction.tokenType
+            );
+        } else {
+            require(auction.highestBidder == msg.sender, "Only winning bidder can collect token");
+            transferNft(
+                auction.assetContract,
                 address(this),
                 msg.sender,
                 auction.tokenId,
                 auction.quantity,
-                ""
+                auction.tokenType
             );
-        } else {
-            // Transfer NFT to winning bidder
-            IERC721(auction.assetContract).transferFrom(address(this), msg.sender, auction.tokenId);
         }
 
         emit AuctionTokenCollected(_auctionId, msg.sender);
+    }
+
+    // internal function to transfer nft for user | winner
+    function transferNft(
+        address asset,
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 quantity,
+        TokenType tokenType
+    ) internal {
+        if (tokenType == TokenType.ERC1155) {
+            // Transfer NFT to winning bidder
+            IERC1155(asset).safeTransferFrom(from, to, tokenId, quantity, "");
+        } else {
+            // Transfer NFT to winning bidder
+            IERC721(asset).safeTransferFrom(from, to, tokenId);
+        }
     }
 
     // bid in auction
@@ -495,12 +532,12 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             requiredAmount =
                 s.auctionData.auctions[_auctionId].startPrice +
                 ((s.auctionData.auctions[_auctionId].startPrice * s.auctionData.auctions[_auctionId].stepAmount) /
-                    10000); // nếu chưa có người đặt giá thì đặt giá bằng start price
+                    BPS); // nếu chưa có người đặt giá thì đặt giá bằng start price
         } else {
             // Nếu đã có người đặt giá, tính bước giá tối thiểu ex step = 500 is 5%
             requiredAmount =
                 currentHighestBid +
-                ((currentHighestBid * s.auctionData.auctions[_auctionId].stepAmount) / 10000); // step amount in %
+                ((currentHighestBid * s.auctionData.auctions[_auctionId].stepAmount) / BPS); // step amount in %
         }
 
         return _bidAmount >= requiredAmount;

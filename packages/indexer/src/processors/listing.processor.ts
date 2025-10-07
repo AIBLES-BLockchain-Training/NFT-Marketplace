@@ -255,7 +255,7 @@ export async function processListingEvents(
     const topic0 = log.topics[0]
     const timestamp = new Date(log.block.header.timestamp)
     const blockNumber = log.block.header.height
-    const transactionHash = log.transaction?.hash || ''
+    const transactionHash = log.transactionHash || ''
 
     try {
       if (topic0 === abi.events.ListingCreated?.topic) {
