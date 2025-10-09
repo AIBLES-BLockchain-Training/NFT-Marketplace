@@ -1,5 +1,3 @@
-import { EvmBatchProcessor } from '@subsquid/evm-processor'
-import { TypeormDatabase } from '@subsquid/typeorm-store'
 import {
   Listing,
   ListingStatus,
@@ -9,316 +7,389 @@ import {
   Collection,
   CollectionType,
   PurchaseHistory,
-  TradeType
+  TradeType,
+  CurrencyApproval,
+  BuyerApproval,
+  SupportedCurrency
 } from '../model'
 
-interface ListingABI {
+export interface ListingABI {
   events: {
     ListingCreated: {
       topic: string
       decode: (log: any) => {
         listingId: bigint
-        tokenContract: string
+        owner: string
+        assetContract: string
         tokenId: bigint
-        seller: string
-        price: bigint
+        quantity: bigint
         currency: string
-        startTime: bigint
-        endTime: bigint
+        pricePerToken: bigint
+        startTimestamp: bigint
+        endTimestamp: bigint
+        reserved: boolean
       }
     }
     ListingUpdated: {
       topic: string
       decode: (log: any) => {
         listingId: bigint
-        newPrice: bigint
-        newCurrency: string
+        assetContract: string
+        tokenId: bigint
+        quantity: bigint
+        currency: string
+        pricePerToken: bigint
+        startTimestamp: bigint
+        endTimestamp: bigint
+        reserved: boolean
+      }
+    }
+    ListingCompleted: {
+      topic: string
+      decode: (log: any) => {
+        listingId: bigint
       }
     }
     ListingCancelled: {
       topic: string
       decode: (log: any) => {
         listingId: bigint
-        cancelledBy: string
       }
     }
-    ListingSold: {
+    BuyerApproved: {
       topic: string
       decode: (log: any) => {
         listingId: bigint
         buyer: string
-        price: bigint
+        isApproved: boolean
+      }
+    }
+    CurrencyApproved: {
+      topic: string
+      decode: (log: any) => {
+        listingId: bigint
         currency: string
+        price: bigint
+      }
+    }
+    NFTPurchased: {
+      topic: string
+      decode: (log: any) => {
+        listingId: bigint
+        buyer: string
+        quantity: bigint
+        totalPrice: bigint
+      }
+    }
+    FeeWithdrawn: {
+      topic: string
+      decode: (log: any) => {
+        admin: string
+        currency: string
+        amount: bigint
+      }
+    }
+    CurrencyFeeUpdated: {
+      topic: string
+      decode: (log: any) => {
+        currency: string
+        fee: bigint
+      }
+    }
+    PermissionContractUpdated: {
+      topic: string
+      decode: (log: any) => {
+        oldPermission: string
+        newPermission: string
       }
     }
   }
 }
 
-export class ListingProcessor {
-  private processor: EvmBatchProcessor
-  private contractAddress: string
-  private abi: ListingABI
+export function getListingTopics(abi: ListingABI): string[] {
+  return [
+    abi.events.ListingCreated?.topic,
+    abi.events.ListingUpdated?.topic,
+    abi.events.ListingCompleted?.topic,
+    abi.events.ListingCancelled?.topic,
+    abi.events.BuyerApproved?.topic,
+    abi.events.CurrencyApproved?.topic,
+    abi.events.NFTPurchased?.topic,
+    abi.events.FeeWithdrawn?.topic,
+    abi.events.CurrencyFeeUpdated?.topic,
+    abi.events.PermissionContractUpdated?.topic
+  ].filter(Boolean) as string[]
+}
 
-  constructor(
-    contractAddress: string,
-    abi: ListingABI,
-    gateway: string = 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
-    rpcEndpoint?: string
-  ) {
-    this.contractAddress = contractAddress
-    this.abi = abi
-
-    this.processor = new EvmBatchProcessor()
-      .setGateway(gateway)
-      .setFinalityConfirmation(12)
-
-    if (rpcEndpoint) {
-      this.processor.setRpcEndpoint({
-        url: rpcEndpoint,
-        rateLimit: 5
+export async function processListingEvents(
+  logs: any[],
+  ctx: any,
+  abi: ListingABI,
+  contractAddress: string,
+  listingMap: Map<string, Listing>,
+  subjectMap: Map<string, Subject>,
+  collectionMap: Map<string, Collection>,
+  nftMap: Map<string, NFT>,
+  currencyMap: Map<string, SupportedCurrency>,
+  purchaseHistories: PurchaseHistory[],
+  currencyApprovals: CurrencyApproval[],
+  buyerApprovals: BuyerApproval[]
+) {
+  async function getOrCreateSubject(address: string): Promise<Subject> {
+    const subjectId = address.toLowerCase()
+    if (subjectMap.has(subjectId)) {
+      return subjectMap.get(subjectId)!
+    }
+    let subject = await ctx.store.get(Subject, subjectId)
+    if (!subject) {
+      subject = new Subject({
+        id: subjectId,
+        subjectType: SubjectType.USER,
+        name: `${address.slice(0, 6)}...${address.slice(-4)}`,
+        avatarUrl: undefined,
+        backgroundUrl: undefined,
+        bio: undefined,
+        createdAt: new Date(),
+        collections: [],
+        listings: [],
+        roleAssignments: [],
+        purchaseHistoryAsSeller: [],
+        purchaseHistoryAsBuyer: []
       })
     }
-
-    this.processor.addLog({
-      address: [this.contractAddress],
-      topic0: [
-        this.abi.events.ListingCreated.topic,
-        this.abi.events.ListingUpdated.topic,
-        this.abi.events.ListingCancelled.topic,
-        this.abi.events.ListingSold.topic
-      ]
-    })
+    subjectMap.set(subjectId, subject)
+    return subject
   }
 
-  async process(db: TypeormDatabase) {
-    const listingMap: Map<string, Listing> = new Map()
-    const subjectMap: Map<string, Subject> = new Map()
-    const collectionMap: Map<string, Collection> = new Map()
-    const nftMap: Map<string, NFT> = new Map()
-    const purchaseHistories: PurchaseHistory[] = []
-
-    async function getOrCreateSubject(address: string): Promise<Subject> {
-      const subjectId = address.toLowerCase()
-
-      if (subjectMap.has(subjectId)) {
-        return subjectMap.get(subjectId)!
-      }
-
-      let subject = await db.get(Subject, subjectId)
-      if (!subject) {
-        subject = new Subject({
-          id: subjectId,
-          subjectType: SubjectType.ADDRESS,
-          name: `${address.slice(0, 6)}...${address.slice(-4)}`,
-          avatarUrl: null,
-          backgroundUrl: null,
-          bio: null,
-          createdAt: new Date(),
-          collections: [],
-          listings: [],
-          roleAssignments: [],
-          purchaseHistoryAsSeller: [],
-          purchaseHistoryAsBuyer: []
-        })
-        subjectMap.set(subjectId, subject)
-      } else {
-        subjectMap.set(subjectId, subject)
-      }
-      return subject
+  async function getOrCreateCollection(contractAddress: string, creator?: Subject): Promise<Collection> {
+    const collectionId = contractAddress.toLowerCase()
+    if (collectionMap.has(collectionId)) {
+      return collectionMap.get(collectionId)!
     }
-
-    async function getOrCreateCollection(contractAddress: string): Promise<Collection> {
-      const collectionId = contractAddress.toLowerCase()
-
-      if (collectionMap.has(collectionId)) {
-        return collectionMap.get(collectionId)!
-      }
-
-      let collection = await db.get(Collection, collectionId)
-      if (!collection) {
-        collection = new Collection({
-          id: collectionId,
-          contractAddress: collectionId,
-          name: `Collection ${contractAddress.slice(0, 6)}`,
-          symbol: 'NFT',
-          description: null,
-          bannerImageUrl: null,
-          logoImageUrl: null,
-          collectionType: CollectionType.ERC721,
-          creator: null,
-          createdAt: new Date(),
-          royaltyPercentage: 0,
-          royaltyRecipient: null,
-          nfts: [],
-          collectionTraitStats: [],
-          supportedCurrencies: []
-        })
-        collectionMap.set(collectionId, collection)
-      } else {
-        collectionMap.set(collectionId, collection)
-      }
-      return collection
+    let collection = await ctx.store.get(Collection, collectionId)
+    if (!collection) {
+      collection = new Collection({
+        id: collectionId,
+        name: `Collection ${contractAddress.slice(0, 6)}`,
+        symbol: 'NFT',
+        description: undefined,
+        logoUrl: undefined,
+        bannerUrl: undefined,
+        collectionType: CollectionType.ERC721,
+        creator: creator,
+        totalSupply: BigInt(0),
+        floorPrice: undefined,
+        createdAt: new Date(),
+        nfts: [],
+        traits: [],
+        traitStats: []
+      })
     }
+    collectionMap.set(collectionId, collection)
+    return collection
+  }
 
-    async function getOrCreateNFT(
-      contractAddress: string,
-      tokenId: bigint
-    ): Promise<NFT> {
-      const nftId = `${contractAddress.toLowerCase()}-${tokenId.toString()}`
-
-      if (nftMap.has(nftId)) {
-        return nftMap.get(nftId)!
-      }
-
-      let nft = await db.get(NFT, nftId)
-      if (!nft) {
-        const collection = await getOrCreateCollection(contractAddress)
-        nft = new NFT({
-          id: nftId,
-          tokenId: tokenId,
-          collection: collection,
-          name: `NFT #${tokenId}`,
-          description: null,
-          imageUrl: null,
-          metadataUrl: null,
-          animationUrl: null,
-          currentOwner: null,
-          mintedAt: new Date(),
-          mintedBy: null,
-          mintPrice: BigInt(0),
-          traits: [],
-          listings: [],
-          tokenOwnerships: []
-        })
-        nftMap.set(nftId, nft)
-      } else {
-        nftMap.set(nftId, nft)
-      }
-      return nft
+  async function getOrCreateNFT(contractAddress: string, tokenId: bigint, owner?: Subject): Promise<NFT> {
+    const nftId = `${contractAddress.toLowerCase()}-${tokenId.toString()}`
+    if (nftMap.has(nftId)) {
+      return nftMap.get(nftId)!
     }
-
-    async function getListing(listingId: string): Promise<Listing | null> {
-      if (listingMap.has(listingId)) {
-        return listingMap.get(listingId)!
-      }
-      const listing = await db.get(Listing, listingId)
-      if (listing) {
-        listingMap.set(listingId, listing)
-        return listing
-      }
-      return null
+    let nft = await ctx.store.get(NFT, nftId)
+    if (!nft) {
+      const collection = await getOrCreateCollection(contractAddress, owner)
+      nft = new NFT({
+        id: nftId,
+        collection: collection,
+        tokenId: tokenId,
+        name: `NFT #${tokenId}`,
+        imageUrl: undefined,
+        description: undefined,
+        metadataUri: undefined,
+        listings: [],
+        purchaseHistory: [],
+        traits: [],
+        extensions: [],
+        owners: []
+      })
     }
+    nftMap.set(nftId, nft)
+    return nft
+  }
 
-    await this.processor.run(db, async (ctx) => {
-      for (let block of ctx.blocks) {
-        for (let log of block.logs) {
-          const topic0 = log.topics[0]
-          const timestamp = new Date(block.header.timestamp)
-          const blockNumber = block.header.height
-          const transactionHash = log.transaction?.hash || ''
+  async function getOrCreateCurrency(address: string): Promise<SupportedCurrency> {
+    const currencyId = address.toLowerCase()
+    if (currencyMap.has(currencyId)) {
+      return currencyMap.get(currencyId)!
+    }
+    let currency = await ctx.store.get(SupportedCurrency, currencyId)
+    if (!currency) {
+      currency = new SupportedCurrency({
+        id: currencyId,
+        name: currencyId === '0x0000000000000000000000000000000000000000' ? 'ETH' : `Token_${address.slice(0, 6)}`,
+        symbol: currencyId === '0x0000000000000000000000000000000000000000' ? 'ETH' : 'TKN',
+        decimals: 18,
+        isActive: true,
+        feePercentage: 0,
+        totalAmountFee: BigInt(0),
+        currencyApprovals: [],
+        purchaseHistory: []
+      })
+    }
+    currencyMap.set(currencyId, currency)
+    return currency
+  }
 
-          if (topic0 === this.abi.events.ListingCreated.topic) {
-            const {
-              listingId,
-              tokenContract,
-              tokenId,
-              seller,
-              price,
-              currency,
-              startTime,
-              endTime
-            } = this.abi.events.ListingCreated.decode(log)
+  async function getListing(listingId: string): Promise<Listing | null> {
+    if (listingMap.has(listingId)) {
+      return listingMap.get(listingId)!
+    }
+    const listing = await ctx.store.get(Listing, listingId)
+    if (listing) {
+      listingMap.set(listingId, listing)
+      return listing
+    }
+    return null
+  }
 
-            const listingIdStr = listingId.toString()
-            const sellerSubject = await getOrCreateSubject(seller)
-            const nft = await getOrCreateNFT(tokenContract, tokenId)
+  for (let log of logs) {
+    const topic0 = log.topics[0]
+    const timestamp = new Date(log.block.header.timestamp)
+    const blockNumber = log.block.header.height
+    const transactionHash = log.transaction?.hash || ''
 
-            let listing = await getListing(listingIdStr)
-            if (!listing) {
-              listing = new Listing({
-                id: listingIdStr,
-                nft: nft,
-                owner: sellerSubject,
-                price: price,
-                currency: currency,
-                startTime: new Date(Number(startTime) * 1000),
-                endTime: endTime ? new Date(Number(endTime) * 1000) : null,
-                status: ListingStatus.ACTIVE,
-                createdAt: timestamp,
-                updatedAt: timestamp,
-                auction: null,
-                offers: [],
-                purchaseHistory: []
-              })
-              listingMap.set(listingIdStr, listing)
-            }
-          }
+    try {
+      if (topic0 === abi.events.ListingCreated?.topic) {
+        const {
+          listingId, owner, assetContract, tokenId, quantity,
+          currency, pricePerToken, startTimestamp, endTimestamp, reserved
+        } = abi.events.ListingCreated.decode(log)
 
-          if (topic0 === this.abi.events.ListingUpdated.topic) {
-            const { listingId, newPrice, newCurrency } = this.abi.events.ListingUpdated.decode(log)
+        const listingIdStr = listingId.toString()
+        const ownerSubject = await getOrCreateSubject(owner)
+        const nft = await getOrCreateNFT(assetContract, tokenId, ownerSubject)
 
-            const listingIdStr = listingId.toString()
-            let listing = await getListing(listingIdStr)
-            if (listing) {
-              listing.price = newPrice
-              listing.currency = newCurrency
-              listing.updatedAt = timestamp
-            }
-          }
+        let listing = await getListing(listingIdStr)
+        if (!listing) {
+          listing = new Listing({
+            id: listingIdStr,
+            owner: ownerSubject,
+            nft: nft,
+            quantity: quantity,
+            pricePerToken: pricePerToken,
+            startTimestamp: new Date(Number(startTimestamp) * 1000),
+            endTimestamp: new Date(Number(endTimestamp) * 1000),
+            isReserved: reserved,
+            status: ListingStatus.CREATED,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            transactionHash: transactionHash,
+            currencyApprovals: [],
+            buyerApprovals: [],
+            purchaseHistory: []
+          })
+          listingMap.set(listingIdStr, listing)
+        }
+      }
 
-          if (topic0 === this.abi.events.ListingCancelled.topic) {
-            const { listingId } = this.abi.events.ListingCancelled.decode(log)
+      else if (topic0 === abi.events.ListingUpdated?.topic) {
+        const {
+          listingId, assetContract, tokenId, quantity,
+          currency, pricePerToken, startTimestamp, endTimestamp, reserved
+        } = abi.events.ListingUpdated.decode(log)
 
-            const listingIdStr = listingId.toString()
-            let listing = await getListing(listingIdStr)
-            if (listing) {
-              listing.status = ListingStatus.CANCELLED
-              listing.updatedAt = timestamp
-            }
-          }
+        const listingIdStr = listingId.toString()
+        let listing = await getListing(listingIdStr)
+        if (listing) {
+          const nft = await getOrCreateNFT(assetContract, tokenId)
+          listing.nft = nft
+          listing.quantity = quantity
+          listing.pricePerToken = pricePerToken
+          listing.startTimestamp = new Date(Number(startTimestamp) * 1000)
+          listing.endTimestamp = new Date(Number(endTimestamp) * 1000)
+          listing.isReserved = reserved
+          listing.updatedAt = timestamp
+          listing.transactionHash = transactionHash
+        }
+      }
 
-          if (topic0 === this.abi.events.ListingSold.topic) {
-            const { listingId, buyer, price, currency } = this.abi.events.ListingSold.decode(log)
+      else if (topic0 === abi.events.ListingCompleted?.topic) {
+        const { listingId } = abi.events.ListingCompleted.decode(log)
+        const listingIdStr = listingId.toString()
+        let listing = await getListing(listingIdStr)
+        if (listing) {
+          listing.status = ListingStatus.COMPLETED
+          listing.updatedAt = timestamp
+          listing.transactionHash = transactionHash
+        }
+      }
 
-            const listingIdStr = listingId.toString()
-            let listing = await getListing(listingIdStr)
-            if (listing) {
-              listing.status = ListingStatus.SOLD
-              listing.updatedAt = timestamp
+      else if (topic0 === abi.events.ListingCancelled?.topic) {
+        const { listingId } = abi.events.ListingCancelled.decode(log)
+        const listingIdStr = listingId.toString()
+        let listing = await getListing(listingIdStr)
+        if (listing) {
+          listing.status = ListingStatus.CANCELED
+          listing.updatedAt = timestamp
+          listing.transactionHash = transactionHash
+        }
+      }
 
-              const buyerSubject = await getOrCreateSubject(buyer)
+      else if (topic0 === abi.events.NFTPurchased?.topic) {
+        const { listingId, buyer, quantity, totalPrice } = abi.events.NFTPurchased.decode(log)
+        const listingIdStr = listingId.toString()
+        let listing = await getListing(listingIdStr)
+        if (listing) {
+          const buyerSubject = await getOrCreateSubject(buyer)
+          let usedCurrency = await getOrCreateCurrency('0x0000000000000000000000000000000000000000')
 
-              const purchaseHistory = new PurchaseHistory({
-                id: `${transactionHash}-${log.logIndex}`,
-                nft: listing.nft,
-                listing: listing,
-                seller: listing.owner,
-                buyer: buyerSubject,
-                price: price,
-                currency: currency,
-                tradeType: TradeType.DIRECT_SALE,
-                purchasedAt: timestamp,
-                transactionHash: transactionHash
-              })
-              purchaseHistories.push(purchaseHistory)
+          const approvedCurrencies = await ctx.store.find(CurrencyApproval, {
+            where: { listing: { id: listingIdStr } }
+          })
 
-              if (listing.nft) {
-                listing.nft.currentOwner = buyerSubject
+          if (approvedCurrencies.length > 0) {
+            for (const approval of approvedCurrencies) {
+              const expectedPrice = approval.pricePerToken * quantity
+              if (expectedPrice === totalPrice) {
+                usedCurrency = approval.currency
+                break
               }
             }
+          }
+
+          if (listing.quantity < quantity) {
+            console.error(`Insufficient quantity in listing ${listingIdStr}: available ${listing.quantity}, requested ${quantity}`)
+            continue
+          }
+
+          const purchaseHistory = new PurchaseHistory({
+            id: `${transactionHash}-${log.logIndex}`,
+            transactionHash: transactionHash,
+            nft: listing.nft,
+            seller: listing.owner,
+            buyer: buyerSubject,
+            quantity: quantity,
+            currency: usedCurrency,
+            totalPrice: totalPrice,
+            tradeType: TradeType.LISTING,
+            timestamp: timestamp,
+            blockNumber: blockNumber,
+            auction: undefined,
+            listing: listing
+          })
+          purchaseHistories.push(purchaseHistory)
+
+          listing.quantity = listing.quantity - quantity
+          listing.updatedAt = timestamp
+          listing.transactionHash = transactionHash
+
+          if (listing.quantity === BigInt(0)) {
+            listing.status = ListingStatus.COMPLETED
           }
         }
       }
 
-      await ctx.store.save([...subjectMap.values()])
-      await ctx.store.save([...collectionMap.values()])
-      await ctx.store.save([...nftMap.values()])
-      await ctx.store.save([...listingMap.values()])
-      await ctx.store.save(purchaseHistories)
-    })
-  }
-
-  getProcessor(): EvmBatchProcessor {
-    return this.processor
+    } catch (error) {
+      console.error(`Error processing listing log at block ${blockNumber}, tx ${transactionHash}:`, error)
+    }
   }
 }

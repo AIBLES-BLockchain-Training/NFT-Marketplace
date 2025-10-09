@@ -1,5 +1,3 @@
-import { EvmBatchProcessor } from '@subsquid/evm-processor';
-import { TypeormDatabase } from '@subsquid/typeorm-store';
 import {
   Auction,
   AuctionStatus,
@@ -12,6 +10,7 @@ import {
   SubjectType,
   SupportedCurrency,
   TokenOwnership,
+  TradeType,
 } from '../model';
 
 interface AuctionABI {
@@ -83,302 +82,325 @@ interface AuctionABI {
   };
 }
 
-export class AuctionProcessor {
-  private processor: EvmBatchProcessor;
-  private contractAddress: string;
-  private abi: AuctionABI;
+export function getAuctionTopics(abi: AuctionABI): string[] {
+  return [
+    abi.events.AuctionCreated?.topic,
+    abi.events.AuctionCancelled?.topic,
+    abi.events.AuctionBidPlaced?.topic,
+    abi.events.AuctionPayoutCollected?.topic,
+    abi.events.AuctionTokenCollected?.topic,
+    abi.events.AuctionFinalized?.topic,
+  ].filter(Boolean) as string[];
+}
 
-  constructor(
-    contractAddress: string,
-    abi: AuctionABI,
-    gateway: string = 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
-    rpcEndpoint?: string,
-  ) {
-    this.contractAddress = contractAddress.toLowerCase();
-    this.abi = abi;
-
-    // Initialize the EvmBatchProcessor
-    this.processor = new EvmBatchProcessor().setGateway(gateway).setFinalityConfirmation(12);
-
-    // If a custom RPC endpoint is provided, set it with a rate limit
-    if (rpcEndpoint) {
-      this.processor.setRpcEndpoint({
-        url: rpcEndpoint,
-        rateLimit: 5,
+export async function processAuctionEvents(
+  logs: any[],
+  ctx: any,
+  abi: AuctionABI,
+  contractAddress: string,
+  auctionMap: Map<string, Auction> = new Map(), // Key: auctionId
+  nftMap: Map<string, NFT> = new Map(), // Key: `${assetContract.toLowerCase()}-${tokenId.toString()}`
+  subjectMap: Map<string, Subject> = new Map(), // key is address in lowercase
+  collectionMap: Map<string, Collection> = new Map(), // key is contract address in lowercase
+  bidMap: Map<string, Bid> = new Map(), // Key: `${auctionId.toString()}-${bidder.toLowerCase()}`
+  purchaseHistories: PurchaseHistory[] = [], // key is auto-generated
+  updatedOwnerships: TokenOwnership[] = [], // gom ownerships cần cập nhật
+) {
+  async function getOrCreateSubject(address: string): Promise<Subject> {
+    const subjectId = address.toLowerCase();
+    if (subjectMap.has(subjectId)) {
+      return subjectMap.get(subjectId)!;
+    }
+    let subject = await ctx.store.get(Subject, subjectId);
+    if (!subject) {
+      subject = new Subject({
+        id: subjectId,
+        subjectType: SubjectType.USER,
+        name: `${address.slice(0, 6)}...${address.slice(-4)}`,
+        avatarUrl: null,
+        backgroundUrl: null,
+        bio: null,
+        createdAt: new Date(),
+        collections: [],
+        listings: [],
+        roleAssignments: [],
+        purchaseHistoryAsSeller: [],
+        purchaseHistoryAsBuyer: [],
       });
     }
-
-    this.processor.addLog({
-      address: [this.contractAddress],
-      topic0: [
-        this.abi.events.AuctionCreated.topic,
-        this.abi.events.AuctionCancelled.topic,
-        this.abi.events.AuctionBidPlaced.topic,
-        this.abi.events.AuctionPayoutCollected.topic,
-        this.abi.events.AuctionTokenCollected.topic,
-        this.abi.events.AuctionFinalized.topic,
-      ],
-    });
-
-    const process = async (db: TypeormDatabase) => {
-      const auctionMap: Map<string, Auction> = new Map(); // Key: auctionId
-      const nftMap: Map<string, NFT> = new Map(); // Key: `${assetContract.toLowerCase()}-${tokenId.toString()}`
-      const subjectMap: Map<string, Subject> = new Map(); // key is address in lowercase
-      const collectionMap: Map<string, Collection> = new Map(); // key is contract address in lowercase
-      const bidMap: Map<string, Bid> = new Map(); // Key: `${auctionId.toString()}-${bidder.toLowerCase()}`
-      const purchaseHistories: PurchaseHistory[] = []; // key is auto-generated
-
-      async function getOrCreateSubject(address: string): Promise<Subject> {
-        const subjectId = address.toLowerCase();
-
-        if (subjectMap.has(subjectId)) {
-          return subjectMap.get(subjectId)!;
-        }
-
-        let subject = await db.get(Subject, subjectId);
-        if (!subject) {
-          subject = new Subject({
-            id: subjectId,
-            subjectType: SubjectType.USER,
-            name: `${address.slice(0, 6)}...${address.slice(-4)}`,
-            avatarUrl: null,
-            backgroundUrl: null,
-            bio: null,
-            createdAt: new Date(),
-            collections: [],
-            listings: [],
-            roleAssignments: [],
-            purchaseHistoryAsSeller: [],
-            purchaseHistoryAsBuyer: [],
-          });
-          subjectMap.set(subjectId, subject);
-        } else {
-          subjectMap.set(subjectId, subject);
-        }
-        return subject;
-      }
-
-      async function getOrCreateCollection(contractAddress: string): Promise<Collection> {
-        const collectionId = contractAddress.toLowerCase();
-
-        if (collectionMap.has(collectionId)) {
-          return collectionMap.get(collectionId)!;
-        }
-
-        let collection = await db.get(Collection, collectionId);
-        if (!collection) {
-          collection = new Collection({
-            id: collectionId,
-            name: `Collection ${contractAddress.slice(0, 6)}`,
-            symbol: 'NFT',
-            description: null,
-            bannerUrl: null,
-            logoUrl: null,
-            collectionType: CollectionType.ERC721,
-            creator: undefined,
-            createdAt: new Date(),
-            nfts: [],
-            traits: [],
-            traitStats: [],
-          });
-          collectionMap.set(collectionId, collection);
-        } else {
-          collectionMap.set(collectionId, collection);
-        }
-        return collection;
-      }
-
-      async function getOrCreateNFT(contractAddress: string, tokenId: bigint): Promise<NFT> {
-        const nftId = `${contractAddress.toLowerCase()}-${tokenId.toString()}`;
-
-        if (nftMap.has(nftId)) {
-          return nftMap.get(nftId)!;
-        }
-
-        let nft = await db.get(NFT, nftId);
-        if (!nft) {
-          const collection = await getOrCreateCollection(contractAddress);
-          nft = new NFT({
-            id: nftId,
-            tokenId: tokenId,
-            collection: collection,
-            name: `NFT #${tokenId}`,
-            imageUrl: null,
-            description: null,
-            metadataUri: null,
-            traits: [],
-            listings: [],
-            owners: [],
-          });
-          nftMap.set(nftId, nft);
-        } else {
-          nftMap.set(nftId, nft);
-        }
-        return nft;
-      }
-
-      async function getAuction(auctionId: string): Promise<Auction | null> {
-        if (auctionMap.has(auctionId)) {
-          return auctionMap.get(auctionId)!;
-        }
-
-        const auction = await db.get(Auction, auctionId);
-        if (auction) {
-          auctionMap.set(auctionId, auction);
-          return auction;
-        }
-        return null;
-      }
-
-      // Helper to get SupportedCurrency by address
-      async function getOnlyCurrency(address: string): Promise<SupportedCurrency> {
-        const currencyId = address.toLowerCase();
-        let currency = await db.get(SupportedCurrency, currencyId);
-        if (!currency) {
-          throw new Error(`Currency ${currencyId} not found in DB but was used in auction`);
-        }
-        return currency!;
-      }
-
-
-      async function transferNft(nft: NFT, from: Subject, to: Subject, quantity: bigint) {
-        // Update the ownership records
-        // await updateTokenOwnership(nft, from, -quantity, new Date());
-        // await updateTokenOwnership(nft, to, quantity, new Date());g k em 
-      }
-
-      await this.processor.run(db, async (ctx) => {
-        for (let block of ctx.blocks) {
-          for (let log of block.logs) {
-            const transactionHash = log.transaction?.hash.toString() || '';
-            // Process AuctionCreated event
-            if (log.topics[0] === this.abi.events.AuctionCreated.topic) {
-              const {
-                auctionId,
-                seller,
-                assetContract,
-                tokenId,
-                quantity,
-                currency,
-                startPrice,
-                ceilingPrice,
-                startTime,
-                endTime,
-                timeBufferInSeconds,
-                stepAmount,
-              } = this.abi.events.AuctionCreated.decode(log);
-
-              const auctionIdStr = auctionId.toString();
-              const sellerSubject = await getOrCreateSubject(seller);
-              const nft = await getOrCreateNFT(assetContract, tokenId);
-              try {
-                const currencyEntity = await getOnlyCurrency(currency);
-                let auction = await getAuction(auctionIdStr);
-                if (!auction) {
-                  auction = new Auction({
-                    id: auctionIdStr,
-                    nft: nft,
-                    seller: sellerSubject,
-                    quantity: quantity,
-                    currency: currencyEntity,
-                    startPrice: startPrice,
-                    ceilingPrice: ceilingPrice,
-                    startTime: new Date(Number(startTime) * 1000),
-                    endTime: new Date(Number(endTime) * 1000),
-                    timeBufferInSeconds: Number(timeBufferInSeconds),
-                    stepAmount: stepAmount,
-                  });
-                  auctionMap.set(auctionIdStr, auction);
-                }
-              } catch (error) {
-                console.error('Error fetching metadata:', error);
-              }
-            }
-
-            if (log.topics[0] === this.abi.events.AuctionCancelled.topic) {
-              const { auctionId } = this.abi.events.AuctionCancelled.decode(log);
-              const auctionIdStr = auctionId.toString();
-              const auction = await getAuction(auctionIdStr);
-              if (auction) {
-                // update auction status
-                auction.status = AuctionStatus.CANCELLED;
-              }
-            }
-
-            if (log.topics[0] === this.abi.events.AuctionBidPlaced.topic) {
-              const { auctionId, bidder, bidAmount } = this.abi.events.AuctionBidPlaced.decode(log);
-              const auctionIdStr = auctionId.toString();
-              const bidderSubject = await getOrCreateSubject(bidder);
-              const auction = await getAuction(auctionIdStr);
-              if (!auction) {
-                continue;
-              }
-              const bidId = `${auctionIdStr}-${bidder.toLowerCase()}`;
-              if (!bidMap.has(bidId)) {
-                const bid = new Bid({
-                  id: bidId,
-                  auction: auction,
-                  bidderAddress: bidderSubject,
-                  bidAmount: bidAmount,
-                  timestamp: new Date(block.header.timestamp),
-                });
-                bidMap.set(bidId, bid);
-
-                // Update auction's current highest bid if needed
-                auction.winningBid = bid;
-                auction.bids.push(bid);
-              }
-            }
-
-            /*
-             We can skip AuctionPayoutCollected and AuctionTokenCollected              
-            */
-            if (log.topics[0] === this.abi.events.AuctionFinalized.topic) {
-              const { auctionId, winner, winningBid, currency } = this.abi.events.AuctionFinalized.decode(log);
-              const auctionIdStr = auctionId.toString();
-              const winnerSubject = await getOrCreateSubject(winner);
-              const auction = await getAuction(auctionIdStr);
-              if (auction) {
-                const purchaseHistory = new PurchaseHistory({
-                  id: `${transactionHash}-${auctionIdStr}-${winner.toLowerCase()}`, // Unique ID
-                  nft: auction.nft,
-                  seller: auction.seller,
-                  buyer: winnerSubject,
-                  quantity: auction.quantity,
-                  totalPrice: winningBid,
-                  currency: await getOnlyCurrency(currency),
-                  timestamp: new Date(block.header.timestamp),
-                  transactionHash: transactionHash,
-                });
-                purchaseHistories.push(purchaseHistory);
-
-                // Update NFT owners
-                const ownershipId = `${auction.nft.id}-${winner.toLowerCase()}`;
-                const ownership = new TokenOwnership({
-                  id: ownershipId,  
-                  nft: auction.nft,
-                  // ownerAddress: winnerSubject,
-                  balance: auction.quantity,
-                  updatedAt: new Date(block.header.timestamp),
-                });
-                auction.nft.owners.push(ownership);
-              }
-            }
-          }
-        }
-
-        // Process the collected data
-        await ctx.store.save([...subjectMap.values()]);
-        await ctx.store.save([...collectionMap.values()]);
-        await ctx.store.save([...nftMap.values()]);
-        await ctx.store.save([...auctionMap.values()]);
-        await ctx.store.save([...bidMap.values()]);
-        await ctx.store.save([...purchaseHistories]);
-      });
-    };
+    subjectMap.set(subjectId, subject);
+    return subject;
   }
 
-  getProcessor(): EvmBatchProcessor {
-    return this.processor;
+  async function getOrCreateCollection(contractAddress: string, creator?: Subject): Promise<Collection> {
+    const collectionId = contractAddress.toLowerCase();
+    if (collectionMap.has(collectionId)) {
+      return collectionMap.get(collectionId)!;
+    }
+    let collection = await ctx.store.get(Collection, collectionId);
+    if (!collection) {
+      collection = new Collection({
+        id: collectionId,
+        name: `Collection ${contractAddress.slice(0, 6)}`,
+        symbol: 'NFT',
+        description: undefined,
+        bannerUrl: undefined,
+        logoUrl: undefined,
+        collectionType: CollectionType.ERC721, // erc721 or 1155
+        creator: creator,
+        createdAt: new Date(),
+        nfts: [],
+        traits: [],
+        traitStats: [],
+      });
+    }
+    collectionMap.set(collectionId, collection);
+    return collection;
+  }
+
+  async function getOrCreateNFT(contractAddress: string, tokenId: bigint, owner?: Subject): Promise<NFT> {
+    const nftId = `${contractAddress.toLowerCase()}-${tokenId.toString()}`;
+    if (nftMap.has(nftId)) {
+      return nftMap.get(nftId)!;
+    }
+    let nft = await ctx.store.get(NFT, nftId);
+    if (!nft) {
+      const collection = await getOrCreateCollection(contractAddress, owner);
+      nft = new NFT({
+        id: nftId,
+        collection: collection,
+        tokenId: tokenId,
+        name: `NFT #${tokenId.toString()}`,
+        imageUrl: undefined,
+        description: undefined,
+        metadataUri: undefined,
+        listings: [],
+        purchaseHistory: [],
+        traits: [],
+        extensions: [],
+        owners: [],
+      });
+    }
+    nftMap.set(nftId, nft);
+    return nft;
+  }
+
+  async function getAuction(auctionId: string): Promise<Auction | null> {
+    if (auctionMap.has(auctionId)) {
+      return auctionMap.get(auctionId)!;
+    }
+    const auction = await ctx.store.get(Auction, auctionId);
+    if (auction) {
+      auctionMap.set(auctionId, auction);
+      return auction;
+    }
+    return null;
+  }
+
+  // Helper to get SupportedCurrency by address
+  async function getOnlyCurrency(address: string): Promise<SupportedCurrency> {
+    const currencyId = address.toLowerCase();
+    let currency = await ctx.store.get(SupportedCurrency, currencyId);
+    if (!currency) {
+      throw new Error(`Currency ${currencyId} not found in DB but was used in auction`);
+    }
+    return currency!;
+  }
+
+  async function updateTokenOwnership(
+    nft: NFT,
+    owner: Subject,
+    quantityChange: bigint,
+    timestamp: Date,
+  ): Promise<TokenOwnership> {
+    const ownershipId = `${nft.id}-${owner.id}`;
+    let ownership = await ctx.store.get(TokenOwnership, ownershipId);
+
+    if (!ownership) {
+      // chưa có account và quantiy dương -> nhận được
+      if (quantityChange < 0n) {
+        throw new Error(`Cannot reduce ownership below zero for ${ownershipId}`);
+      }
+      ownership = new TokenOwnership({
+        id: ownershipId,
+        nft,
+        ownerAddress: owner,
+        balance: quantityChange, // khởi tạo balance = số dương nhận được
+        updatedAt: timestamp,
+      });
+    } else {
+      // đã có account, cập nhật balance
+      const currentBalance = BigInt(ownership.balance.toString()); // ép về BigInt để cộng trừ
+      const newBalance = currentBalance + quantityChange; // nếu quantityChange âm thì trừ đi Ex: -3n
+
+      if (newBalance < 0n) {
+        throw new Error(`Ownership balance cannot go negative for ${ownershipId}`);
+      }
+
+      ownership.balance = newBalance;
+      ownership.updatedAt = timestamp;
+    }
+
+    // thay vì save từng ownership, return ra để gom batch save
+    return ownership;
+  }
+
+  for (let log of logs) {
+    const topic0 = log.topics[0];
+    const timestamp = new Date(log.block.header.timestamp);
+    const blockNumber = log.block.header.height;
+    const transactionHash = log.transaction?.hash.toString() || '';
+
+    try {
+      if (topic0 === abi.events.AuctionCreated.topic) {
+        const {
+          auctionId,
+          seller,
+          assetContract,
+          tokenId,
+          quantity,
+          currency,
+          startPrice,
+          ceilingPrice,
+          startTime,
+          endTime,
+          timeBufferInSeconds,
+          stepAmount,
+        } = abi.events.AuctionCreated.decode(log);
+
+        const auctionIdStr = auctionId.toString();
+        const sellerSubject = await getOrCreateSubject(seller);
+        const nft = await getOrCreateNFT(assetContract, tokenId);
+        try {
+          const currencyEntity = await getOnlyCurrency(currency);
+          let auction = await getAuction(auctionIdStr);
+          if (!auction) {
+            auction = new Auction({
+              id: auctionIdStr,
+              nft: nft,
+              seller: sellerSubject,
+              quantity: quantity,
+              currency: currencyEntity,
+              startPrice: startPrice,
+              ceilingPrice: ceilingPrice,
+              startTime: new Date(Number(startTime) * 1000),
+              endTime: new Date(Number(endTime) * 1000),
+              timeBufferInSeconds: Number(timeBufferInSeconds),
+              stepAmount: stepAmount,
+              status: AuctionStatus.CREATED,
+            });
+            auctionMap.set(auctionIdStr, auction);
+            // update owner of NFT from seller to contract
+            try {
+              const oldOwner = await updateTokenOwnership(nft, sellerSubject, -quantity, timestamp);
+              const newOwner = await updateTokenOwnership(nft, await getOrCreateSubject(contractAddress), quantity, timestamp);
+              updatedOwnerships.push(oldOwner, newOwner);
+            } catch (error) {
+              console.error('Error updating token ownership on auction creation:', error);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching metadata:', error);
+        }
+      }
+
+      if (topic0 === abi.events.AuctionCancelled.topic) {
+        const { auctionId } = abi.events.AuctionCancelled.decode(log);
+        const auctionIdStr = auctionId.toString();
+        const auction = await getAuction(auctionIdStr);
+        if (auction) {
+          // update auction status
+          auction.status = AuctionStatus.CANCELLED;
+        }
+        // return NFT to seller
+        try {
+          if (auction) {
+            const oldOwner = await updateTokenOwnership(auction.nft, await getOrCreateSubject(contractAddress), -auction.quantity, timestamp);
+            const newOwner = await updateTokenOwnership(auction.nft, auction.seller, auction.quantity, timestamp);
+            updatedOwnerships.push(oldOwner, newOwner);
+          }
+        } catch (error) {
+          console.error('Error updating token ownership on auction cancellation:', error);
+        }
+      }
+
+      if (topic0 === abi.events.AuctionBidPlaced.topic) {
+        const { auctionId, bidder, bidAmount } = abi.events.AuctionBidPlaced.decode(log);
+        const auctionIdStr = auctionId.toString();
+        const bidderSubject = await getOrCreateSubject(bidder);
+        const auction = await getAuction(auctionIdStr);
+        if (!auction) {
+          continue;
+        }
+        if (auction.status === AuctionStatus.CREATED) {
+          auction.status = AuctionStatus.ACTIVE;
+        }
+        const bidId = `${auctionIdStr}-${bidder.toLowerCase()}`;
+        if (!bidMap.has(bidId)) {
+          const bid = new Bid({
+            id: bidId,
+            auction: auction,
+            bidderAddress: bidderSubject,
+            bidAmount: bidAmount,
+            timestamp: timestamp,
+          });
+          bidMap.set(bidId, bid);
+
+          // Update auction's current highest bid if needed
+          auction.winningBid = bid;
+          auction.bids.push(bid);
+          auctionMap.set(auction.id, auction);
+        }
+      }
+
+      if (topic0 === abi.events.AuctionFinalized.topic) {
+        const { auctionId, winner, winningBid, currency } = abi.events.AuctionFinalized.decode(log);
+        const auctionIdStr = auctionId.toString();
+        const winnerSubject = await getOrCreateSubject(winner);
+        const auction = await getAuction(auctionIdStr);
+        const usedCurrency = await getOnlyCurrency(currency);
+        if (auction) {
+          const purchaseHistory = new PurchaseHistory({
+            id: `${transactionHash}-${log.logIndex}`, // Unique ID
+            nft: auction.nft,
+            seller: auction.seller,
+            buyer: winnerSubject,
+            quantity: auction.quantity,
+            currency: usedCurrency,
+            totalPrice: winningBid,
+            tradeType: TradeType.AUCTION,
+            timestamp: timestamp,
+            blockNumber: blockNumber,
+            auction: auction,
+            listing: undefined,
+            transactionHash: transactionHash,
+          });
+          purchaseHistories.push(purchaseHistory);
+          auction.purchaseHistory.push(purchaseHistory);
+          auction.status = AuctionStatus.ENDED;
+          // Update auction status
+          auctionMap.set(auction.id, auction);
+        }
+      }
+
+      if(topic0 == abi.events.AuctionTokenCollected.topic) {
+        const { auctionId, winner, tokenId } = abi.events.AuctionTokenCollected.decode(log);
+        const auctionIdStr = auctionId.toString();
+        const winnerSubject = await getOrCreateSubject(winner);
+        const auction = await getAuction(auctionIdStr);
+        if (auction) {
+          // transfer NFT from contract to winner
+          try {
+            const oldOwner = await updateTokenOwnership(auction.nft, await getOrCreateSubject(contractAddress), -auction.quantity, timestamp);
+            const newOwner = await updateTokenOwnership(auction.nft, winnerSubject, auction.quantity, timestamp);
+            updatedOwnerships.push(oldOwner, newOwner);
+          } catch (error) {
+            console.error('Error updating token ownership on auction token collection:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error processing log in tx ${transactionHash} at block ${blockNumber}:`, error);
+    }
   }
 }
