@@ -43,14 +43,27 @@ contract Permissions is IPermission, AccessControl {
     }
     
     // ============= CONSTANTS =============
-    
-    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
-    
-    bytes32 public constant LISTING_ROLE = keccak256("LISTING_ROLE");
-    bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
-    bytes32 public constant OFFER_ROLE = keccak256("OFFER_ROLE");
-    
-    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
+    // Use functions instead of constants to work with delegatecall (if needed in future)
+
+    function MANAGEMENT_ROLE() public pure returns (bytes32) {
+        return keccak256("MANAGEMENT_ROLE");
+    }
+
+    function LISTING_ROLE() public pure returns (bytes32) {
+        return keccak256("LISTING_ROLE");
+    }
+
+    function AUCTION_ROLE() public pure returns (bytes32) {
+        return keccak256("AUCTION_ROLE");
+    }
+
+    function OFFER_ROLE() public pure returns (bytes32) {
+        return keccak256("OFFER_ROLE");
+    }
+
+    function NFT_ROLE() public pure returns (bytes32) {
+        return keccak256("NFT_ROLE");
+    }
     
     // ============= INITIALIZATION =============
     
@@ -59,19 +72,19 @@ contract Permissions is IPermission, AccessControl {
         require(!s.currency.initialized, "Already initialized");
         
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
-        _setupRole(MANAGEMENT_ROLE, admin);
-        
-        _setRoleAdmin(MANAGEMENT_ROLE, DEFAULT_ADMIN_ROLE);
+        _setupRole(MANAGEMENT_ROLE(), admin);
 
-        _setRoleAdmin(LISTING_ROLE, MANAGEMENT_ROLE);
-        _setRoleAdmin(AUCTION_ROLE, MANAGEMENT_ROLE);
-        _setRoleAdmin(OFFER_ROLE, MANAGEMENT_ROLE);
-        _setRoleAdmin(NFT_ROLE, MANAGEMENT_ROLE);
+        _setRoleAdmin(MANAGEMENT_ROLE(), DEFAULT_ADMIN_ROLE);
 
-        s.allowedRoles[LISTING_ROLE] = true;
-        s.allowedRoles[AUCTION_ROLE] = true;
-        s.allowedRoles[OFFER_ROLE] = true;
-        s.allowedRoles[NFT_ROLE] = true;
+        _setRoleAdmin(LISTING_ROLE(), MANAGEMENT_ROLE());
+        _setRoleAdmin(AUCTION_ROLE(), MANAGEMENT_ROLE());
+        _setRoleAdmin(OFFER_ROLE(), MANAGEMENT_ROLE());
+        _setRoleAdmin(NFT_ROLE(), MANAGEMENT_ROLE());
+
+        s.allowedRoles[LISTING_ROLE()] = true;
+        s.allowedRoles[AUCTION_ROLE()] = true;
+        s.allowedRoles[OFFER_ROLE()] = true;
+        s.allowedRoles[NFT_ROLE()] = true;
         
         s.currency.initialized = true;
     }
@@ -93,7 +106,7 @@ contract Permissions is IPermission, AccessControl {
     
     // ============= CURRENCY MANAGEMENT =============
     
-    function addCurrency(address[] calldata _currencies) external onlyRole(MANAGEMENT_ROLE) {
+    function addCurrency(address[] calldata _currencies) external onlyRole(MANAGEMENT_ROLE()) {
         PermissionsStorage storage s = _permissionsStorage();
         require(_currencies.length > 0, "Empty currency array");
         for (uint256 i = 0; i < _currencies.length; i++) {
@@ -102,7 +115,7 @@ contract Permissions is IPermission, AccessControl {
         }
     }
     
-    function removeCurrency(address[] calldata _currencies) external onlyRole(MANAGEMENT_ROLE) {
+    function removeCurrency(address[] calldata _currencies) external onlyRole(MANAGEMENT_ROLE()) {
         PermissionsStorage storage s = _permissionsStorage();
         for (uint256 i = 0; i < _currencies.length; i++) {
             s.currency.supportedCurrencies[_currencies[i]] = false;
@@ -112,23 +125,23 @@ contract Permissions is IPermission, AccessControl {
     
     // ============= ASSET MANAGEMENT =============
     
-    function assignNFTRole(address[] calldata _nfts) external onlyRole(MANAGEMENT_ROLE) {
+    function assignNFTRole(address[] calldata _nfts) external onlyRole(MANAGEMENT_ROLE()) {
         for (uint i = 0; i < _nfts.length; i++) {
-            _grantRole(NFT_ROLE, _nfts[i]);
+            _grantRole(NFT_ROLE(), _nfts[i]);
             emit NFTRoleAssigned(_nfts[i]);
         }
     }
-    
-    function revokeNFTRole(address[] calldata _nfts) external onlyRole(MANAGEMENT_ROLE) {
+
+    function revokeNFTRole(address[] calldata _nfts) external onlyRole(MANAGEMENT_ROLE()) {
         for (uint i = 0; i < _nfts.length; i++) {
-            _revokeRole(NFT_ROLE, _nfts[i]);
+            _revokeRole(NFT_ROLE(), _nfts[i]);
             emit NFTRoleRevoked(_nfts[i]);
         }
     }
     
     // ============= USER ROLE MANAGEMENT =============
     
-    function registerRole(bytes32 role, bytes32 adminRole) external onlyRole(MANAGEMENT_ROLE) {
+    function registerRole(bytes32 role, bytes32 adminRole) external onlyRole(MANAGEMENT_ROLE()) {
         PermissionsStorage storage s = _permissionsStorage();
         require(!s.allowedRoles[role], "Role already registered");
         s.allowedRoles[role] = true;
@@ -136,7 +149,7 @@ contract Permissions is IPermission, AccessControl {
         emit RoleRegistered(role, adminRole);
     }
     
-    function assignRole(bytes32 role, address[] calldata accounts) external onlyRole(MANAGEMENT_ROLE) {
+    function assignRole(bytes32 role, address[] calldata accounts) external onlyRole(MANAGEMENT_ROLE()) {
         PermissionsStorage storage s = _permissionsStorage();
         require(s.allowedRoles[role], "InvalidRole");
         
@@ -146,7 +159,7 @@ contract Permissions is IPermission, AccessControl {
         }
     }
     
-    function revokeRole(bytes32 role, address[] calldata accounts) external onlyRole(MANAGEMENT_ROLE) {
+    function revokeRole(bytes32 role, address[] calldata accounts) external onlyRole(MANAGEMENT_ROLE()) {
         PermissionsStorage storage s = _permissionsStorage();
         require(s.allowedRoles[role], "InvalidRole");
         
@@ -182,10 +195,10 @@ contract Permissions is IPermission, AccessControl {
     }
     
     function requestNFTRole(address nftContract, uint256 tokenId) external {
-        if (hasRole(NFT_ROLE, address(0))) {
+        if (hasRole(NFT_ROLE(), address(0))) {
             revert NFTRoleAlreadyGrantedGlobally();
         }
-        if (hasRole(NFT_ROLE, nftContract)) {
+        if (hasRole(NFT_ROLE(), nftContract)) {
             revert NFTAlreadyWhitelisted(nftContract);
         }
         

@@ -1,29 +1,28 @@
-import { EvmBatchProcessor } from '@subsquid/evm-processor'
-import { TypeormDatabase } from '@subsquid/typeorm-store'
 import {
   Role,
   Subject,
   SubjectType,
   RoleAssignment,
   PermissionEvent,
-  PermissionEventType
+  PermissionEventType,
+  SupportedCurrency
 } from '../model'
 
-interface PermissionsABI {
+export interface PermissionsABI {
   events: {
     RoleGranted: {
       topic: string
       decode: (log: any) => {
-        account: string
         role: string
+        account: string
         sender: string
       }
     }
     RoleRevoked: {
       topic: string
       decode: (log: any) => {
-        account: string
         role: string
+        account: string
         sender: string
       }
     }
@@ -35,230 +34,280 @@ interface PermissionsABI {
         newAdminRole: string
       }
     }
-  }
-}
-
-class IdGenerator {
-  private ids: Record<string, number>
-
-  constructor() {
-    this.ids = {}
-  }
-
-  public getNextId(key: string): number {
-    if (this.ids[key] === undefined) {
-      this.ids[key] = 0
+    CurrencyAdded: {
+      topic: string
+      decode: (log: any) => {
+        currency: string
+      }
     }
-    return this.ids[key]++
+    CurrencyRemoved: {
+      topic: string
+      decode: (log: any) => {
+        currency: string
+      }
+    }
+    NFTRoleAssigned: {
+      topic: string
+      decode: (log: any) => {
+        nft: string
+      }
+    }
+    NFTRoleRevoked: {
+      topic: string
+      decode: (log: any) => {
+        nft: string
+      }
+    }
+    UserRoleAssigned: {
+      topic: string
+      decode: (log: any) => {
+        role: string
+        account: string
+      }
+    }
+    UserRoleRevoked: {
+      topic: string
+      decode: (log: any) => {
+        role: string
+        account: string
+      }
+    }
+    RoleRegistered: {
+      topic: string
+      decode: (log: any) => {
+        role: string
+        adminRole: string
+      }
+    }
+    RoleRequested: {
+      topic: string
+      decode: (log: any) => {
+        requester: string
+        role: string
+      }
+    }
+    NFTRoleRequested: {
+      topic: string
+      decode: (log: any) => {
+        nft: string
+        tokenId: bigint
+        requester: string
+      }
+    }
   }
 }
 
-export class PermissionsProcessor {
-  private processor: EvmBatchProcessor
-  private contractAddress: string
-  private abi: PermissionsABI
-  private idGenerator: IdGenerator
+export function getPermissionsTopics(abi: PermissionsABI): string[] {
+  return [
+    abi.events.RoleGranted?.topic,
+    abi.events.RoleRevoked?.topic,
+    abi.events.RoleAdminChanged?.topic,
+    abi.events.CurrencyAdded?.topic,
+    abi.events.CurrencyRemoved?.topic,
+    abi.events.NFTRoleAssigned?.topic,
+    abi.events.NFTRoleRevoked?.topic,
+    abi.events.UserRoleAssigned?.topic,
+    abi.events.UserRoleRevoked?.topic,
+    abi.events.RoleRegistered?.topic,
+    abi.events.RoleRequested?.topic,
+    abi.events.NFTRoleRequested?.topic
+  ].filter(Boolean) as string[]
+}
 
-  constructor(
-    contractAddress: string,
-    abi: PermissionsABI,
-    gateway: string = 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
-    rpcEndpoint?: string
-  ) {
-    this.contractAddress = contractAddress
-    this.abi = abi
-    this.idGenerator = new IdGenerator()
+export async function processPermissionsEvents(
+  logs: any[],
+  ctx: any,
+  abi: PermissionsABI,
+  contractAddress: string,
+  roleMap: Map<string, Role>,
+  subjectMap: Map<string, Subject>,
+  currencyMap: Map<string, SupportedCurrency>,
+  roleAssignments: RoleAssignment[],
+  permissionEvents: PermissionEvent[]
+) {
+  async function getOrCreateRole(roleHash: string, roleName?: string): Promise<Role> {
+    if (roleMap.has(roleHash)) {
+      return roleMap.get(roleHash)!
+    }
 
-    this.processor = new EvmBatchProcessor()
-      .setGateway(gateway)
-      .setFinalityConfirmation(12)
-
-    if (rpcEndpoint) {
-      this.processor.setRpcEndpoint({
-        url: rpcEndpoint,
-        rateLimit: 5
+    let role = await ctx.store.get(Role, roleHash)
+    if (!role) {
+      role = new Role({
+        id: roleHash,
+        roleHash: roleHash,
+        roleName: roleName || `Role_${roleHash.slice(0, 8)}`,
+        description: undefined,
+        assignments: []
       })
     }
-
-    this.processor.addLog({
-      address: [this.contractAddress],
-      topic0: [
-        this.abi.events.RoleGranted.topic,
-        this.abi.events.RoleRevoked.topic,
-        this.abi.events.RoleAdminChanged.topic
-      ]
-    })
+    roleMap.set(roleHash, role)
+    return role
   }
 
-  async process(db: TypeormDatabase) {
-    const roleMap: Map<string, Role> = new Map()
-    const subjectMap: Map<string, Subject> = new Map()
-    const roleAssignments: RoleAssignment[] = []
-    const permissionEvents: PermissionEvent[] = []
+  async function getOrCreateSubject(address: string): Promise<Subject> {
+    const subjectId = address.toLowerCase()
 
-    async function getOrCreateRole(roleHash: string, roleName?: string): Promise<Role> {
-      if (roleMap.has(roleHash)) {
-        return roleMap.get(roleHash)!
-      }
-
-      let role = await db.get(Role, roleHash)
-      if (!role) {
-        role = new Role({
-          id: roleHash,
-          roleHash: roleHash,
-          roleName: roleName || `Role_${roleHash.slice(0, 8)}`,
-          description: null,
-          assignments: []
-        })
-        roleMap.set(roleHash, role)
-      } else {
-        roleMap.set(roleHash, role)
-      }
-      return role
+    if (subjectMap.has(subjectId)) {
+      return subjectMap.get(subjectId)!
     }
 
-    async function getOrCreateSubject(address: string): Promise<Subject> {
-      const subjectId = address.toLowerCase()
+    let subject = await ctx.store.get(Subject, subjectId)
+    if (!subject) {
+      const subjectType = SubjectType.USER
 
-      if (subjectMap.has(subjectId)) {
-        return subjectMap.get(subjectId)!
-      }
+      subject = new Subject({
+        id: subjectId,
+        subjectType: subjectType,
+        name: `${address.slice(0, 6)}...${address.slice(-4)}`,
+        avatarUrl: undefined,
+        backgroundUrl: undefined,
+        bio: undefined,
+        createdAt: new Date(),
+        collections: [],
+        listings: [],
+        roleAssignments: [],
+        purchaseHistoryAsSeller: [],
+        purchaseHistoryAsBuyer: []
+      })
+    }
+    subjectMap.set(subjectId, subject)
+    return subject
+  }
 
-      let subject = await db.get(Subject, subjectId)
-      if (!subject) {
-        subject = new Subject({
-          id: subjectId,
-          subjectType: SubjectType.ADDRESS,
-          name: `${address.slice(0, 6)}...${address.slice(-4)}`,
-          avatarUrl: null,
-          backgroundUrl: null,
-          bio: null,
-          createdAt: new Date(),
-          collections: [],
-          listings: [],
-          roleAssignments: [],
-          purchaseHistoryAsSeller: [],
-          purchaseHistoryAsBuyer: []
-        })
-        subjectMap.set(subjectId, subject)
-      } else {
-        subjectMap.set(subjectId, subject)
-      }
-      return subject
+  async function getOrCreateCurrency(address: string): Promise<SupportedCurrency | null> {
+    const currencyId = address.toLowerCase()
+
+    if (currencyMap.has(currencyId)) {
+      return currencyMap.get(currencyId)!
     }
 
-    await this.processor.run(db, async (ctx) => {
-      for (let block of ctx.blocks) {
-        for (let log of block.logs) {
-          const topic0 = log.topics[0]
-          const timestamp = new Date(block.header.timestamp)
-          const blockNumber = block.header.height
-          const transactionHash = log.transaction?.hash || ''
+    let currency = await ctx.store.get(SupportedCurrency, currencyId)
+    if (currency) {
+      currencyMap.set(currencyId, currency)
+      return currency
+    }
+    return null
+  }
 
-          if (topic0 === this.abi.events.RoleGranted.topic) {
-            const { account, role: roleHash, sender } = this.abi.events.RoleGranted.decode(log)
+  for (let log of logs) {
+    const topic0 = log.topics[0]
+    const timestamp = new Date(log.block.header.timestamp)
+    const blockNumber = log.block.header.height
+    const transactionHash = log.transactionHash || ''
 
-            const role = await getOrCreateRole(roleHash)
-            const subject = await getOrCreateSubject(account)
-            const grantor = await getOrCreateSubject(sender)
+    try {
+      if (topic0 === abi.events.RoleGranted?.topic) {
+        const { role: roleHash, account, sender } = abi.events.RoleGranted.decode(log)
 
-            const existingAssignment = await ctx.store.findOne(RoleAssignment, {
-              where: {
-                subject: { id: subject.id },
-                role: { id: role.id }
-              }
-            })
+        const role = await getOrCreateRole(roleHash)
+        const subject = await getOrCreateSubject(account)
+        const grantor = await getOrCreateSubject(sender)
 
-            if (!existingAssignment) {
-              const assignment = new RoleAssignment({
-                id: `${subject.id}-${role.id}-${blockNumber}`,
-                subject: subject,
-                role: role,
-                assignedAt: timestamp,
-                assignedBy: grantor.id,
-                transactionHash: transactionHash
-              })
-              roleAssignments.push(assignment)
-            }
-
-            const event = new PermissionEvent({
-              id: `${transactionHash}-${log.logIndex}`,
-              eventType: PermissionEventType.ROLE_GRANTED,
-              role: role,
-              subject: subject,
-              granted: true,
-              grantedBy: grantor.id,
-              timestamp: timestamp,
-              transactionHash: transactionHash,
-              blockNumber: blockNumber
-            })
-            permissionEvents.push(event)
+        const existingAssignment = await ctx.store.findOne(RoleAssignment, {
+          where: {
+            subject: { id: subject.id },
+            role: { id: role.id }
           }
+        })
 
-          if (topic0 === this.abi.events.RoleRevoked.topic) {
-            const { account, role: roleHash, sender } = this.abi.events.RoleRevoked.decode(log)
+        if (!existingAssignment) {
+          const assignmentId = `${subject.id}-${role.id}-${transactionHash}-${log.logIndex}`
+          const assignment = new RoleAssignment({
+            id: assignmentId,
+            subject: subject,
+            role: role,
+            assignedAt: timestamp,
+            assignedBy: grantor.id,
+            transactionHash: transactionHash
+          })
+          roleAssignments.push(assignment)
+        } else {
+          existingAssignment.assignedAt = timestamp
+          existingAssignment.assignedBy = grantor.id
+          existingAssignment.transactionHash = transactionHash
+        }
 
-            const role = await getOrCreateRole(roleHash)
-            const subject = await getOrCreateSubject(account)
-            const revoker = await getOrCreateSubject(sender)
+        const event = new PermissionEvent({
+          id: `${transactionHash}-${log.logIndex}`,
+          eventType: PermissionEventType.ROLE_GRANTED,
+          role: role,
+          subject: subject,
+          granted: true,
+          grantedBy: grantor.id,
+          timestamp: timestamp,
+          transactionHash: transactionHash,
+          blockNumber: blockNumber
+        })
+        permissionEvents.push(event)
+      }
 
-            const existingAssignment = await ctx.store.findOne(RoleAssignment, {
-              where: {
-                subject: { id: subject.id },
-                role: { id: role.id }
-              }
-            })
+      else if (topic0 === abi.events.RoleRevoked?.topic) {
+        const { role: roleHash, account, sender } = abi.events.RoleRevoked.decode(log)
 
-            if (existingAssignment) {
-              await ctx.store.remove(existingAssignment)
-            }
+        const role = await getOrCreateRole(roleHash)
+        const subject = await getOrCreateSubject(account)
+        const revoker = await getOrCreateSubject(sender)
 
-            const event = new PermissionEvent({
-              id: `${transactionHash}-${log.logIndex}`,
-              eventType: PermissionEventType.ROLE_REVOKED,
-              role: role,
-              subject: subject,
-              granted: false,
-              grantedBy: revoker.id,
-              timestamp: timestamp,
-              transactionHash: transactionHash,
-              blockNumber: blockNumber
-            })
-            permissionEvents.push(event)
+        const existingAssignment = await ctx.store.findOne(RoleAssignment, {
+          where: {
+            subject: { id: subject.id },
+            role: { id: role.id }
           }
+        })
 
-          if (topic0 === this.abi.events.RoleAdminChanged.topic) {
-            const { role: roleHash, previousAdminRole, newAdminRole } =
-              this.abi.events.RoleAdminChanged.decode(log)
+        if (existingAssignment) {
+          await ctx.store.remove(existingAssignment)
+        }
 
-            const role = await getOrCreateRole(roleHash)
-            const previousAdmin = await getOrCreateRole(previousAdminRole, 'Admin')
-            const newAdmin = await getOrCreateRole(newAdminRole, 'Admin')
+        const event = new PermissionEvent({
+          id: `${transactionHash}-${log.logIndex}`,
+          eventType: PermissionEventType.ROLE_REVOKED,
+          role: role,
+          subject: subject,
+          granted: false,
+          grantedBy: revoker.id,
+          timestamp: timestamp,
+          transactionHash: transactionHash,
+          blockNumber: blockNumber
+        })
+        permissionEvents.push(event)
+      }
 
-            const event = new PermissionEvent({
-              id: `${transactionHash}-${log.logIndex}`,
-              eventType: PermissionEventType.ADMIN_ROLE_CHANGED,
-              role: role,
-              subject: null,
-              granted: true,
-              grantedBy: this.contractAddress,
-              timestamp: timestamp,
-              transactionHash: transactionHash,
-              blockNumber: blockNumber
-            })
-            permissionEvents.push(event)
-          }
+      else if (topic0 === abi.events.CurrencyAdded?.topic) {
+        const { currency: currencyAddress } = abi.events.CurrencyAdded.decode(log)
+
+        let currency = await getOrCreateCurrency(currencyAddress)
+        if (!currency) {
+          currency = new SupportedCurrency({
+            id: currencyAddress.toLowerCase(),
+            name: `Currency_${currencyAddress.slice(0, 6)}`,
+            symbol: 'UNKNOWN',
+            decimals: 18,
+            isActive: true,
+            feePercentage: 0,
+            totalAmountFee: BigInt(0),
+            currencyApprovals: [],
+            purchaseHistory: []
+          })
+          currencyMap.set(currency.id, currency)
+        } else {
+          currency.isActive = true
+          currencyMap.set(currency.id, currency)
         }
       }
 
-      await ctx.store.save([...roleMap.values()])
-      await ctx.store.save([...subjectMap.values()])
-      await ctx.store.save(roleAssignments)
-      await ctx.store.save(permissionEvents)
-    })
-  }
+      else if (topic0 === abi.events.CurrencyRemoved?.topic) {
+        const { currency: currencyAddress } = abi.events.CurrencyRemoved.decode(log)
 
-  getProcessor(): EvmBatchProcessor {
-    return this.processor
+        const currency = await getOrCreateCurrency(currencyAddress)
+        if (currency) {
+          currency.isActive = false
+          currencyMap.set(currency.id, currency)
+        }
+      }
+
+    } catch (error) {
+      console.error(`Error processing permissions log at block ${blockNumber}, tx ${transactionHash}:`, error)
+    }
   }
 }
