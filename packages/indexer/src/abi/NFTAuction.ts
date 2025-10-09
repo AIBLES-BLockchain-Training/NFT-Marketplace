@@ -3,13 +3,13 @@ import { event, fun, viewFun, indexed, ContractBase } from '@subsquid/evm-abi'
 import type { EventParams as EParams, FunctionArguments, FunctionReturn } from '@subsquid/evm-abi'
 
 export const events = {
-    AuctionCloser: event("0xe7a82e6b0b89763638d2b4fb2888d75d24397bdf67b0349b95ea1f4939cf19d9", "AuctionCloser(uint256,address,address,uint256,address,address)", {"auctionId": p.uint256, "assetContract": p.address, "closer": p.address, "tokenId": p.uint256, "auctionCreater": p.address, "winningBidder": p.address}),
-    AuctionPayoutCollected: event("0xab2d11a4cba899440e689b797feb807ed64a0e6a275253a20549e47958ccc9b6", "AuctionPayoutCollected(uint256,address,uint256)", {"auctionId": p.uint256, "auctionCreator": p.address, "amount": p.uint256}),
-    AuctionTokenCollected: event("0xbbfc6066587822f65c9d1a870c9b3721be435de005266a89be950e0611ff080f", "AuctionTokenCollected(uint256,address)", {"auctionId": p.uint256, "bidder": p.address}),
-    BidPlaced: event("0x0e54eff26401bf69b81b26f60bd85ef47f5d85275c1d268d84f68d6897431c47", "BidPlaced(uint256,address,uint256)", {"auctionId": p.uint256, "bidder": p.address, "amount": p.uint256}),
-    CancelledAuction: event("0xd68d26ab7202e0ff43e7ee058c16686e737f214c5832bfc1dd2fbb0518f60d8e", "CancelledAuction(address,uint256)", {"auctionCreator": p.address, "auctionId": p.uint256}),
+    AuctionBidPlaced: event("0x8cb9a5059c7ef5de4bab6a5d6b8d370b0cb2265ab475501d8fbd9749879a8608", "AuctionBidPlaced(uint256,address,uint256,address)", {"auctionId": indexed(p.uint256), "bidder": indexed(p.address), "bidAmount": p.uint256, "currency": p.address}),
+    AuctionCancelled: event("0x10ac9f0bb365b5d22d7bec500408692f23fdf83eadfec71615ef88b4c1134f0e", "AuctionCancelled(uint256,address)", {"auctionId": indexed(p.uint256), "seller": indexed(p.address)}),
+    AuctionCreated: event("0xe65d666b934fa6a599a38cb331d43bea98c313296c5b786f21e11c23938658fe", "AuctionCreated(uint256,address,address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256,uint8)", {"auctionId": indexed(p.uint256), "seller": indexed(p.address), "assetContract": indexed(p.address), "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "stepAmount": p.uint256, "tokenType": p.uint8}),
+    AuctionFinalized: event("0x81bd28ae84f5a9d2a1eff49e950eba8746e0f1681c140b90c6c0f569996ac0c3", "AuctionFinalized(uint256,address,uint256,address)", {"auctionId": indexed(p.uint256), "winner": indexed(p.address), "winningBid": p.uint256, "currency": p.address}),
+    AuctionPayoutCollected: event("0xab2d11a4cba899440e689b797feb807ed64a0e6a275253a20549e47958ccc9b6", "AuctionPayoutCollected(uint256,address,uint256)", {"auctionId": indexed(p.uint256), "seller": indexed(p.address), "amount": p.uint256}),
+    AuctionTokenCollected: event("0xc09791e926fed93c83ece90e9339e29eac0a7446063dfa0b4531928b3e147695", "AuctionTokenCollected(uint256,address,uint256)", {"auctionId": indexed(p.uint256), "winner": indexed(p.address), "tokenId": p.uint256}),
     NFTReceived: event("0x1d823cdc8f0514a95b53538df2d2f3deaf98d1c534c6e750daa593173c27f8f0", "NFTReceived(address,address,uint256,bytes)", {"operator": p.address, "from": p.address, "tokenId": p.uint256, "data": p.bytes}),
-    NewAuction: event("0x3faf59d38c631df1f933024be7c62d29daf87f9f5e102a822e597b26744d8a60", "NewAuction(address,uint256,address,(uint256,address,address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,address,uint256,uint256,bool,bool,uint8,uint8))", {"auctionCreator": p.address, "auctionId": p.uint256, "assetContract": p.address, "auction": p.struct({"id": p.uint256, "auctionCreator": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "highestBidder": p.address, "highestBid": p.uint256, "stepAmount": p.uint256, "isPayoutCollected": p.bool, "isTokenCollected": p.bool, "status": p.uint8, "tokenType": p.uint8})}),
     UpdatePermissionsContract: event("0x8accae49e7f28887d579627d809fdc995fe8c2b9cc71b7249d2b367fd5538c58", "UpdatePermissionsContract(address,address)", {"oldPermissionsContract": p.address, "newPermissionsContract": p.address}),
 }
 
@@ -95,13 +95,13 @@ export class Contract extends ContractBase {
 }
 
 /// Event types
-export type AuctionCloserEventArgs = EParams<typeof events.AuctionCloser>
+export type AuctionBidPlacedEventArgs = EParams<typeof events.AuctionBidPlaced>
+export type AuctionCancelledEventArgs = EParams<typeof events.AuctionCancelled>
+export type AuctionCreatedEventArgs = EParams<typeof events.AuctionCreated>
+export type AuctionFinalizedEventArgs = EParams<typeof events.AuctionFinalized>
 export type AuctionPayoutCollectedEventArgs = EParams<typeof events.AuctionPayoutCollected>
 export type AuctionTokenCollectedEventArgs = EParams<typeof events.AuctionTokenCollected>
-export type BidPlacedEventArgs = EParams<typeof events.BidPlaced>
-export type CancelledAuctionEventArgs = EParams<typeof events.CancelledAuction>
 export type NFTReceivedEventArgs = EParams<typeof events.NFTReceived>
-export type NewAuctionEventArgs = EParams<typeof events.NewAuction>
 export type UpdatePermissionsContractEventArgs = EParams<typeof events.UpdatePermissionsContract>
 
 /// Function types

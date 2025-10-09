@@ -1,6 +1,5 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
 import {NFT} from "./nft.model"
-import {Subject} from "./subject.model"
 
 @Entity_()
 export class TokenOwnership {
@@ -15,11 +14,9 @@ export class TokenOwnership {
     @ManyToOne_(() => NFT, {nullable: true})
     nft!: NFT
 
-    @Index_()
-    @ManyToOne_(() => Subject, {nullable: true})
-    ownerAddress!: Subject
+    @StringColumn_({nullable: false})
+    ownerAddress!: string
 
-    @Index_()
     @BigIntColumn_({nullable: false})
     balance!: bigint
 

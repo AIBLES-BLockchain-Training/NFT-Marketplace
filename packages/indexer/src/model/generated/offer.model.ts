@@ -1,5 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
-import {Subject} from "./subject.model"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, ManyToOne as ManyToOne_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
 import {NFT} from "./nft.model"
 import {SupportedCurrency} from "./supportedCurrency.model"
 import {OfferStatus} from "./_offerStatus"
@@ -14,8 +13,8 @@ export class Offer {
     id!: string
 
     @Index_()
-    @ManyToOne_(() => Subject, {nullable: true})
-    buyerAddress!: Subject
+    @StringColumn_({nullable: false})
+    buyerAddress!: string
 
     @Index_()
     @ManyToOne_(() => NFT, {nullable: true})

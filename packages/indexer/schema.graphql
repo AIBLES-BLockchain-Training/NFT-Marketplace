@@ -150,8 +150,8 @@ type Listing @entity {
 
 type Auction @entity {
   id: ID! @index
-  nftId: NFT!
-  sellerAddress: String! @index
+  nft: NFT! @index
+  seller: Subject! @index
   quantity: BigInt!
   currency: SupportedCurrency! @index
   startPrice: BigInt! @index
@@ -171,7 +171,7 @@ type Auction @entity {
 type Bid @entity {
   id: ID! @index
   auction: Auction! @index
-  bidderAddress: String! @index
+  bidder: Subject! @index
   bidAmount: BigInt! @index
   timestamp: DateTime!
 }

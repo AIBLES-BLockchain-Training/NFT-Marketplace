@@ -17,7 +17,7 @@ export class Bid {
 
     @Index_()
     @ManyToOne_(() => Subject, {nullable: true})
-    bidderAddress!: Subject
+    bidder!: Subject
 
     @Index_()
     @BigIntColumn_({nullable: false})

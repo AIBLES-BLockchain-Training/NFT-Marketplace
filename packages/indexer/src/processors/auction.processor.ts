@@ -13,7 +13,7 @@ import {
   TradeType,
 } from '../model';
 
-interface AuctionABI {
+export interface AuctionABI {
   events: {
     AuctionCreated: {
       topic: string;
@@ -79,6 +79,24 @@ interface AuctionABI {
         currency: string;
       };
     };
+
+    NFTReceived: {
+      topic: string;
+      decode: (log: any) => {
+        operator: string;
+        from: string;
+        tokenId: bigint;
+        data: string;
+      };
+    }
+
+    UpdatePermissionsContract: {
+      topic: string;
+      decode: (log: any) => {
+        oldPermissionsContract: string;
+        newPermissionsContract: string;
+      };
+    }
   };
 }
 
@@ -90,6 +108,8 @@ export function getAuctionTopics(abi: AuctionABI): string[] {
     abi.events.AuctionPayoutCollected?.topic,
     abi.events.AuctionTokenCollected?.topic,
     abi.events.AuctionFinalized?.topic,
+    abi.events.NFTReceived?.topic,
+    abi.events.UpdatePermissionsContract?.topic,
   ].filter(Boolean) as string[];
 }
 
@@ -98,13 +118,13 @@ export async function processAuctionEvents(
   ctx: any,
   abi: AuctionABI,
   contractAddress: string,
-  auctionMap: Map<string, Auction> = new Map(), // Key: auctionId
-  nftMap: Map<string, NFT> = new Map(), // Key: `${assetContract.toLowerCase()}-${tokenId.toString()}`
-  subjectMap: Map<string, Subject> = new Map(), // key is address in lowercase
-  collectionMap: Map<string, Collection> = new Map(), // key is contract address in lowercase
-  bidMap: Map<string, Bid> = new Map(), // Key: `${auctionId.toString()}-${bidder.toLowerCase()}`
-  purchaseHistories: PurchaseHistory[] = [], // key is auto-generated
-  updatedOwnerships: TokenOwnership[] = [], // gom ownerships cần cập nhật
+  auctionMap: Map<string, Auction>, // Key: auctionId
+  nftMap: Map<string, NFT>, // Key: `${assetContract.toLowerCase()}-${tokenId.toString()}`
+  subjectMap: Map<string, Subject>, // key is address in lowercase
+  collectionMap: Map<string, Collection>, // key is contract address in lowercase
+  bidMap: Map<string, Bid>, // Key: `${auctionId.toString()}-${bidder.toLowerCase()}`
+  purchaseHistories: PurchaseHistory[], // key is auto-generated
+  updatedOwnerships: TokenOwnership[], // gom ownerships cần cập nhật
 ) {
   async function getOrCreateSubject(address: string): Promise<Subject> {
     const subjectId = address.toLowerCase();
@@ -224,7 +244,7 @@ export async function processAuctionEvents(
       ownership = new TokenOwnership({
         id: ownershipId,
         nft,
-        ownerAddress: owner,
+        ownerAddress: owner.id,
         balance: quantityChange, // khởi tạo balance = số dương nhận được
         updatedAt: timestamp,
       });
@@ -249,7 +269,7 @@ export async function processAuctionEvents(
     const topic0 = log.topics[0];
     const timestamp = new Date(log.block.header.timestamp);
     const blockNumber = log.block.header.height;
-    const transactionHash = log.transaction?.hash.toString() || '';
+    const transactionHash = log.transactionHash || '';
 
     try {
       if (topic0 === abi.events.AuctionCreated.topic) {
@@ -340,7 +360,7 @@ export async function processAuctionEvents(
           const bid = new Bid({
             id: bidId,
             auction: auction,
-            bidderAddress: bidderSubject,
+            bidder: bidderSubject,
             bidAmount: bidAmount,
             timestamp: timestamp,
           });

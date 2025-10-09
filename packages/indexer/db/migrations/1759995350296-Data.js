@@ -1,14 +1,14 @@
-module.exports = class Data1759847833719 {
-    name = 'Data1759847833719'
+module.exports = class Data1759995350296 {
+    name = 'Data1759995350296'
 
     async up(db) {
-        await db.query(`CREATE TABLE "bid" ("id" character varying NOT NULL, "bidder_address" text NOT NULL, "bid_amount" numeric NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "auction_id" character varying, CONSTRAINT "PK_ed405dda320051aca2dcb1a50bb" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "bid" ("id" character varying NOT NULL, "bid_amount" numeric NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "auction_id" character varying, "bidder_id" character varying, CONSTRAINT "PK_ed405dda320051aca2dcb1a50bb" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_9e594e5a61c0f3cb25679f6ba8" ON "bid" ("auction_id") `)
-        await db.query(`CREATE INDEX "IDX_b6344418b51997c0b30bcef270" ON "bid" ("bidder_address") `)
+        await db.query(`CREATE INDEX "IDX_e7618559409a903a897164156b" ON "bid" ("bidder_id") `)
         await db.query(`CREATE INDEX "IDX_faa1fafeb82d82d077b0b0c065" ON "bid" ("bid_amount") `)
-        await db.query(`CREATE TABLE "auction" ("id" character varying NOT NULL, "seller_address" text NOT NULL, "quantity" numeric NOT NULL, "start_price" numeric NOT NULL, "step_amount" numeric NOT NULL, "ceiling_price" numeric, "start_time" TIMESTAMP WITH TIME ZONE, "end_time" TIMESTAMP WITH TIME ZONE, "time_buffer_in_seconds" integer NOT NULL, "status" character varying(9) NOT NULL, "nft_id_id" character varying, "currency_id" character varying, "winning_bid_id" character varying, CONSTRAINT "PK_9dc876c629273e71646cf6dfa67" PRIMARY KEY ("id"))`)
-        await db.query(`CREATE INDEX "IDX_dba13de832980011b5d815c8dd" ON "auction" ("nft_id_id") `)
-        await db.query(`CREATE INDEX "IDX_bd71e17fd882a77946cfd54c34" ON "auction" ("seller_address") `)
+        await db.query(`CREATE TABLE "auction" ("id" character varying NOT NULL, "quantity" numeric NOT NULL, "start_price" numeric NOT NULL, "step_amount" numeric NOT NULL, "ceiling_price" numeric, "start_time" TIMESTAMP WITH TIME ZONE, "end_time" TIMESTAMP WITH TIME ZONE, "time_buffer_in_seconds" integer NOT NULL, "status" character varying(9) NOT NULL, "nft_id" character varying, "seller_id" character varying, "currency_id" character varying, "winning_bid_id" character varying, CONSTRAINT "PK_9dc876c629273e71646cf6dfa67" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE INDEX "IDX_cfb47e97e60c9d1462576f85a8" ON "auction" ("nft_id") `)
+        await db.query(`CREATE INDEX "IDX_3d6291a6a8071165fa8cd76874" ON "auction" ("seller_id") `)
         await db.query(`CREATE INDEX "IDX_4855125e8c0afa924db50cc1cf" ON "auction" ("currency_id") `)
         await db.query(`CREATE INDEX "IDX_cb5487e151f28b546dc1c18589" ON "auction" ("start_price") `)
         await db.query(`CREATE INDEX "IDX_70db2d52e2f57f3a91c0102efe" ON "auction" ("step_amount") `)
@@ -106,7 +106,9 @@ module.exports = class Data1759847833719 {
         await db.query(`CREATE INDEX "IDX_db38cf80352c558992739a5e19" ON "permission_event" ("transaction_hash") `)
         await db.query(`CREATE INDEX "IDX_d53dbc7f4e1920ca68925dd526" ON "permission_event" ("block_number") `)
         await db.query(`ALTER TABLE "bid" ADD CONSTRAINT "FK_9e594e5a61c0f3cb25679f6ba8d" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
-        await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_dba13de832980011b5d815c8dd2" FOREIGN KEY ("nft_id_id") REFERENCES "nft"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "bid" ADD CONSTRAINT "FK_e7618559409a903a897164156b7" FOREIGN KEY ("bidder_id") REFERENCES "subject"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_cfb47e97e60c9d1462576f85a88" FOREIGN KEY ("nft_id") REFERENCES "nft"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_3d6291a6a8071165fa8cd768749" FOREIGN KEY ("seller_id") REFERENCES "subject"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_4855125e8c0afa924db50cc1cf2" FOREIGN KEY ("currency_id") REFERENCES "supported_currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_4fc9100272bc153c236abfdba63" FOREIGN KEY ("winning_bid_id") REFERENCES "bid"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "purchase_history" ADD CONSTRAINT "FK_dd0db214ea8bc810cc472b4a7e3" FOREIGN KEY ("nft_id") REFERENCES "nft"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
@@ -138,11 +140,11 @@ module.exports = class Data1759847833719 {
     async down(db) {
         await db.query(`DROP TABLE "bid"`)
         await db.query(`DROP INDEX "public"."IDX_9e594e5a61c0f3cb25679f6ba8"`)
-        await db.query(`DROP INDEX "public"."IDX_b6344418b51997c0b30bcef270"`)
+        await db.query(`DROP INDEX "public"."IDX_e7618559409a903a897164156b"`)
         await db.query(`DROP INDEX "public"."IDX_faa1fafeb82d82d077b0b0c065"`)
         await db.query(`DROP TABLE "auction"`)
-        await db.query(`DROP INDEX "public"."IDX_dba13de832980011b5d815c8dd"`)
-        await db.query(`DROP INDEX "public"."IDX_bd71e17fd882a77946cfd54c34"`)
+        await db.query(`DROP INDEX "public"."IDX_cfb47e97e60c9d1462576f85a8"`)
+        await db.query(`DROP INDEX "public"."IDX_3d6291a6a8071165fa8cd76874"`)
         await db.query(`DROP INDEX "public"."IDX_4855125e8c0afa924db50cc1cf"`)
         await db.query(`DROP INDEX "public"."IDX_cb5487e151f28b546dc1c18589"`)
         await db.query(`DROP INDEX "public"."IDX_70db2d52e2f57f3a91c0102efe"`)
@@ -240,7 +242,9 @@ module.exports = class Data1759847833719 {
         await db.query(`DROP INDEX "public"."IDX_db38cf80352c558992739a5e19"`)
         await db.query(`DROP INDEX "public"."IDX_d53dbc7f4e1920ca68925dd526"`)
         await db.query(`ALTER TABLE "bid" DROP CONSTRAINT "FK_9e594e5a61c0f3cb25679f6ba8d"`)
-        await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_dba13de832980011b5d815c8dd2"`)
+        await db.query(`ALTER TABLE "bid" DROP CONSTRAINT "FK_e7618559409a903a897164156b7"`)
+        await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_cfb47e97e60c9d1462576f85a88"`)
+        await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_3d6291a6a8071165fa8cd768749"`)
         await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_4855125e8c0afa924db50cc1cf2"`)
         await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_4fc9100272bc153c236abfdba63"`)
         await db.query(`ALTER TABLE "purchase_history" DROP CONSTRAINT "FK_dd0db214ea8bc810cc472b4a7e3"`)

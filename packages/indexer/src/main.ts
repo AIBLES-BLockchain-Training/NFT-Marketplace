@@ -1,33 +1,42 @@
-import "reflect-metadata"
 import { EvmBatchProcessor } from '@subsquid/evm-processor'
 import { TypeormDatabase } from '@subsquid/typeorm-store'
+import "reflect-metadata"
 import {
-  Listing,
-  Subject,
+  Auction,
+  Bid,
+  BuyerApproval,
   Collection,
+  CurrencyApproval,
+  Listing,
   NFT,
-  SupportedCurrency,
-  Role,
-  RoleAssignment,
   PermissionEvent,
   PurchaseHistory,
-  CurrencyApproval,
-  BuyerApproval
+  Role,
+  RoleAssignment,
+  Subject,
+  SupportedCurrency,
+  TokenOwnership
 } from './model'
 
 import {
-  processPermissionsEvents,
-  getPermissionsTopics,
-  type PermissionsABI
-} from './processors/permissions.processor'
+  getAuctionTopics,
+  processAuctionEvents,
+  type AuctionABI
+} from './processors/auction.processor'
 import {
-  processListingEvents,
   getListingTopics,
+  processListingEvents,
   type ListingABI
 } from './processors/listing.processor'
+import {
+  getPermissionsTopics,
+  processPermissionsEvents,
+  type PermissionsABI
+} from './processors/permissions.processor'
 
-import * as permissionsAbi from './abi/Permissions'
 import * as listingAbi from './abi/Listing'
+import * as auctionAbi from './abi/NFTAuction'
+import * as permissionsAbi from './abi/Permissions'
 
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
@@ -90,6 +99,13 @@ class CombinedIndexer {
         topic0: listingTopics
       })
     }
+    const auctionTopics = getAuctionTopics(auctionAbi as AuctionABI)
+    if (auctionTopics.length > 0) {
+      this.processor.addLog({
+        address: [CONTRACT_ADDRESSES.router.toLowerCase()],
+        topic0: auctionTopics
+      })
+    }
   }
 
   async run() {
@@ -113,8 +129,16 @@ class CombinedIndexer {
       const currencyApprovals: CurrencyApproval[] = []
       const buyerApprovals: BuyerApproval[] = []
 
+      // auction
+      const auctionMap: Map<string, Auction> = new Map() 
+      const bidMap: Map<string, Bid> = new Map() 
+      const updatedOwnerships: TokenOwnership[] = []
+
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
+      const auctionLogs: any[] = []
+
+
 
       for (let block of ctx.blocks) {
         for (let log of block.logs) {
@@ -124,6 +148,8 @@ class CombinedIndexer {
             permissionsLogs.push({ ...log, block })
           } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
             listingLogs.push({ ...log, block })
+          } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
+            auctionLogs.push({ ...log, block })
           }
         }
       }
@@ -163,6 +189,24 @@ class CombinedIndexer {
         )
       }
 
+      // Process auction events
+      if (auctionLogs.length > 0) {
+        console.log(`Processing ${auctionLogs.length} auction events`)
+        await processAuctionEvents(
+          auctionLogs,
+          ctx,
+          auctionAbi as AuctionABI,
+          CONTRACT_ADDRESSES.router.toLowerCase(),
+          auctionMap,
+          nftMap,
+          subjectMap,
+          collectionMap,
+          bidMap,
+          purchaseHistories,
+          updatedOwnerships
+        )
+      }
+
       console.log('Saving entities to database...')
       await ctx.store.save(Array.from(subjectMap.values()))
       await ctx.store.save(Array.from(roleMap.values()))
@@ -170,6 +214,9 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(nftMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
+      await ctx.store.save(Array.from(auctionMap.values()))
+      await ctx.store.save(Array.from(bidMap.values()))
+      await ctx.store.save(updatedOwnerships)
       await ctx.store.save(roleAssignments)
       await ctx.store.save(permissionEvents)
       await ctx.store.save(currencyApprovals)
