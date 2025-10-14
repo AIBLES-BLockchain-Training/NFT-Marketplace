@@ -163,7 +163,19 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(nftMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
-      await ctx.store.save(roleAssignments)
+
+      const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
+      const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
+
+      if (assignmentsToRemove.length > 0) {
+        console.log(`Removing ${assignmentsToRemove.length} role assignments`)
+        await ctx.store.remove(assignmentsToRemove)
+      }
+
+      if (assignmentsToSave.length > 0) {
+        await ctx.store.save(assignmentsToSave)
+      }
+
       await ctx.store.save(permissionEvents)
       await ctx.store.save(currencyApprovals)
       await ctx.store.save(buyerApprovals)

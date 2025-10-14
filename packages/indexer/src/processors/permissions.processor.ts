@@ -114,12 +114,18 @@ export async function processPermissionsEvents(
         const subject = await getOrCreateSubject(account)
         const grantor = await getOrCreateSubject(sender)
 
-        const existingAssignment = await ctx.store.findOne(RoleAssignment, {
-          where: {
-            subject: { id: subject.id },
-            role: { id: role.id }
-          }
-        })
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === subject.id && a.role.id === role.id && !(a as any)._toRemove
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: subject.id },
+              role: { id: role.id }
+            }
+          })
+        }
 
         if (!existingAssignment) {
           const assignmentId = `${subject.id}-${role.id}-${transactionHash}-${log.logIndex}`
@@ -136,6 +142,7 @@ export async function processPermissionsEvents(
           existingAssignment.assignedAt = timestamp
           existingAssignment.assignedBy = grantor.id
           existingAssignment.transactionHash = transactionHash
+          roleAssignments.push(existingAssignment)
         }
 
         const event = new PermissionEvent({
@@ -159,15 +166,27 @@ export async function processPermissionsEvents(
         const subject = await getOrCreateSubject(account)
         const revoker = await getOrCreateSubject(sender)
 
-        const existingAssignment = await ctx.store.findOne(RoleAssignment, {
-          where: {
-            subject: { id: subject.id },
-            role: { id: role.id }
-          }
-        })
+        const assignmentId = `${subject.id}-${role.id}`
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === subject.id && a.role.id === role.id
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: subject.id },
+              role: { id: role.id }
+            }
+          })
+        }
 
         if (existingAssignment) {
-          await ctx.store.remove(existingAssignment)
+          const index = roleAssignments.indexOf(existingAssignment)
+          if (index > -1) {
+            roleAssignments.splice(index, 1)
+          }
+          (existingAssignment as any)._toRemove = true
+          roleAssignments.push(existingAssignment)
         }
 
         const event = new PermissionEvent({
@@ -215,6 +234,105 @@ export async function processPermissionsEvents(
           currency.isActive = false
           currencyMap.set(currency.id, currency)
         }
+      }
+
+      else if (topic0 === PermissionsABI.events.RoleAdminChanged?.topic) {
+        const { role: roleHash, previousAdminRole, newAdminRole } = PermissionsABI.events.RoleAdminChanged.decode(log)
+
+        console.log(`Role admin changed for role ${roleHash}: ${previousAdminRole} -> ${newAdminRole} at block ${blockNumber}`)
+      }
+
+      else if (topic0 === PermissionsABI.events.RoleRegistered?.topic) {
+        const { role: roleHash, adminRole } = PermissionsABI.events.RoleRegistered.decode(log)
+
+        await getOrCreateRole(roleHash)
+        console.log(`Role registered: ${roleHash} with admin role ${adminRole} at block ${blockNumber}`)
+      }
+
+      else if (topic0 === PermissionsABI.events.UserRoleAssigned?.topic) {
+        const { role: roleHash, account } = PermissionsABI.events.UserRoleAssigned.decode(log)
+
+        const role = await getOrCreateRole(roleHash)
+        const subject = await getOrCreateSubject(account)
+
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === subject.id && a.role.id === role.id && !(a as any)._toRemove
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: subject.id },
+              role: { id: role.id }
+            }
+          })
+        }
+
+        if (!existingAssignment) {
+          const assignmentId = `${subject.id}-${role.id}-${transactionHash}-${log.logIndex}`
+          const assignment = new RoleAssignment({
+            id: assignmentId,
+            subject: subject,
+            role: role,
+            assignedAt: timestamp,
+            assignedBy: contractAddress,
+            transactionHash: transactionHash
+          })
+          roleAssignments.push(assignment)
+        }
+      }
+
+      else if (topic0 === PermissionsABI.events.UserRoleRevoked?.topic) {
+        const { role: roleHash, account } = PermissionsABI.events.UserRoleRevoked.decode(log)
+
+        const role = await getOrCreateRole(roleHash)
+        const subject = await getOrCreateSubject(account)
+
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === subject.id && a.role.id === role.id
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: subject.id },
+              role: { id: role.id }
+            }
+          })
+        }
+
+        if (existingAssignment) {
+          const index = roleAssignments.indexOf(existingAssignment)
+          if (index > -1) {
+            roleAssignments.splice(index, 1)
+          }
+          (existingAssignment as any)._toRemove = true
+          roleAssignments.push(existingAssignment)
+        }
+      }
+
+      else if (topic0 === PermissionsABI.events.NFTRoleAssigned?.topic) {
+        const { nft } = PermissionsABI.events.NFTRoleAssigned.decode(log)
+
+        console.log(`NFT role assigned to ${nft} at block ${blockNumber}`)
+      }
+
+      else if (topic0 === PermissionsABI.events.NFTRoleRevoked?.topic) {
+        const { nft } = PermissionsABI.events.NFTRoleRevoked.decode(log)
+
+        console.log(`NFT role revoked from ${nft} at block ${blockNumber}`)
+      }
+
+      else if (topic0 === PermissionsABI.events.RoleRequested?.topic) {
+        const { requester, role: roleHash } = PermissionsABI.events.RoleRequested.decode(log)
+
+        console.log(`Role ${roleHash} requested by ${requester} at block ${blockNumber}`)
+      }
+
+      else if (topic0 === PermissionsABI.events.NFTRoleRequested?.topic) {
+        const { nft, tokenId, requester } = PermissionsABI.events.NFTRoleRequested.decode(log)
+
+        console.log(`NFT role requested for ${nft}#${tokenId} by ${requester} at block ${blockNumber}`)
       }
 
     } catch (error) {

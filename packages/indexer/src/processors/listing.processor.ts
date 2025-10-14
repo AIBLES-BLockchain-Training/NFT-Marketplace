@@ -241,6 +241,103 @@ export async function processListingEvents(
         }
       }
 
+      else if (topic0 === ListingABI.events.BuyerApproved?.topic) {
+        const { listingId, buyer, isApproved } = ListingABI.events.BuyerApproved.decode(log)
+        const listingIdStr = listingId.toString()
+        let listing = await getListing(listingIdStr)
+
+        if (listing) {
+          const buyerSubject = await getOrCreateSubject(buyer)
+
+          const existingApproval = await ctx.store.findOne(BuyerApproval, {
+            where: {
+              listing: { id: listingIdStr },
+              buyerAddress: buyerSubject.id
+            }
+          })
+
+          if (existingApproval) {
+            existingApproval.isApproved = isApproved
+            existingApproval.updatedAt = timestamp
+            existingApproval.transactionHash = transactionHash
+            buyerApprovals.push(existingApproval)
+          } else {
+            const approval = new BuyerApproval({
+              id: `${listingIdStr}-${buyerSubject.id}`,
+              listing: listing,
+              buyerAddress: buyerSubject.id,
+              isApproved: isApproved,
+              approvedBy: listing.owner.id,
+              transactionHash: transactionHash,
+              createdAt: timestamp,
+              updatedAt: timestamp
+            })
+            buyerApprovals.push(approval)
+          }
+        }
+      }
+
+      else if (topic0 === ListingABI.events.CurrencyApproved?.topic) {
+        const { listingId, currency, price } = ListingABI.events.CurrencyApproved.decode(log)
+        const listingIdStr = listingId.toString()
+        let listing = await getListing(listingIdStr)
+
+        if (listing) {
+          const currencyEntity = await getOrCreateCurrency(currency)
+
+          const existingApproval = await ctx.store.findOne(CurrencyApproval, {
+            where: {
+              listing: { id: listingIdStr },
+              currency: { id: currencyEntity.id }
+            }
+          })
+
+          if (existingApproval) {
+            existingApproval.pricePerToken = price
+            existingApproval.updatedAt = timestamp
+            existingApproval.transactionHash = transactionHash
+            currencyApprovals.push(existingApproval)
+          } else {
+            const approval = new CurrencyApproval({
+              id: `${listingIdStr}-${currencyEntity.id}`,
+              listing: listing,
+              currency: currencyEntity,
+              pricePerToken: price,
+              approvedBy: listing.owner.id,
+              transactionHash: transactionHash,
+              createdAt: timestamp,
+              updatedAt: timestamp
+            })
+            currencyApprovals.push(approval)
+          }
+        }
+      }
+
+      else if (topic0 === ListingABI.events.FeeWithdrawn?.topic) {
+        const { admin, currency, amount } = ListingABI.events.FeeWithdrawn.decode(log)
+
+        const currencyEntity = await getOrCreateCurrency(currency)
+        if (currencyEntity && currencyEntity.totalAmountFee >= amount) {
+          currencyEntity.totalAmountFee = currencyEntity.totalAmountFee - amount
+          currencyMap.set(currencyEntity.id, currencyEntity)
+        }
+      }
+
+      else if (topic0 === ListingABI.events.CurrencyFeeUpdated?.topic) {
+        const { currency, fee } = ListingABI.events.CurrencyFeeUpdated.decode(log)
+
+        const currencyEntity = await getOrCreateCurrency(currency)
+        if (currencyEntity) {
+          currencyEntity.feePercentage = Number(fee) / 10000
+          currencyMap.set(currencyEntity.id, currencyEntity)
+        }
+      }
+
+      else if (topic0 === ListingABI.events.PermissionContractUpdated?.topic) {
+        const { oldPermission, newPermission } = ListingABI.events.PermissionContractUpdated.decode(log)
+        console.log(`Permission contract updated from ${oldPermission} to ${newPermission} at block ${blockNumber}`)
+      }
+
       else if (topic0 === ListingABI.events.NFTPurchased?.topic) {
         const { listingId, buyer, quantity, totalPrice } = ListingABI.events.NFTPurchased.decode(log)
         const listingIdStr = listingId.toString()
@@ -249,12 +346,21 @@ export async function processListingEvents(
           const buyerSubject = await getOrCreateSubject(buyer)
           let usedCurrency = await getOrCreateCurrency('0x0000000000000000000000000000000000000000')
 
-          const approvedCurrencies = await ctx.store.find(CurrencyApproval, {
-            where: { listing: { id: listingIdStr } }
-          })
+          const approvalsInBatch = currencyApprovals.filter(a =>
+            a.listing.id === listingIdStr
+          )
 
-          if (approvedCurrencies.length > 0) {
-            for (const approval of approvedCurrencies) {
+          let allApprovals = [...approvalsInBatch]
+
+          if (approvalsInBatch.length === 0) {
+            const approvalsFromDb = await ctx.store.find(CurrencyApproval, {
+              where: { listing: { id: listingIdStr } }
+            })
+            allApprovals = approvalsFromDb
+          }
+
+          if (allApprovals.length > 0) {
+            for (const approval of allApprovals) {
               const expectedPrice = approval.pricePerToken * quantity
               if (expectedPrice === totalPrice) {
                 usedCurrency = approval.currency
@@ -264,8 +370,7 @@ export async function processListingEvents(
           }
 
           if (listing.quantity < quantity) {
-            console.error(`Insufficient quantity in listing ${listingIdStr}: available ${listing.quantity}, requested ${quantity}`)
-            continue
+            console.warn(`Quantity mismatch in listing ${listingIdStr}: available ${listing.quantity}, purchased ${quantity}. Recording transaction anyway.`)
           }
 
           const purchaseHistory = new PurchaseHistory({
@@ -285,7 +390,11 @@ export async function processListingEvents(
           })
           purchaseHistories.push(purchaseHistory)
 
-          listing.quantity = listing.quantity - quantity
+          if (listing.quantity >= quantity) {
+            listing.quantity = listing.quantity - quantity
+          } else {
+            listing.quantity = BigInt(0)
+          }
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
 
