@@ -12,119 +12,26 @@ import {
   BuyerApproval,
   SupportedCurrency
 } from '../model'
+import * as ListingABI from '../abi/Listing'
 
-export interface ListingABI {
-  events: {
-    ListingCreated: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-        owner: string
-        assetContract: string
-        tokenId: bigint
-        quantity: bigint
-        currency: string
-        pricePerToken: bigint
-        startTimestamp: bigint
-        endTimestamp: bigint
-        reserved: boolean
-      }
-    }
-    ListingUpdated: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-        assetContract: string
-        tokenId: bigint
-        quantity: bigint
-        currency: string
-        pricePerToken: bigint
-        startTimestamp: bigint
-        endTimestamp: bigint
-        reserved: boolean
-      }
-    }
-    ListingCompleted: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-      }
-    }
-    ListingCancelled: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-      }
-    }
-    BuyerApproved: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-        buyer: string
-        isApproved: boolean
-      }
-    }
-    CurrencyApproved: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-        currency: string
-        price: bigint
-      }
-    }
-    NFTPurchased: {
-      topic: string
-      decode: (log: any) => {
-        listingId: bigint
-        buyer: string
-        quantity: bigint
-        totalPrice: bigint
-      }
-    }
-    FeeWithdrawn: {
-      topic: string
-      decode: (log: any) => {
-        admin: string
-        currency: string
-        amount: bigint
-      }
-    }
-    CurrencyFeeUpdated: {
-      topic: string
-      decode: (log: any) => {
-        currency: string
-        fee: bigint
-      }
-    }
-    PermissionContractUpdated: {
-      topic: string
-      decode: (log: any) => {
-        oldPermission: string
-        newPermission: string
-      }
-    }
-  }
-}
-
-export function getListingTopics(abi: ListingABI): string[] {
+export function getListingTopics(): string[] {
   return [
-    abi.events.ListingCreated?.topic,
-    abi.events.ListingUpdated?.topic,
-    abi.events.ListingCompleted?.topic,
-    abi.events.ListingCancelled?.topic,
-    abi.events.BuyerApproved?.topic,
-    abi.events.CurrencyApproved?.topic,
-    abi.events.NFTPurchased?.topic,
-    abi.events.FeeWithdrawn?.topic,
-    abi.events.CurrencyFeeUpdated?.topic,
-    abi.events.PermissionContractUpdated?.topic
+    ListingABI.events.ListingCreated?.topic,
+    ListingABI.events.ListingUpdated?.topic,
+    ListingABI.events.ListingCompleted?.topic,
+    ListingABI.events.ListingCancelled?.topic,
+    ListingABI.events.BuyerApproved?.topic,
+    ListingABI.events.CurrencyApproved?.topic,
+    ListingABI.events.NFTPurchased?.topic,
+    ListingABI.events.FeeWithdrawn?.topic,
+    ListingABI.events.CurrencyFeeUpdated?.topic,
+    ListingABI.events.PermissionContractUpdated?.topic
   ].filter(Boolean) as string[]
 }
 
 export async function processListingEvents(
   logs: any[],
   ctx: any,
-  abi: ListingABI,
   contractAddress: string,
   listingMap: Map<string, Listing>,
   subjectMap: Map<string, Subject>,
@@ -258,11 +165,11 @@ export async function processListingEvents(
     const transactionHash = log.transactionHash || ''
 
     try {
-      if (topic0 === abi.events.ListingCreated?.topic) {
+      if (topic0 === ListingABI.events.ListingCreated?.topic) {
         const {
           listingId, owner, assetContract, tokenId, quantity,
           currency, pricePerToken, startTimestamp, endTimestamp, reserved
-        } = abi.events.ListingCreated.decode(log)
+        } = ListingABI.events.ListingCreated.decode(log)
 
         const listingIdStr = listingId.toString()
         const ownerSubject = await getOrCreateSubject(owner)
@@ -291,11 +198,11 @@ export async function processListingEvents(
         }
       }
 
-      else if (topic0 === abi.events.ListingUpdated?.topic) {
+      else if (topic0 === ListingABI.events.ListingUpdated?.topic) {
         const {
           listingId, assetContract, tokenId, quantity,
           currency, pricePerToken, startTimestamp, endTimestamp, reserved
-        } = abi.events.ListingUpdated.decode(log)
+        } = ListingABI.events.ListingUpdated.decode(log)
 
         const listingIdStr = listingId.toString()
         let listing = await getListing(listingIdStr)
@@ -312,8 +219,8 @@ export async function processListingEvents(
         }
       }
 
-      else if (topic0 === abi.events.ListingCompleted?.topic) {
-        const { listingId } = abi.events.ListingCompleted.decode(log)
+      else if (topic0 === ListingABI.events.ListingCompleted?.topic) {
+        const { listingId } = ListingABI.events.ListingCompleted.decode(log)
         const listingIdStr = listingId.toString()
         let listing = await getListing(listingIdStr)
         if (listing) {
@@ -323,8 +230,8 @@ export async function processListingEvents(
         }
       }
 
-      else if (topic0 === abi.events.ListingCancelled?.topic) {
-        const { listingId } = abi.events.ListingCancelled.decode(log)
+      else if (topic0 === ListingABI.events.ListingCancelled?.topic) {
+        const { listingId } = ListingABI.events.ListingCancelled.decode(log)
         const listingIdStr = listingId.toString()
         let listing = await getListing(listingIdStr)
         if (listing) {
@@ -334,8 +241,8 @@ export async function processListingEvents(
         }
       }
 
-      else if (topic0 === abi.events.NFTPurchased?.topic) {
-        const { listingId, buyer, quantity, totalPrice } = abi.events.NFTPurchased.decode(log)
+      else if (topic0 === ListingABI.events.NFTPurchased?.topic) {
+        const { listingId, buyer, quantity, totalPrice } = ListingABI.events.NFTPurchased.decode(log)
         const listingIdStr = listingId.toString()
         let listing = await getListing(listingIdStr)
         if (listing) {
