@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 type Subject @entity {
   id: ID! @index # address
   subjectType: SubjectType! @index
@@ -306,3 +307,4 @@ enum PermissionEventType {
   ROLE_REVOKED
   ADMIN_ROLE_CHANGED
 }
+
