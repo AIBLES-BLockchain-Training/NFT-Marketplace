@@ -19,17 +19,22 @@ async function deployPermissions(owner: string, signer: any) {
   await permissions['initialize'](owner);
   console.log(`Permissions initialized with admin: ${owner}`);
   
-  console.log("Waiting 60 seconds before verification...");
-  await new Promise(resolve => setTimeout(resolve, 60000));
-  
+  console.log("Waiting 30 seconds before verification...");
+  await new Promise(resolve => setTimeout(resolve, 30000));
+
   try {
+    console.log("Verifying Permissions on Etherscan...");
     await hre.run("verify:verify", {
       address: permissionsAddress,
       constructorArguments: [],
     });
     console.log("Permissions verified on Etherscan");
-  } catch (error) {
-    console.log("Verification failed:", error);
+  } catch (error: any) {
+    if (error.message.includes("Already Verified")) {
+      console.log("Permissions already verified");
+    } else {
+      console.log("Verification failed (can verify manually later):", error.message);
+    }
   }
   
   return permissionsAddress;
@@ -45,17 +50,22 @@ async function deployExtensionManager(owner: string, signer: any) {
   const extensionManagerAddress = await extensionManager.getAddress();
   console.log(`ExtensionManager deployed to: ${extensionManagerAddress}`);
   
-  console.log("Waiting 60 seconds before verification...");
-  await new Promise(resolve => setTimeout(resolve, 60000));
-  
+  console.log("Waiting 30 seconds before verification...");
+  await new Promise(resolve => setTimeout(resolve, 30000));
+
   try {
+    console.log("Verifying ExtensionManager on Etherscan...");
     await hre.run("verify:verify", {
       address: extensionManagerAddress,
       constructorArguments: [owner],
     });
     console.log("ExtensionManager verified on Etherscan");
-  } catch (error) {
-    console.log("Verification failed:", error);
+  } catch (error: any) {
+    if (error.message.includes("Already Verified")) {
+      console.log("ExtensionManager already verified");
+    } else {
+      console.log("Verification failed (can verify manually later):", error.message);
+    }
   }
   
   return extensionManagerAddress;
@@ -71,17 +81,22 @@ async function deployRouter(extensionManagerAddress: string, signer: any) {
   const routerAddress = await router.getAddress();
   console.log(`Router deployed to: ${routerAddress}`);
   
-  console.log("Waiting 60 seconds before verification...");
-  await new Promise(resolve => setTimeout(resolve, 60000));
-  
+  console.log("Waiting 30 seconds before verification...");
+  await new Promise(resolve => setTimeout(resolve, 30000));
+
   try {
+    console.log("Verifying Router on Etherscan...");
     await hre.run("verify:verify", {
       address: routerAddress,
       constructorArguments: [extensionManagerAddress],
     });
     console.log("Router verified on Etherscan");
-  } catch (error) {
-    console.log("Verification failed:", error);
+  } catch (error: any) {
+    if (error.message.includes("Already Verified")) {
+      console.log("Router already verified");
+    } else {
+      console.log("Verification failed (can verify manually later):", error.message);
+    }
   }
   
   return routerAddress;
@@ -101,17 +116,22 @@ async function deployListing(permissionsAddress: string, signer: any) {
   await listing['initializeListing'](permissionsAddress);
   console.log(`Listing initialized with permissions: ${permissionsAddress}`);
   
-  console.log("Waiting 60 seconds before verification...");
-  await new Promise(resolve => setTimeout(resolve, 60000));
-  
+  console.log("Waiting 30 seconds before verification...");
+  await new Promise(resolve => setTimeout(resolve, 30000));
+
   try {
+    console.log("Verifying Listing on Etherscan...");
     await hre.run("verify:verify", {
       address: listingAddress,
       constructorArguments: [],
     });
     console.log("Listing verified on Etherscan");
-  } catch (error) {
-    console.log("Verification failed:", error);
+  } catch (error: any) {
+    if (error.message.includes("Already Verified")) {
+      console.log("Listing already verified");
+    } else {
+      console.log("Verification failed (can verify manually later):", error.message);
+    }
   }
   
   return listingAddress;
@@ -145,25 +165,34 @@ async function deployOffer(feeRecipient: string, feePercentage: number, permissi
 
 async function deployNFTAuction(permissionsAddress: string, signer: any) {
   console.log("Deploying NFTAuction contract...");
-  
+
   const NFTAuction = await ethers.getContractFactory("NFTAuction", signer);
-  const nftAuction = await NFTAuction.deploy(permissionsAddress);
+  const nftAuction = await NFTAuction.deploy();
   await nftAuction.waitForDeployment();
   
   const nftAuctionAddress = await nftAuction.getAddress();
   console.log(`NFTAuction deployed to: ${nftAuctionAddress}`);
-  
-  console.log("Waiting 60 seconds before verification...");
-  await new Promise(resolve => setTimeout(resolve, 60000));
-  
+
+  console.log("Initializing NFTAuction...");
+  await nftAuction['initializeAuction'](permissionsAddress);
+  console.log(`NFTAuction initialized with permissions: ${permissionsAddress}`);
+
+  console.log("Waiting 30 seconds before verification...");
+  await new Promise(resolve => setTimeout(resolve, 30000));
+
   try {
+    console.log("Verifying NFTAuction on Etherscan...");
     await hre.run("verify:verify", {
       address: nftAuctionAddress,
-      constructorArguments: [permissionsAddress],
+      constructorArguments: [], // NFTAuction has no constructor parameters
     });
     console.log("NFTAuction verified on Etherscan");
-  } catch (error) {
-    console.log("Verification failed:", error);
+  } catch (error: any) {
+    if (error.message.includes("Already Verified")) {
+      console.log("NFTAuction already verified");
+    } else {
+      console.log("Verification failed (can verify manually later):", error.message);
+    }
   }
   
   return nftAuctionAddress;
@@ -195,29 +224,29 @@ async function main() {
     // const permissionsAddress = await deployPermissions(ADMIN_ADDRESS, signer);
     // console.log("-".repeat(60));
     
-    const extensionManagerAddress = await deployExtensionManager(ADMIN_ADDRESS, signer);
-    console.log("-".repeat(60));
-    
-    const routerAddress = await deployRouter(extensionManagerAddress, signer);
-    console.log("-".repeat(60));
-    
-    const listingAddress = await deployListing("0x3FdBdDFB20695921F8521D59B209c82fc902775B", signer);
-    console.log("-".repeat(60));
-    
-    // const offerAddress = await deployOffer(FEE_RECIPIENT, FEE_PERCENTAGE, permissionsAddress);
+    // const extensionManagerAddress = await deployExtensionManager(ADMIN_ADDRESS, signer);
     // console.log("-".repeat(60));
     
-    // const nftAuctionAddress = await deployNFTAuction(permissionsAddress);
+    // const routerAddress = await deployRouter(extensionManagerAddress, signer);
     // console.log("-".repeat(60));
+    
+    // const listingAddress = await deployListing("0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
+    // console.log("-".repeat(60));
+    
+    // const offerAddress = await deployOffer(FEE_RECIPIENT, FEE_PERCENTAGE, "0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
+    // console.log("-".repeat(60));
+    
+    const nftAuctionAddress = await deployNFTAuction("0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
+    console.log("-".repeat(60));
     
     console.log("ALL CONTRACTS DEPLOYED SUCCESSFULLY!");
     console.log("\nContract Addresses:");
     // console.log(`   Permissions:      ${permissionsAddress}`);
-    console.log(`   ExtensionManager: ${extensionManagerAddress}`);
-    console.log(`   Router:           ${routerAddress}`);
-    console.log(`   Listing:          ${listingAddress}`);
+    // console.log(`   ExtensionManager: ${extensionManagerAddress}`);
+    // console.log(`   Router:           ${routerAddress}`);
+    // console.log(`   Listing:          ${listingAddress}`);
     // console.log(`   Offer:            ${offerAddress}`);
-    // console.log(`   NFTAuction:       ${nftAuctionAddress}`);
+    console.log(`   NFTAuction:       ${nftAuctionAddress}`);
     
     console.log("\nSave these addresses for your frontend configuration!");
     

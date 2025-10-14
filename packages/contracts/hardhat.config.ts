@@ -53,21 +53,15 @@ const config: HardhatUserConfig = {
     hardhat: {},
     bscMainnet: {
       url: 'https://bsc-rpc.publicnode.com',
-      accounts: process.env['BSC_ACCOUNT_PRIVATE'] ? [process.env['BSC_ACCOUNT_PRIVATE']] : [],
+      accounts: process.env['PRIVATE_KEY'] ? [process.env['PRIVATE_KEY']] : [],
     },
     bscTestnet: {
       url: 'https://bsc-testnet-rpc.publicnode.com',
-      accounts: [
-        process.env['BSC_ACCOUNT_PRIVATE'] ? process.env['BSC_ACCOUNT_PRIVATE'] : '',
-        process.env['BSC_ACCOUNT_PRIVATE_2'] ? process.env['BSC_ACCOUNT_PRIVATE_2'] : '',
-      ],
+      accounts: process.env['PRIVATE_KEY'] ? [process.env['PRIVATE_KEY']] : [],
     },
     ethSepolia: {
       url: 'https://ethereum-sepolia-rpc.publicnode.com',
-      accounts: [
-        process.env['ETH_ACCOUNT_PRIVATE'] ? process.env['ETH_ACCOUNT_PRIVATE'] : '',
-        process.env['ETH_ACCOUNT_PRIVATE_2'] ? process.env['ETH_ACCOUNT_PRIVATE_2'] : '',
-      ],
+      accounts: process.env['PRIVATE_KEY'] ? [process.env['PRIVATE_KEY']] : [],
     },
   },
   etherscan: {

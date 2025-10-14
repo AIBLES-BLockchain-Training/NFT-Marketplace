@@ -7,20 +7,23 @@ async function main() {
   console.log('Deploying Permissions...');
   const owner = '0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a';
 
-  const Permissions = await ethers.getContractFactory('Permissions');
-  const permissions = await Permissions.deploy(owner);
-
+  const Permissions = await ethers.getContractFactory("Permissions");
+  const permissions = await Permissions.deploy();
+  
   const permissionsAddr = await permissions.getAddress();
-  console.log('Permissions deployed to:', permissionsAddr);
-
-  console.log('Wait to verify contract');
+  console.log("Permissions deployed to:", permissionsAddr);
+  
+  console.log("Initializing Permissions contract...");
+  const tx = await permissions['initialize'](owner);
+  await tx.wait();
+  console.log("Permissions initialized with admin:", owner);
 
   await new Promise((resolve) => {
-    setTimeout(resolve, 60 * 1000);
+      setTimeout(resolve, 60 * 1000);
   });
-  await run('verify:verify', {
-    address: permissionsAddr,
-    constructorArguments: [owner],
+  await run("verify:verify", {
+      address: permissionsAddr,
+      constructorArguments: [],
   });
 }
 

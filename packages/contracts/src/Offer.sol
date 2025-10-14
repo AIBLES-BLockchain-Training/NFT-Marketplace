@@ -8,10 +8,19 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./IPermissions.sol";
 
 contract NFTOffer is ReentrancyGuard {
-    // Role constants
-    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
-    bytes32 public constant OFFER_ROLE = keccak256("OFFER_ROLE");
-    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
+    // Use functions instead of constants to work with delegatecall
+    function MANAGEMENT_ROLE() public pure returns (bytes32) {
+        return keccak256("MANAGEMENT_ROLE");
+    }
+
+    function OFFER_ROLE() public pure returns (bytes32) {
+        return keccak256("OFFER_ROLE");
+    }
+
+    function NFT_ROLE() public pure returns (bytes32) {
+        return keccak256("NFT_ROLE");
+    }
+
     enum Status {
         UNSET,
         ACTIVE,
@@ -115,12 +124,12 @@ contract NFTOffer is ReentrancyGuard {
     }
 
     modifier onlyOfferRole() {
-        if (!permissions.hasRole(OFFER_ROLE, msg.sender)) revert CallerDoesNotHaveOfferRole();
+        if (!permissions.hasRole(OFFER_ROLE(), msg.sender)) revert CallerDoesNotHaveOfferRole();
         _;
     }
 
     function makeOffer(OfferParams memory params) external nonReentrant onlyOfferRole returns (uint256 offerId) {
-        if (!permissions.hasRole(NFT_ROLE, params.assetContract)) revert NFTNotWhitelisted();
+        if (!permissions.hasRole(NFT_ROLE(), params.assetContract)) revert NFTNotWhitelisted();
 
         if (!permissions.supportedCurrencies(params.currency)) revert CurrencyNotSupported();
 
@@ -299,14 +308,16 @@ contract NFTOffer is ReentrancyGuard {
 
     // Admin functions
     function setFeeRecipient(address _feeRecipient) external {
-        if (!permissions.hasRole(MANAGEMENT_ROLE, msg.sender)) revert CallerDoesNotHaveManagementRole();
+        if (!permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
+
         if (_feeRecipient == address(0)) revert ZeroAddress();
         feeRecipient = _feeRecipient;
     }
 
     function setFeePercentage(uint256 _feePercentage) external {
-        if (!permissions.hasRole(MANAGEMENT_ROLE, msg.sender)) revert CallerDoesNotHaveManagementRole();
-        require(_feePercentage <= 1000, "Fee too high"); 
+        if (!permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
+        require(_feePercentage <= 1000, "Fee too high");
         feePercentage = _feePercentage;
     }
 }
+

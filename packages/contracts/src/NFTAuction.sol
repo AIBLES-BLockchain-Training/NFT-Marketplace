@@ -36,9 +36,20 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     }
 
     // ============= CONSTANTS & ENUMS =============
-    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
-    bytes32 public constant AUCTION_ROLE = keccak256("AUCTION_ROLE");
-    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
+    // Use functions instead of constants to work with delegatecall
+    function MANAGEMENT_ROLE() public pure returns (bytes32) {
+        return keccak256("MANAGEMENT_ROLE");
+    }
+
+    function AUCTION_ROLE() public pure returns (bytes32) {
+        return keccak256("AUCTION_ROLE");
+    }
+
+    function NFT_ROLE() public pure returns (bytes32) {
+        return keccak256("NFT_ROLE");
+    }
+
+    uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
     uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
@@ -131,14 +142,14 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     function hasAuctionRole(address _account) internal view {
         AuctionStorage storage s = _auctionStorage();
         if (address(s.coreStorage.permissionsContract) == address(0)) revert("Caller does not have the auction role");
-        if (!s.coreStorage.permissionsContract.hasRole(AUCTION_ROLE, _account)) {
+        if (!s.coreStorage.permissionsContract.hasRole(AUCTION_ROLE(), _account)) {
             revert("Caller does not have the auction role");
         }
     }
 
     function hasAuctionNFTRole(address _nft) internal view {
         AuctionStorage storage s = _auctionStorage();
-        if (!s.coreStorage.permissionsContract.hasRole(NFT_ROLE, _nft)) {
+        if (!s.coreStorage.permissionsContract.hasRole(NFT_ROLE(), _nft)) {
             revert("NFT contract is not whitelisted");
         }
     }
@@ -152,7 +163,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
 
     function _checkManagementPermission() internal view {
         AuctionStorage storage s = _auctionStorage();
-        if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE, msg.sender)) {
+        if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE(), msg.sender)) {
             revert("Caller does not have MANAGEMENT_ROLE");
         }
     }

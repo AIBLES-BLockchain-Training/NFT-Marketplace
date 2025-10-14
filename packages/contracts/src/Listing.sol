@@ -103,12 +103,21 @@ contract Listing is ReentrancyGuard {
         }
     }
     
-    
+
     // ============= CONSTANTS & ENUMS =============
-    
-    bytes32 public constant MANAGEMENT_ROLE = keccak256("MANAGEMENT_ROLE");
-    bytes32 public constant LISTING_ROLE = keccak256("LISTING_ROLE");
-    bytes32 public constant NFT_ROLE = keccak256("NFT_ROLE");
+
+    // Use functions instead of constants to work with delegatecall
+    function MANAGEMENT_ROLE() public pure returns (bytes32) {
+        return keccak256("MANAGEMENT_ROLE");
+    }
+
+    function LISTING_ROLE() public pure returns (bytes32) {
+        return keccak256("LISTING_ROLE");
+    }
+
+    function NFT_ROLE() public pure returns (bytes32) {
+        return keccak256("NFT_ROLE");
+    }
 
     enum Status {
         UNSET,
@@ -289,7 +298,7 @@ contract Listing is ReentrancyGuard {
     function _checkManagementPermission() internal view {
         ListingStorage storage s = _listingStorage();
         if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
-        if (!s.core.permissionContract.hasRole(MANAGEMENT_ROLE, msg.sender)) {
+        if (!s.core.permissionContract.hasRole(MANAGEMENT_ROLE(), msg.sender)) {
             revert("Caller does not have MANAGEMENT_ROLE");
         }
     }
@@ -297,7 +306,7 @@ contract Listing is ReentrancyGuard {
     function _checkListingPermission(address user) internal view {
         ListingStorage storage s = _listingStorage();
         if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
-        if (!s.core.permissionContract.hasRole(LISTING_ROLE, user)) {
+        if (!s.core.permissionContract.hasRole(LISTING_ROLE(), user)) {
             revert UserNotAuthorizedToCreateListing(user);
         }
     }
@@ -305,7 +314,7 @@ contract Listing is ReentrancyGuard {
     function _checkNFTPermission(address nftContract) internal view {
         ListingStorage storage s = _listingStorage();
         if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
-        if (!s.core.permissionContract.hasRole(NFT_ROLE, nftContract)) {
+        if (!s.core.permissionContract.hasRole(NFT_ROLE(), nftContract)) {
             revert NFTNotWhitelistedForListing(nftContract);
         }
     }
@@ -321,13 +330,13 @@ contract Listing is ReentrancyGuard {
     function hasListingPermission(address user) external view returns (bool) {
         ListingStorage storage s = _listingStorage();
         if (address(s.core.permissionContract) == address(0)) return false;
-        return s.core.permissionContract.hasRole(LISTING_ROLE, user);
+        return s.core.permissionContract.hasRole(LISTING_ROLE(), user);
     }
 
     function isNFTWhitelisted(address nftContract) external view returns (bool) {
         ListingStorage storage s = _listingStorage();
         if (address(s.core.permissionContract) == address(0)) return false;
-        return s.core.permissionContract.hasRole(NFT_ROLE, nftContract);
+        return s.core.permissionContract.hasRole(NFT_ROLE(), nftContract);
     }
 
     function isCurrencySupported(address currency) external view returns (bool) {
