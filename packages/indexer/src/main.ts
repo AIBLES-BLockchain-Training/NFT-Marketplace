@@ -17,17 +17,12 @@ import {
 
 import {
   processPermissionsEvents,
-  getPermissionsTopics,
-  type PermissionsABI
+  getPermissionsTopics
 } from './processors/permissions.processor'
 import {
   processListingEvents,
-  getListingTopics,
-  type ListingABI
+  getListingTopics
 } from './processors/listing.processor'
-
-import * as permissionsAbi from './abi/Permissions'
-import * as listingAbi from './abi/Listing'
 
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
@@ -74,7 +69,7 @@ class CombinedIndexer {
     })
 
     // Add logs for permissions contract
-    const permissionsTopics = getPermissionsTopics(permissionsAbi as PermissionsABI)
+    const permissionsTopics = getPermissionsTopics()
     if (permissionsTopics.length > 0) {
       this.processor.addLog({
         address: [CONTRACT_ADDRESSES.permissions.toLowerCase()],
@@ -83,7 +78,7 @@ class CombinedIndexer {
     }
 
     // Add logs for listing contract
-    const listingTopics = getListingTopics(listingAbi as ListingABI)
+    const listingTopics = getListingTopics()
     if (listingTopics.length > 0) {
       this.processor.addLog({
         address: [CONTRACT_ADDRESSES.router.toLowerCase()],
@@ -134,7 +129,6 @@ class CombinedIndexer {
         await processPermissionsEvents(
           permissionsLogs,
           ctx,
-          permissionsAbi as PermissionsABI,
           CONTRACT_ADDRESSES.permissions.toLowerCase(),
           roleMap,
           subjectMap,
@@ -150,7 +144,6 @@ class CombinedIndexer {
         await processListingEvents(
           listingLogs,
           ctx,
-          listingAbi as ListingABI,
           CONTRACT_ADDRESSES.router.toLowerCase(),
           listingMap,
           subjectMap,
@@ -170,7 +163,19 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(nftMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
-      await ctx.store.save(roleAssignments)
+
+      const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
+      const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
+
+      if (assignmentsToRemove.length > 0) {
+        console.log(`Removing ${assignmentsToRemove.length} role assignments`)
+        await ctx.store.remove(assignmentsToRemove)
+      }
+
+      if (assignmentsToSave.length > 0) {
+        await ctx.store.save(assignmentsToSave)
+      }
+
       await ctx.store.save(permissionEvents)
       await ctx.store.save(currencyApprovals)
       await ctx.store.save(buyerApprovals)
