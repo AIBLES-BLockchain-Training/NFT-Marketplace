@@ -5,7 +5,9 @@ import {
   RoleAssignment,
   PermissionEvent,
   PermissionEventType,
-  SupportedCurrency
+  SupportedCurrency,
+  Collection,
+  CollectionType
 } from '../model'
 import * as PermissionsABI from '../abi/Permissions'
 
@@ -34,7 +36,8 @@ export async function processPermissionsEvents(
   subjectMap: Map<string, Subject>,
   currencyMap: Map<string, SupportedCurrency>,
   roleAssignments: RoleAssignment[],
-  permissionEvents: PermissionEvent[]
+  permissionEvents: PermissionEvent[],
+  collectionMap: Map<string, Collection>
 ) {
   async function getOrCreateRole(roleHash: string, roleName?: string): Promise<Role> {
     if (roleMap.has(roleHash)) {
@@ -55,7 +58,7 @@ export async function processPermissionsEvents(
     return role
   }
 
-  async function getOrCreateSubject(address: string): Promise<Subject> {
+  async function getOrCreateSubject(address: string, type?: SubjectType): Promise<Subject> {
     const subjectId = address.toLowerCase()
 
     if (subjectMap.has(subjectId)) {
@@ -64,7 +67,7 @@ export async function processPermissionsEvents(
 
     let subject = await ctx.store.get(Subject, subjectId)
     if (!subject) {
-      const subjectType = SubjectType.USER
+      const subjectType = type || SubjectType.USER
 
       subject = new Subject({
         id: subjectId,
@@ -98,6 +101,36 @@ export async function processPermissionsEvents(
       return currency
     }
     return null
+  }
+
+  async function getOrCreateCollection(contractAddress: string, creator?: Subject): Promise<Collection> {
+    const collectionId = contractAddress.toLowerCase()
+
+    if (collectionMap.has(collectionId)) {
+      return collectionMap.get(collectionId)!
+    }
+
+    let collection = await ctx.store.get(Collection, collectionId)
+    if (!collection) {
+      collection = new Collection({
+        id: collectionId,
+        name: `Collection ${contractAddress.slice(0, 6)}...${contractAddress.slice(-4)}`,
+        symbol: 'NFT',
+        description: undefined,
+        logoUrl: undefined,
+        bannerUrl: undefined,
+        collectionType: CollectionType.ERC721,
+        creator: creator,
+        totalSupply: BigInt(0),
+        floorPrice: undefined,
+        createdAt: new Date(),
+        nfts: [],
+        traits: [],
+        traitStats: []
+      })
+    }
+    collectionMap.set(collectionId, collection)
+    return collection
   }
 
   for (let log of logs) {
@@ -314,11 +347,79 @@ export async function processPermissionsEvents(
       else if (topic0 === PermissionsABI.events.NFTRoleAssigned?.topic) {
         const { nft } = PermissionsABI.events.NFTRoleAssigned.decode(log)
 
-        console.log(`NFT role assigned to ${nft} at block ${blockNumber}`)
+        // NFT_ROLE hash = keccak256('NFT_ROLE')
+        const NFT_ROLE_HASH = '0x8736816fdbcc15f6cc3f6dcf60e42b0ef33eb02281d312c807a38b4ad09190c0'
+
+        const role = await getOrCreateRole(NFT_ROLE_HASH, 'NFT_ROLE')
+        const nftSubject = await getOrCreateSubject(nft, SubjectType.CONTRACT)
+
+        // Create Collection for this NFT contract
+        const collection = await getOrCreateCollection(nft, nftSubject)
+
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === nftSubject.id && a.role.id === role.id && !(a as any)._toRemove
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: nftSubject.id },
+              role: { id: role.id }
+            }
+          })
+        }
+
+        if (!existingAssignment) {
+          const assignmentId = `${nftSubject.id}-${role.id}-${transactionHash}-${log.logIndex}`
+          const assignment = new RoleAssignment({
+            id: assignmentId,
+            subject: nftSubject,
+            role: role,
+            assignedAt: timestamp,
+            assignedBy: contractAddress,
+            transactionHash: transactionHash
+          })
+          roleAssignments.push(assignment)
+        } else {
+          existingAssignment.assignedAt = timestamp
+          existingAssignment.assignedBy = contractAddress
+          existingAssignment.transactionHash = transactionHash
+          roleAssignments.push(existingAssignment)
+        }
+
+        console.log(`NFT role assigned to ${nft} (collection created/updated) at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.NFTRoleRevoked?.topic) {
         const { nft } = PermissionsABI.events.NFTRoleRevoked.decode(log)
+
+        // NFT_ROLE hash = keccak256('NFT_ROLE')
+        const NFT_ROLE_HASH = '0x8736816fdbcc15f6cc3f6dcf60e42b0ef33eb02281d312c807a38b4ad09190c0'
+
+        const role = await getOrCreateRole(NFT_ROLE_HASH, 'NFT_ROLE')
+        const nftSubject = await getOrCreateSubject(nft, SubjectType.CONTRACT)
+
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === nftSubject.id && a.role.id === role.id
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: nftSubject.id },
+              role: { id: role.id }
+            }
+          })
+        }
+
+        if (existingAssignment) {
+          const index = roleAssignments.indexOf(existingAssignment)
+          if (index > -1) {
+            roleAssignments.splice(index, 1)
+          }
+          (existingAssignment as any)._toRemove = true
+          roleAssignments.push(existingAssignment)
+        }
 
         console.log(`NFT role revoked from ${nft} at block ${blockNumber}`)
       }

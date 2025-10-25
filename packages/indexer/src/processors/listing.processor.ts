@@ -42,7 +42,7 @@ export async function processListingEvents(
   currencyApprovals: CurrencyApproval[],
   buyerApprovals: BuyerApproval[]
 ) {
-  async function getOrCreateSubject(address: string): Promise<Subject> {
+  async function getOrCreateSubject(address: string, type?: SubjectType): Promise<Subject> {
     const subjectId = address.toLowerCase()
     if (subjectMap.has(subjectId)) {
       return subjectMap.get(subjectId)!
@@ -51,7 +51,7 @@ export async function processListingEvents(
     if (!subject) {
       subject = new Subject({
         id: subjectId,
-        subjectType: SubjectType.USER,
+        subjectType: type || SubjectType.USER,
         name: `${address.slice(0, 6)}...${address.slice(-4)}`,
         avatarUrl: undefined,
         backgroundUrl: undefined,
@@ -103,7 +103,10 @@ export async function processListingEvents(
     }
     let nft = await ctx.store.get(NFT, nftId)
     if (!nft) {
-      const collection = await getOrCreateCollection(contractAddress, owner)
+      // Create Subject for NFT contract with type CONTRACT
+      // This ensures NFT contract always has correct Subject type
+      const contractSubject = await getOrCreateSubject(contractAddress, SubjectType.CONTRACT)
+      const collection = await getOrCreateCollection(contractAddress, contractSubject)
       nft = new NFT({
         id: nftId,
         collection: collection,

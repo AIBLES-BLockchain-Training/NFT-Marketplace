@@ -134,7 +134,8 @@ class CombinedIndexer {
           subjectMap,
           currencyMap,
           roleAssignments,
-          permissionEvents
+          permissionEvents,
+          collectionMap
         )
       }
 
