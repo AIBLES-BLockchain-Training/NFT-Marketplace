@@ -9,7 +9,7 @@ import { Spinner } from '../../components/common/Spinner';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_AUCTIONS_QUERY } from '../../lib/graphql/queries';
 import { Auction } from '../../types';
-import { formatEther } from '../../lib/web3/utils';
+import { formatEth } from '../../lib/web3/utils';
 import toast from 'react-hot-toast';
 
 export default function AuctionsPage() {
@@ -40,8 +40,8 @@ export default function AuctionsPage() {
         where,
       });
 
-      if (result.data?.auctions) {
-        setAuctions(result.data.auctions);
+      if (result.auctions) {
+        setAuctions(result.auctions);
       }
     } catch (error) {
       console.error('Failed to load auctions:', error);
@@ -193,7 +193,7 @@ export default function AuctionsPage() {
                         {auction.winningBid ? (
                           <div className="flex items-baseline gap-2">
                             <p className="text-xl font-bold text-white">
-                              {formatEther(auction.winningBid.bidAmount)}
+                              {formatEth(auction.winningBid.bidAmount)}
                             </p>
                             <p className="text-sm text-gray-400">
                               {auction.currency.symbol}
@@ -202,7 +202,7 @@ export default function AuctionsPage() {
                         ) : (
                           <div className="flex items-baseline gap-2">
                             <p className="text-lg font-semibold text-gray-400">
-                              {formatEther(auction.startPrice)}
+                              {formatEth(auction.startPrice)}
                             </p>
                             <p className="text-xs text-gray-500">Start</p>
                           </div>

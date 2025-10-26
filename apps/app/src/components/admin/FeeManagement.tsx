@@ -85,7 +85,7 @@ export function FeeManagement() {
               <label className="block text-sm font-medium text-gray-300 mb-2">Currency Address</label>
               <Input
                 type="text"
-                placeholder="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE (ETH)"
+                placeholder="0x0000000000000000000000000000000000000000 (ETH/Native)"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
                 required
@@ -119,7 +119,7 @@ export function FeeManagement() {
               <label className="block text-sm font-medium text-gray-300 mb-2">Currency Address</label>
               <Input
                 type="text"
-                placeholder="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE (ETH)"
+                placeholder="0x0000000000000000000000000000000000000000 (ETH/Native)"
                 value={withdrawCurrency}
                 onChange={(e) => setWithdrawCurrency(e.target.value)}
                 required

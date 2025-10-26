@@ -14,7 +14,7 @@ import {
   TokenOwnership
 } from '../model'
 import * as ListingABI from '../abi/Listing'
-import { fetchCollectionMetadata, detectContractType } from '../utils/metadata'
+import { fetchCollectionMetadata, detectContractType, fetchNFTMetadata } from '../utils/metadata'
 import { ethers } from 'ethers'
 
 export function getListingTopics(): string[] {
@@ -125,20 +125,29 @@ export async function processListingEvents(
       // This ensures NFT contract always has correct Subject type
       const contractSubject = await getOrCreateSubject(contractAddress, SubjectType.CONTRACT)
       const collection = await getOrCreateCollection(contractAddress, contractSubject)
+
+      // Fetch NFT metadata from blockchain
+      console.log(`Fetching metadata for NFT: ${contractAddress}:${tokenId}`)
+      const metadata = await fetchNFTMetadata(contractAddress, tokenId.toString(), provider)
+
       nft = new NFT({
         id: nftId,
         collection: collection,
         tokenId: tokenId,
-        name: `NFT #${tokenId}`,
-        imageUrl: undefined,
-        description: undefined,
-        metadataUri: undefined,
+        name: metadata?.name || `${collection.name} #${tokenId}`,
+        imageUrl: metadata?.image,
+        description: metadata?.description,
+        metadataUri: undefined, // Can be populated if we store the tokenURI
         listings: [],
         purchaseHistory: [],
         traits: [],
         extensions: [],
         owners: []
       })
+
+      if (metadata) {
+        console.log(`NFT metadata fetched: ${metadata.name || 'Unnamed'}`)
+      }
     }
     nftMap.set(nftId, nft)
     return nft
@@ -171,7 +180,10 @@ export async function processListingEvents(
     if (listingMap.has(listingId)) {
       return listingMap.get(listingId)!
     }
-    const listing = await ctx.store.get(Listing, listingId)
+    const listing = await ctx.store.get(Listing, {
+      where: { id: listingId },
+      relations: { owner: true, nft: true }
+    })
     if (listing) {
       listingMap.set(listingId, listing)
       return listing
@@ -417,7 +429,8 @@ export async function processListingEvents(
 
           if (approvalsInBatch.length === 0) {
             const approvalsFromDb = await ctx.store.find(CurrencyApproval, {
-              where: { listing: { id: listingIdStr } }
+              where: { listing: { id: listingIdStr } },
+              relations: { currency: true }
             })
             allApprovals = approvalsFromDb
           }

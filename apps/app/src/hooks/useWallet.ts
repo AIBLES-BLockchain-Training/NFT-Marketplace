@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useWalletStore } from '../store/walletStore';
 import { useAuthStore } from '../store/authStore';
@@ -16,13 +16,13 @@ import {
 } from '../lib/auth/signature';
 import toast from 'react-hot-toast';
 
+// Global flag to prevent multiple simultaneous signature requests across all component instances
+let isRequestingSignature = false;
+
 export function useWallet() {
   const { address, chainId, isConnected, isConnecting, balance, setAddress, setChainId, setIsConnecting, setBalance, reset } =
     useWalletStore();
   const { isAuthenticated, setAuth, clearAuth } = useAuthStore();
-
-  // Flag to prevent multiple simultaneous signature requests
-  const isRequestingSignature = useRef(false);
 
   const updateBalance = useCallback(async (addr: Address) => {
     const provider = getBrowserProvider();
@@ -85,11 +85,21 @@ export function useWallet() {
         setAuth(authData.signature, authData.nonce, authData.timestamp);
       } else {
         // Need signature first - check if already requesting to prevent duplicates
-        if (isRequestingSignature.current) {
+        if (isRequestingSignature) {
+          console.log('Signature request already in progress, skipping duplicate');
           return;
         }
 
-        isRequestingSignature.current = true;
+        isRequestingSignature = true;
+
+        // Safety timeout: reset flag after 30 seconds if still stuck
+        const timeoutId = setTimeout(() => {
+          if (isRequestingSignature) {
+            console.log('Signature request timeout, resetting flag');
+            isRequestingSignature = false;
+          }
+        }, 30000);
+
         try {
           const signer = await getSigner();
           if (!signer) throw new Error('Signer not found');
@@ -104,7 +114,8 @@ export function useWallet() {
           setAddress(userAddress);
           await updateBalance(userAddress);
         } finally {
-          isRequestingSignature.current = false;
+          clearTimeout(timeoutId);
+          isRequestingSignature = false;
         }
       }
     } catch (error: unknown) {
@@ -165,12 +176,21 @@ export function useWallet() {
           setAuth(authData.signature, authData.nonce, authData.timestamp);
         } else {
           // New wallet needs to sign first - check if already requesting
-          if (isRequestingSignature.current) {
+          if (isRequestingSignature) {
+            console.log('Signature request already in progress, skipping duplicate');
             return;
           }
 
           clearAuth();
-          isRequestingSignature.current = true;
+          isRequestingSignature = true;
+
+          // Safety timeout: reset flag after 30 seconds if still stuck
+          const timeoutId = setTimeout(() => {
+            if (isRequestingSignature) {
+              console.log('Signature request timeout, resetting flag');
+              isRequestingSignature = false;
+            }
+          }, 30000);
 
           try {
             const signer = await getSigner();
@@ -190,7 +210,8 @@ export function useWallet() {
             // Don't set address if signature failed
             reset();
           } finally {
-            isRequestingSignature.current = false;
+            clearTimeout(timeoutId);
+            isRequestingSignature = false;
           }
         }
       }

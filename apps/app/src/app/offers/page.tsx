@@ -9,7 +9,7 @@ import { Spinner } from '../../components/common/Spinner';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_OFFERS_QUERY } from '../../lib/graphql/queries';
 import { Offer } from '../../types';
-import { formatEther } from '../../lib/web3/utils';
+import { formatEth } from '../../lib/web3/utils';
 import toast from 'react-hot-toast';
 
 export default function OffersPage() {
@@ -40,8 +40,8 @@ export default function OffersPage() {
         where,
       });
 
-      if (result.data?.offers) {
-        setOffers(result.data.offers);
+      if (result.offers) {
+        setOffers(result.offers);
       }
     } catch (error) {
       console.error('Failed to load offers:', error);
@@ -187,7 +187,7 @@ export default function OffersPage() {
                     <p className="text-xs text-gray-400 mb-1">Offer Price</p>
                     <div className="flex items-baseline gap-2">
                       <p className="text-xl font-bold text-white">
-                        {formatEther(offer.totalPrice)}
+                        {formatEth(offer.totalPrice)}
                       </p>
                       <p className="text-sm text-gray-400">
                         {offer.currency.symbol}

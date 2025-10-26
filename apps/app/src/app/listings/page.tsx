@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { MainLayout } from '../../components/layout/MainLayout';
 import { Card } from '../../components/common/Card';
@@ -9,20 +9,24 @@ import { Spinner } from '../../components/common/Spinner';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_LISTINGS_QUERY } from '../../lib/graphql/queries';
 import { Listing } from '../../types';
-import { formatEther } from '../../lib/web3/utils';
+import { formatEth } from '../../lib/web3/utils';
 import toast from 'react-hot-toast';
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('active');
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    loadListings();
-  }, [filter]);
+  const LIMIT = 20;
 
-  const loadListings = async () => {
-    setIsLoading(true);
+  const loadListings = useCallback(async (loadOffset: number, append = false) => {
+    if (!append) {
+      setIsLoading(true);
+    }
+
     try {
       const where: any = {};
 
@@ -35,13 +39,22 @@ export default function ListingsPage() {
       }
 
       const result = await graphqlClient.query(GET_LISTINGS_QUERY, {
-        limit: 50,
-        offset: 0,
+        limit: LIMIT,
+        offset: loadOffset,
         where,
       });
 
-      if (result.data?.listings) {
-        setListings(result.data.listings);
+      if (result.listings) {
+        if (append) {
+          setListings(prev => [...prev, ...result.listings]);
+        } else {
+          setListings(result.listings);
+        }
+
+        setHasMore(result.listings.length === LIMIT);
+        setOffset(loadOffset + result.listings.length);
+      } else {
+        setHasMore(false);
       }
     } catch (error) {
       console.error('Failed to load listings:', error);
@@ -49,7 +62,37 @@ export default function ListingsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filter, LIMIT]);
+
+  // Initial load when filter changes
+  useEffect(() => {
+    setOffset(0);
+    setHasMore(true);
+    loadListings(0, false);
+  }, [filter, loadListings]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          loadListings(offset, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasMore, isLoading, offset, loadListings]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -126,68 +169,77 @@ export default function ListingsPage() {
             <p className="text-gray-400">No listings found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {listings.map((listing) => (
-              <Link key={listing.id} href={`/asset/${listing.nft.id}`}>
-                <Card hover>
-                  {/* NFT Image */}
-                  <div className="aspect-square bg-dark-bg rounded-lg overflow-hidden mb-4">
-                    {listing.nft.imageUrl ? (
-                      <img
-                        src={listing.nft.imageUrl}
-                        alt={listing.nft.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500">
-                        No Image
-                      </div>
-                    )}
-                  </div>
-
-                  {/* NFT Info */}
-                  <div className="mb-2">
-                    <p className="text-xs text-gray-500 mb-1">
-                      {listing.nft.collection.name}
-                    </p>
-                    <h3 className="text-lg font-semibold text-white truncate">
-                      {listing.nft.name}
-                    </h3>
-                  </div>
-
-                  {/* Price */}
-                  <div className="mb-3">
-                    <p className="text-xs text-gray-400 mb-1">Price</p>
-                    {listing.currencyApprovals && listing.currencyApprovals.length > 0 ? (
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-xl font-bold text-white">
-                          {formatEther(listing.currencyApprovals[0].pricePerToken)}
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          {listing.currencyApprovals[0].currency.symbol}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-400">Not priced</p>
-                    )}
-                  </div>
-
-                  {/* Status & Seller */}
-                  <div className="flex items-center justify-between pt-3 border-t border-dark-border">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-accent-500" />
-                      <p className="text-xs text-gray-400 truncate max-w-[100px]">
-                        {listing.owner.name}
-                      </p>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {listings.map((listing) => (
+                <Link key={listing.id} href={`/asset/${listing.nft.id}`}>
+                  <Card hover>
+                    {/* NFT Image */}
+                    <div className="aspect-square bg-dark-bg rounded-lg overflow-hidden mb-4">
+                      {listing.nft.imageUrl ? (
+                        <img
+                          src={listing.nft.imageUrl}
+                          alt={listing.nft.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                          No Image
+                        </div>
+                      )}
                     </div>
-                    <Badge variant={getStatusColor(listing.status) as any}>
-                      {listing.status}
-                    </Badge>
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
+
+                    {/* NFT Info */}
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-500 mb-1">
+                        {listing.nft.collection.name}
+                      </p>
+                      <h3 className="text-lg font-semibold text-white truncate">
+                        {listing.nft.name}
+                      </h3>
+                    </div>
+
+                    {/* Price */}
+                    <div className="mb-3">
+                      <p className="text-xs text-gray-400 mb-1">Price</p>
+                      {listing.currencyApprovals && listing.currencyApprovals.length > 0 ? (
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-xl font-bold text-white">
+                            {formatEth(listing.currencyApprovals[0].pricePerToken)}
+                          </p>
+                          <p className="text-sm text-gray-400">
+                            {listing.currencyApprovals[0].currency.symbol}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400">Not priced</p>
+                      )}
+                    </div>
+
+                    {/* Status & Seller */}
+                    <div className="flex items-center justify-between pt-3 border-t border-dark-border">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-accent-500" />
+                        <p className="text-xs text-gray-400 truncate max-w-[100px]">
+                          {listing.owner.name}
+                        </p>
+                      </div>
+                      <Badge variant={getStatusColor(listing.status) as any}>
+                        {listing.status}
+                      </Badge>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+
+            {/* Infinite scroll trigger */}
+            {hasMore && !isLoading && (
+              <div ref={observerTarget} className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+              </div>
+            )}
+          </>
         )}
       </div>
     </MainLayout>

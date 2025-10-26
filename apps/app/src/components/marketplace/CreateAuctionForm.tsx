@@ -5,7 +5,7 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { useContract } from '../../hooks/useContract';
 import { encodeCreateAuction } from '../../lib/web3/encoding';
-import { NATIVE_TOKEN_ADDRESS } from '../../lib/contracts/addresses';
+import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import {
   SECONDS_PER_DAY,
   BID_BUFFER_BPS,
@@ -42,14 +42,14 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
         ? BigInt(Math.floor(parseFloat(buyoutBid) * 1e18))
         : minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
 
-      const startTime = BigInt(Math.floor(Date.now() / 1000));
+      const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 
       const tx = encodeCreateAuction({
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: NATIVE_TOKEN_ADDRESS,
+        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
         startPrice: minimumBidWei,
         stepAmount: (minimumBidWei * BigInt(bidBuffer)) / 10000n,
         ceilingPrice: buyoutBidWei,
@@ -98,7 +98,7 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder="0.00"
             value={minimumBid}
@@ -116,7 +116,7 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder="Optional - Leave empty for no buyout"
             value={buyoutBid}

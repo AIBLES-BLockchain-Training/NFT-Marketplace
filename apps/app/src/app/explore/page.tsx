@@ -2,157 +2,113 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '../../components/layout/MainLayout';
-import { NFTGrid } from '../../components/nft/NFTGrid';
-import { Button } from '../../components/common/Button';
+import { HeroCarousel } from '../../components/common/HeroCarousel';
+import { TrendingSection } from '../../components/common/TrendingSection';
 import { graphqlClient } from '../../lib/graphql/client';
-import { GET_NFTS_QUERY, GET_COLLECTIONS_QUERY } from '../../lib/graphql/queries';
+import {
+  GET_TRENDING_COLLECTIONS_QUERY,
+  GET_TRENDING_NFTS_QUERY,
+} from '../../lib/graphql/queries';
 import { NFT, Collection } from '../../types';
 import toast from 'react-hot-toast';
 
+interface TrendingData {
+  collections: Collection[];
+  nfts: NFT[];
+}
+
 export default function ExplorePage() {
-  const [nfts, setNfts] = useState<NFT[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedCollection, setSelectedCollection] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<string>('');
-  const [sortBy, setSortBy] = useState<string>('recent');
+  const [heroCollections, setHeroCollections] = useState<Collection[]>([]);
+  const [trendingNFTs, setTrendingNFTs] = useState<NFT[]>([]);
+  const [trendingCollections, setTrendingCollections] = useState<Collection[]>([]);
 
-  const loadCollections = useCallback(async () => {
-    try {
-      const result = await graphqlClient.query(GET_COLLECTIONS_QUERY, {
-        limit: 100,
-        offset: 0,
-      });
-
-      if (result.data?.collections) {
-        setCollections(result.data.collections);
-      }
-    } catch (error) {
-      console.error('Failed to load collections:', error);
-      toast.error('Failed to load collections. Please try again.');
-    }
-  }, []);
-
-  const loadNFTs = useCallback(async () => {
+  const loadTrendingData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const where: Record<string, unknown> = {};
+      const [collectionsResult, nftsResult] = await Promise.all([
+        graphqlClient.query(GET_TRENDING_COLLECTIONS_QUERY, { limit: 15 }),
+        graphqlClient.query(GET_TRENDING_NFTS_QUERY, { limit: 15 }),
+      ]);
 
-      if (selectedCollection) {
-        where.collection = { id_eq: selectedCollection };
+      if (collectionsResult.collections) {
+        const collections = collectionsResult.collections;
+
+        // Calculate transaction count for each collection
+        const collectionsWithTxCount = collections.map((collection: any) => {
+          let txCount = 0;
+          if (collection.nfts && collection.nfts.length > 0) {
+            collection.nfts.forEach((nft: any) => {
+              if (nft.purchaseHistory) {
+                txCount += nft.purchaseHistory.length;
+              }
+            });
+          }
+          return { ...collection, txCount };
+        });
+
+        // Sort by transaction count
+        const sortedCollections = collectionsWithTxCount.sort(
+          (a: any, b: any) => b.txCount - a.txCount
+        );
+
+        // Top 5 for hero carousel
+        setHeroCollections(sortedCollections.slice(0, 5));
+        // Top 10 for trending section
+        setTrendingCollections(sortedCollections.slice(0, 10));
       }
 
-      if (selectedType) {
-        where.collection = {
-          ...where.collection,
-          collectionType_eq: selectedType,
-        };
-      }
+      if (nftsResult.nfts) {
+        const nfts = nftsResult.nfts;
 
-      const orderBy = sortBy === 'recent' ? 'createdAt_DESC' : 'id_ASC';
+        // Calculate transaction count for each NFT
+        const nftsWithTxCount = nfts.map((nft: any) => {
+          const txCount = nft.purchaseHistory ? nft.purchaseHistory.length : 0;
+          return { ...nft, txCount };
+        });
 
-      const result = await graphqlClient.query(GET_NFTS_QUERY, {
-        limit: 50,
-        offset: 0,
-        where,
-        orderBy,
-      });
+        // Sort by transaction count
+        const sortedNFTs = nftsWithTxCount.sort((a: any, b: any) => b.txCount - a.txCount);
 
-      if (result.data?.nfts) {
-        setNfts(result.data.nfts);
+        // Top 10 trending NFTs
+        setTrendingNFTs(sortedNFTs.slice(0, 10));
       }
     } catch (error) {
-      console.error('Failed to load NFTs:', error);
-      toast.error('Failed to load NFTs. Please try again.');
+      console.error('Failed to load trending data:', error);
+      toast.error('Failed to load trending data. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCollection, selectedType, sortBy]);
+  }, []);
 
   useEffect(() => {
-    loadCollections();
-  }, [loadCollections]);
-
-  useEffect(() => {
-    loadNFTs();
-  }, [loadNFTs]);
+    loadTrendingData();
+  }, [loadTrendingData]);
 
   return (
     <MainLayout>
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Explore NFTs</h1>
-          <p className="text-gray-400">Discover unique digital collectibles</p>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-dark-card border border-dark-border rounded-2xl p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Collection
-              </label>
-              <select
-                value={selectedCollection}
-                onChange={(e) => setSelectedCollection(e.target.value)}
-                className="w-full px-4 py-2 bg-dark-bg border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
-              >
-                <option value="">All Collections</option>
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Token Type
-              </label>
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full px-4 py-2 bg-dark-bg border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
-              >
-                <option value="">All Types</option>
-                <option value="ERC721">ERC-721</option>
-                <option value="ERC1155">ERC-1155</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Sort By
-              </label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-4 py-2 bg-dark-bg border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
-              >
-                <option value="recent">Recently Listed</option>
-                <option value="oldest">Oldest First</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                onClick={() => {
-                  setSelectedCollection('');
-                  setSelectedType('');
-                  setSortBy('recent');
-                }}
-                variant="secondary"
-                fullWidth
-              >
-                Reset Filters
-              </Button>
-            </div>
+        {isLoading ? (
+          <div className="space-y-8">
+            <div className="h-96 bg-dark-card border border-dark-border rounded-2xl animate-pulse" />
+            <div className="h-64 bg-dark-card border border-dark-border rounded-2xl animate-pulse" />
+            <div className="h-64 bg-dark-card border border-dark-border rounded-2xl animate-pulse" />
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="mb-12">
+              <HeroCarousel collections={heroCollections} />
+            </div>
 
-        {/* NFT Grid */}
-        <NFTGrid nfts={nfts} isLoading={isLoading} />
+            <TrendingSection title="Trending Tokens" items={trendingNFTs} type="nfts" />
+
+            <TrendingSection
+              title="Trending Collections"
+              items={trendingCollections}
+              type="collections"
+            />
+          </>
+        )}
       </div>
     </MainLayout>
   );

@@ -33,11 +33,13 @@ export const CHAIN_CONFIG = {
 
 export const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT || 'http://localhost:4001/graphql';
 
+// Native ETH is represented as address(0) in our contracts
+// This is the Solidity/EVM standard for native tokens
 export const ZERO_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
 
-// Native token address (represents ETH - used for native currency listings/auctions)
-// This is the standard representation used by many protocols for native tokens
-export const NATIVE_TOKEN_ADDRESS: Address = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+// DEPRECATED: Do not use! Contract expects address(0) for native ETH.
+// 0xEeee...EEeE is a convention used by some protocols but NOT our contract standard.
+// export const NATIVE_TOKEN_ADDRESS: Address = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
 // Shorthand exports for convenience
 export const ROUTER_ADDRESS = CONTRACT_ADDRESSES.ROUTER;

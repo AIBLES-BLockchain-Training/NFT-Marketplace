@@ -44,13 +44,13 @@ export function RequestRoles() {
     try {
       setLoadingNFTs(true);
 
-      const [moralisNFTs, rolesData] = await Promise.all([
+      const [moralisResponse, rolesData] = await Promise.all([
         getNFTsByAddress(address),
         graphqlClient.query(GET_USER_ROLE_ASSIGNMENTS_QUERY, { address })
       ]);
 
       // Transform Moralis NFTs to app NFT format
-      const transformedNFTs: NFT[] = moralisNFTs.map((nft: MoralisNFT) => {
+      const transformedNFTs: NFT[] = moralisResponse.data.map((nft: MoralisNFT) => {
         const metadata = nft.normalized_metadata || {};
 
         // Convert IPFS URLs to HTTP gateway URLs

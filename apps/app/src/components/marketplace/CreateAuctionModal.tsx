@@ -7,7 +7,7 @@ import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
 import { encodeCreateAuction } from '../../lib/web3/encoding';
-import { NATIVE_TOKEN_ADDRESS } from '../../lib/contracts/addresses';
+import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import {
   SECONDS_PER_DAY,
   BID_BUFFER_BPS,
@@ -103,14 +103,14 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
         ? BigInt(Math.floor(parseFloat(buyoutBid) * 1e18))
         : minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
 
-      const startTime = BigInt(Math.floor(Date.now() / 1000));
+      const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 
       const tx = encodeCreateAuction({
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: NATIVE_TOKEN_ADDRESS,
+        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
         startPrice: minimumBidWei,
         stepAmount: (minimumBidWei * BigInt(bidBuffer)) / 10000n,
         ceilingPrice: buyoutBidWei,
@@ -118,12 +118,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
         endTimestamp: endTime,
       });
 
-      const receipt = await sendTransaction(tx, 'Auction created successfully!');
-
-      if (receipt?.status === 1) {
-        onSuccess?.();
-        onClose();
-      }
+      await sendTransaction(tx, 'Auction created successfully!');
     } catch (error: unknown) {
       console.error('Create auction error:', error);
     }
@@ -155,7 +150,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder="0.00"
             value={minimumBid}
@@ -173,7 +168,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder={`Auto: ${parseFloat(minimumBid || '0') * 3} ETH`}
             value={buyoutBid}
@@ -254,7 +249,13 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
-          onClose={closeModal}
+          onClose={() => {
+            closeModal();
+            if (result.success) {
+              onSuccess?.();
+              onClose();
+            }
+          }}
           success={result.success}
           message={result.message}
           txHash={result.txHash}

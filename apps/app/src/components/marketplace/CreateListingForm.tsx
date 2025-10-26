@@ -5,7 +5,7 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { useContract } from '../../hooks/useContract';
 import { encodeCreateListing } from '../../lib/web3/encoding';
-import { NATIVE_TOKEN_ADDRESS } from '../../lib/contracts/addresses';
+import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
 import toast from 'react-hot-toast';
 
@@ -31,14 +31,14 @@ export function CreateListingForm({ nft, onSuccess, onCancel }: CreateListingFor
       }
 
       const priceWei = BigInt(Math.floor(parseFloat(pricePerToken) * 1e18));
-      const startTime = BigInt(Math.floor(Date.now() / 1000));
+      const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 
       const tx = encodeCreateListing({
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: NATIVE_TOKEN_ADDRESS,
+        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
@@ -86,7 +86,7 @@ export function CreateListingForm({ nft, onSuccess, onCancel }: CreateListingFor
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder="0.00"
             value={pricePerToken}

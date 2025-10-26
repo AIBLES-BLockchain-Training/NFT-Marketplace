@@ -35,7 +35,7 @@ export function useTransactionModal() {
           value: tx.value,
         });
 
-        const receipt = await transaction.wait();
+        const receipt = await transaction.wait(1);
 
         if (receipt?.status === 1) {
           setResult({

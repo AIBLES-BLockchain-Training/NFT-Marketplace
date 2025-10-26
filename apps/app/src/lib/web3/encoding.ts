@@ -99,6 +99,11 @@ export function encodeBuyFromListing(
   expectedTotalPrice: bigint
 ): EncodedTransaction {
   const listingInterface = new ethers.Interface(ListingABI);
+
+  // Check if currency is native token (ETH)
+  // Contract uses address(0) for native ETH
+  const isNativeToken = currency === ZERO_ADDRESS;
+
   const data = listingInterface.encodeFunctionData('buyFromListing', [
     listingId,
     buyFor,
@@ -107,7 +112,8 @@ export function encodeBuyFromListing(
     expectedTotalPrice,
   ]);
 
-  const value = currency === ZERO_ADDRESS ? expectedTotalPrice.toString() : '0';
+  // Send ETH value if buying with native token
+  const value = isNativeToken ? expectedTotalPrice.toString() : '0';
 
   return {
     to: CONTRACT_ADDRESSES.ROUTER,

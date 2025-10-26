@@ -30,6 +30,8 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const chainName = searchParams.get('chain') || 'sepolia';
     const chain = CHAIN_IDS[chainName] || CHAIN_IDS.sepolia;
+    const cursor = searchParams.get('cursor') || undefined;
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
 
     await initMoralis();
 
@@ -41,7 +43,8 @@ export async function GET(
     const moralisCall = Moralis.EvmApi.nft.getWalletNFTs({
       address,
       chain,
-      limit: 100,
+      limit,
+      cursor,
       normalizeMetadata: true,
     });
 
@@ -50,6 +53,8 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: response.raw.result,
+      cursor: response.raw.cursor, // Next page cursor
+      hasMore: response.raw.cursor !== null && response.raw.cursor !== '',
     });
   } catch (error: any) {
     console.error('Error fetching NFTs from Moralis:', error);
@@ -59,6 +64,8 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: [],
+      cursor: null,
+      hasMore: false,
       warning: error.message || 'Failed to fetch NFTs from Moralis',
     });
   }

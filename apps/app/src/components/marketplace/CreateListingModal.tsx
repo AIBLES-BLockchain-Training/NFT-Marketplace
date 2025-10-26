@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ethers } from 'ethers';
 import { NFT } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -6,10 +7,11 @@ import { Input } from '../common/Input';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
-import { encodeCreateListing } from '../../lib/web3/encoding';
-import { NATIVE_TOKEN_ADDRESS } from '../../lib/contracts/addresses';
+import { encodeCreateListing, encodeApproveCurrencyForListing } from '../../lib/web3/encoding';
+import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
 import { checkNFTApproval, approveNFT, isNFTCollectionWhitelisted } from '../../lib/web3/approve';
+import { ListingABI } from '../../lib/contracts/abis';
 import toast from 'react-hot-toast';
 
 interface CreateListingModalProps {
@@ -26,6 +28,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
   const [quantity, setQuantity] = useState('1');
   const [duration, setDuration] = useState('7'); // days
   const [isApproving, setIsApproving] = useState(false);
+  const [currentStep, setCurrentStep] = useState<'idle' | 'creating' | 'approving'>('idle');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,30 +93,80 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         }
       }
 
-      // Create listing
+      // Step 1: Create listing
+      setCurrentStep('creating');
       const priceWei = BigInt(Math.floor(parseFloat(pricePerToken) * 1e18));
-      const startTime = BigInt(Math.floor(Date.now() / 1000));
+      const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 
-      const tx = encodeCreateListing({
+      const createListingTx = encodeCreateListing({
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: NATIVE_TOKEN_ADDRESS,
+        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
         reserved: false,
       });
 
-      const receipt = await sendTransaction(tx, 'Listing created successfully!');
+      const createReceipt = await sendTransaction(createListingTx, 'Step 1/2: Listing created!');
 
-      if (receipt?.status === 1) {
+      if (createReceipt?.status !== 1) {
+        setCurrentStep('idle');
+        return;
+      }
+
+      // Extract listingId from event logs
+      let listingId: bigint | null = null;
+      try {
+        const listingInterface = new ethers.Interface(ListingABI);
+
+        for (const log of createReceipt.logs) {
+          try {
+            const parsedLog = listingInterface.parseLog({
+              topics: [...log.topics],
+              data: log.data,
+            });
+
+            if (parsedLog?.name === 'ListingCreated') {
+              listingId = parsedLog.args[0]; // First argument is listingId
+              break;
+            }
+          } catch {
+            // Skip logs that don't match
+            continue;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to extract listingId:', error);
+      }
+
+      if (!listingId) {
+        toast.error('Failed to extract listing ID. Please approve currency manually from your profile.');
+        setCurrentStep('idle');
         onSuccess?.();
         onClose();
+        return;
       }
+
+      // Step 2: Approve currency for listing
+      setCurrentStep('approving');
+      const approveCurrencyTx = encodeApproveCurrencyForListing(
+        listingId,
+        ZERO_ADDRESS, // Contract uses address(0) for native ETH
+        priceWei
+      );
+
+      await sendTransaction(
+        approveCurrencyTx,
+        'Step 2/2: Currency approved! Listing is now live and ready for purchase.'
+      );
+
+      setCurrentStep('idle');
     } catch (error: unknown) {
       console.error('Create listing error:', error);
+      setCurrentStep('idle');
     }
   };
 
@@ -143,7 +196,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder="0.00"
             value={pricePerToken}
@@ -194,11 +247,17 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         </div>
 
         <div className="pt-6 border-t border-dark-border flex gap-3">
-          <Button type="button" onClick={onClose} variant="secondary" fullWidth>
+          <Button type="button" onClick={onClose} variant="secondary" fullWidth disabled={isLoading || isApproving}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" fullWidth isLoading={isLoading || isApproving}>
-            {isApproving ? 'Approving...' : 'Create Listing'}
+            {isApproving
+              ? 'Approving NFT...'
+              : currentStep === 'creating'
+                ? 'Step 1/2: Creating Listing...'
+                : currentStep === 'approving'
+                  ? 'Step 2/2: Approving Currency...'
+                  : 'Create Listing'}
           </Button>
         </div>
       </form>
@@ -207,7 +266,13 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
-          onClose={closeModal}
+          onClose={() => {
+            closeModal();
+            if (result.success) {
+              onSuccess?.();
+              onClose();
+            }
+          }}
           success={result.success}
           message={result.message}
           txHash={result.txHash}

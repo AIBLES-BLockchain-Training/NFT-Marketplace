@@ -38,8 +38,9 @@ export function NFTCard({ nft }: NFTCardProps) {
               src={imageUrl}
               alt={nft.name}
               fill
+              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
               className="object-cover group-hover:scale-105 transition-transform duration-300"
-              unoptimized
+              priority={false}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

@@ -6,7 +6,7 @@ import { Input } from '../common/Input';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeMakeOffer } from '../../lib/web3/encoding';
-import { NATIVE_TOKEN_ADDRESS } from '../../lib/contracts/addresses';
+import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
 import toast from 'react-hot-toast';
 
@@ -39,16 +39,12 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: NATIVE_TOKEN_ADDRESS,
+        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
         totalPrice: totalPriceWei,
         expirationTime: expirationTime,
       });
 
-      const receipt = await sendTransaction(tx, 'Offer made successfully!');
-
-      if (receipt?.status === 1) {
-        onSuccess?.();
-      }
+      await sendTransaction(tx, 'Offer made successfully!');
     } catch (error: unknown) {
       console.error('Make offer error:', error);
     }
@@ -71,7 +67,7 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
           </label>
           <Input
             type="number"
-            step="0.001"
+            step="any"
             min="0"
             placeholder="0.00"
             value={totalPrice}
@@ -150,7 +146,12 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
-          onClose={closeModal}
+          onClose={() => {
+            closeModal();
+            if (result.success) {
+              onSuccess?.();
+            }
+          }}
           success={result.success}
           message={result.message}
           txHash={result.txHash}

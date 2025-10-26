@@ -8,6 +8,7 @@ import { AdminManagement } from '../../components/admin/AdminManagement';
 import { UserRoleRequests } from '../../components/admin/UserRoleRequests';
 import { NFTWhitelistRequests } from '../../components/admin/NFTWhitelistRequests';
 import { NFTWhitelistManagement } from '../../components/admin/NFTWhitelistManagement';
+import { GlobalPermissions } from '../../components/admin/GlobalPermissions';
 import { CurrencyManagement } from '../../components/admin/CurrencyManagement';
 import { FeeManagement } from '../../components/admin/FeeManagement';
 import { ActivityTable } from '../../components/admin/ActivityTable';
@@ -307,6 +308,9 @@ export default function AdminDashboard() {
 
           {activeTab === 'permissions' && (
             <div className="space-y-8">
+              {/* Global Permissions - IMPORTANT: Must be at the top */}
+              <GlobalPermissions />
+
               {/* User Role Requests */}
               <UserRoleRequests />
 

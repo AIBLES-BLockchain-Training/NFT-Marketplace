@@ -41,10 +41,12 @@ export async function isNFTCollectionWhitelisted(nftContract: Address): Promise<
     // Check cache first
     const cachedValue = whitelistCache.get(normalizedAddress);
     if (cachedValue !== undefined) {
+      console.log('Using cached whitelist value:', cachedValue);
       return cachedValue;
     }
 
     // Query API to check DB
+    console.log('Checking whitelist for:', normalizedAddress);
     const response = await fetch('/api/nft/check-whitelist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -52,14 +54,17 @@ export async function isNFTCollectionWhitelisted(nftContract: Address): Promise<
     });
 
     const data = await response.json();
+    console.log('Whitelist check response:', data);
 
     if (data.success) {
       const isWhitelisted = data.data.isWhitelisted;
+      console.log('Is whitelisted:', isWhitelisted);
       // Cache the result
       whitelistCache.set(normalizedAddress, isWhitelisted);
       return isWhitelisted;
     }
 
+    console.log('API call failed, returning false');
     return false;
   } catch (error) {
     console.error('Error checking NFT whitelist:', error);

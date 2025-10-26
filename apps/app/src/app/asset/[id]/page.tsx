@@ -223,7 +223,7 @@ export default function AssetPage() {
     }
 
     try {
-      const tx = encodeCancelListing(BigInt(listing.listingId));
+      const tx = encodeCancelListing(BigInt(listing.id)); // listing.id is the listingId from contract
       const receipt = await sendTransaction(tx, 'Listing cancelled successfully!');
 
       if (receipt?.status === 1) {
@@ -319,6 +319,8 @@ export default function AssetPage() {
         <NFTDetail
           nft={nft}
           isOwner={isNFTOwner}
+          activeListing={activeListings[0] || null}
+          onBuy={handleBuyClick}
           onCreateListing={() => setShowCreateListing(true)}
           onCreateAuction={() => setShowCreateAuction(true)}
         />
@@ -346,86 +348,6 @@ export default function AssetPage() {
             }}
           />
         )}
-
-        {/* Trading Section */}
-        <div className="mt-12">
-          <h2 className="text-2xl font-bold text-white mb-6">Trading Activity</h2>
-
-          <div className="space-y-8">
-            {/* Active Listings */}
-            {activeListings.length > 0 && (
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Active Listings ({activeListings.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {activeListings.map((listing) => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      onBuy={handleBuyClick}
-                      onCancel={handleCancelListing}
-                      isOwner={isOwner(listing.listingCreator.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Active Auctions */}
-            {activeAuctions.length > 0 && (
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Active Auctions ({activeAuctions.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {activeAuctions.map((auction) => (
-                    <AuctionCard
-                      key={auction.id}
-                      auction={auction}
-                      onBid={handleBidClick}
-                      onCancel={handleCancelAuction}
-                      isOwner={isOwner(auction.auctionCreator.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Active Offers */}
-            {activeOffers.length > 0 && (
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Active Offers ({activeOffers.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {activeOffers.map((offer) => (
-                    <OfferCard
-                      key={offer.id}
-                      offer={offer}
-                      onAccept={handleAcceptOffer}
-                      onCancel={handleCancelOffer}
-                      isTokenOwner={
-                        nft.owners?.some((o) => isOwner(o.ownerAddress)) || false
-                      }
-                      isOfferMaker={isOwner(offer.offeror.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeListings.length === 0 &&
-              activeAuctions.length === 0 &&
-              activeOffers.length === 0 && (
-                <div className="text-center py-12 bg-dark-card border border-dark-border rounded-2xl">
-                  <p className="text-gray-400">
-                    No active trading activity for this NFT
-                  </p>
-                </div>
-              )}
-          </div>
-        </div>
       </div>
 
       {/* Modals */}

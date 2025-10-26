@@ -43,12 +43,7 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
         bidAmount: bidWei,
       });
 
-      const receipt = await sendTransaction(tx, 'Bid placed successfully!');
-
-      if (receipt?.status === 1) {
-        onSuccess?.();
-        onClose();
-      }
+      await sendTransaction(tx, 'Bid placed successfully!');
     } catch (error: unknown) {
       console.error('Bid error:', error);
     }
@@ -86,7 +81,7 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
           </label>
           <input
             type="number"
-            step="0.001"
+            step="any"
             min={parseFloat(formatEth(nextMinBid))}
             placeholder={formatEth(nextMinBid)}
             value={bidAmount}
@@ -118,7 +113,13 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
-          onClose={closeModal}
+          onClose={() => {
+            closeModal();
+            if (result.success) {
+              onSuccess?.();
+              onClose();
+            }
+          }}
           success={result.success}
           message={result.message}
           txHash={result.txHash}

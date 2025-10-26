@@ -213,10 +213,13 @@ export async function processPermissionsEvents(
 
         let currency = await getOrCreateCurrency(currencyAddress)
         if (!currency) {
+          const currencyId = currencyAddress.toLowerCase()
+          const isNativeToken = currencyId === '0x0000000000000000000000000000000000000000'
+
           currency = new SupportedCurrency({
-            id: currencyAddress.toLowerCase(),
-            name: `Currency_${currencyAddress.slice(0, 6)}`,
-            symbol: 'UNKNOWN',
+            id: currencyId,
+            name: isNativeToken ? 'ETH' : `Currency_${currencyAddress.slice(0, 6)}`,
+            symbol: isNativeToken ? 'ETH' : 'UNKNOWN',
             decimals: 18,
             isActive: true,
             feePercentage: 0,

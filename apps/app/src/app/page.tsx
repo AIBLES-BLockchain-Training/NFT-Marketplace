@@ -1,38 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MainLayout } from '../components/layout/MainLayout';
-import { NFTGrid } from '../components/nft/NFTGrid';
 import { Button } from '../components/common/Button';
-import { graphqlClient } from '../lib/graphql/client';
-import { GET_NFTS_QUERY } from '../lib/graphql/queries';
-import { NFT } from '../types';
 
 export default function HomePage() {
-  const [nfts, setNfts] = useState<NFT[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadFeaturedNFTs();
-  }, []);
-
-  const loadFeaturedNFTs = async () => {
-    try {
-      const result = await graphqlClient.query(GET_NFTS_QUERY, {
-        limit: 8,
-        offset: 0,
-      });
-
-      if (result.data?.nfts) {
-        setNfts(result.data.nfts);
-      }
-    } catch (error) {
-      console.error('Failed to load NFTs:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <MainLayout>
@@ -52,9 +24,9 @@ export default function HomePage() {
                   Explore NFTs
                 </Button>
               </Link>
-              <Link href="/create">
+              <Link href="/collections">
                 <Button variant="secondary" size="lg">
-                  List Your NFT
+                  View Collections
                 </Button>
               </Link>
             </div>
@@ -87,23 +59,6 @@ export default function HomePage() {
               <p className="text-gray-400">Trading Volume</p>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Featured NFTs */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-3xl font-bold text-white mb-2">Featured NFTs</h2>
-              <p className="text-gray-400">Discover trending digital collectibles</p>
-            </div>
-            <Link href="/explore">
-              <Button variant="secondary">View All</Button>
-            </Link>
-          </div>
-
-          <NFTGrid nfts={nfts} isLoading={isLoading} />
         </div>
       </section>
 

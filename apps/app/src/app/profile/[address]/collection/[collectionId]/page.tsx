@@ -28,10 +28,10 @@ export default function CollectionViewPage() {
     setIsLoading(true);
     try {
       // Fetch all NFTs from the owner
-      const moralisNFTs = await getNFTsByAddress(ownerAddress);
+      const moralisResponse = await getNFTsByAddress(ownerAddress);
 
       // Filter NFTs by collection
-      const filteredNFTs = moralisNFTs.filter(
+      const filteredNFTs = moralisResponse.data.filter(
         (nft: MoralisNFT) => nft.token_address.toLowerCase() === collectionId.toLowerCase()
       );
 

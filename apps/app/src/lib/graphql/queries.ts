@@ -316,6 +316,27 @@ export const GET_COLLECTIONS_QUERY = `
   }
 `;
 
+export const GET_COLLECTIONS_TABLE_QUERY = `
+  query GetCollectionsTable($limit: Int!, $offset: Int!) {
+    collections(limit: $limit, offset: $offset, orderBy: createdAt_DESC) {
+      id
+      name
+      logoUrl
+      floorPrice
+      nfts(limit: 1000) {
+        id
+        owners {
+          ownerAddress
+        }
+        purchaseHistory(limit: 1000) {
+          timestamp
+          totalPrice
+        }
+      }
+    }
+  }
+`;
+
 export const GET_COLLECTION_BY_ID_QUERY = `
   query GetCollectionById($id: String!) {
     collection: collectionById(id: $id) {
@@ -334,16 +355,182 @@ export const GET_COLLECTION_BY_ID_QUERY = `
         name
         avatarUrl
       }
-      nfts {
-        id
-        tokenId
-        name
-        imageUrl
-      }
       traits {
         id
         traitType
         value
+      }
+    }
+  }
+`;
+
+export const GET_COLLECTION_LISTED_NFTS_QUERY = `
+  query GetCollectionListedNFTs($collectionId: String!) {
+    listings(where: { nft: { collection: { id_eq: $collectionId } }, status_eq: CREATED }, limit: 1000, orderBy: createdAt_DESC) {
+      id
+      pricePerToken
+      quantity
+      startTimestamp
+      endTimestamp
+      owner {
+        id
+      }
+      nft {
+        id
+        tokenId
+        name
+        imageUrl
+        collection {
+          id
+          name
+          symbol
+          collectionType
+        }
+      }
+      currencyApprovals {
+        pricePerToken
+        currency {
+          id
+          symbol
+          decimals
+        }
+      }
+    }
+  }
+`;
+
+export const GET_COLLECTION_AUCTIONED_NFTS_QUERY = `
+  query GetCollectionAuctionedNFTs($collectionId: String!) {
+    auctions(where: { nftId: { collection: { id_eq: $collectionId } }, status_in: [CREATED, ACTIVE] }, limit: 1000) {
+      id
+      startPrice
+      nftId {
+        id
+        tokenId
+        name
+        imageUrl
+        collection {
+          id
+          name
+          symbol
+          collectionType
+        }
+      }
+      currency {
+        symbol
+      }
+      endTime
+    }
+  }
+`;
+
+export const GET_COLLECTION_OFFERED_NFTS_QUERY = `
+  query GetCollectionOfferedNFTs($collectionId: String!) {
+    offers(where: { nftId: { collection: { id_eq: $collectionId } }, status_eq: ACTIVE }, limit: 1000) {
+      id
+      totalPrice
+      quantity
+      expirationTime
+      nftId {
+        id
+        tokenId
+        name
+        imageUrl
+        collection {
+          id
+          name
+          symbol
+          collectionType
+        }
+      }
+      currency {
+        symbol
+      }
+    }
+  }
+`;
+
+export const GET_COLLECTION_USER_LISTINGS_QUERY = `
+  query GetCollectionUserListings($collectionId: String!, $ownerAddress: String!) {
+    listings(where: { nft: { collection: { id_eq: $collectionId } }, owner: { id_eq: $ownerAddress }, status_eq: CREATED }, orderBy: createdAt_DESC) {
+      id
+      pricePerToken
+      quantity
+      startTimestamp
+      endTimestamp
+      owner {
+        id
+      }
+      nft {
+        id
+        tokenId
+        name
+        imageUrl
+        collection {
+          id
+          name
+          symbol
+          collectionType
+        }
+      }
+      currencyApprovals {
+        pricePerToken
+        currency {
+          id
+          symbol
+          decimals
+        }
+      }
+    }
+  }
+`;
+
+export const GET_COLLECTION_USER_AUCTIONS_QUERY = `
+  query GetCollectionUserAuctions($collectionId: String!, $ownerAddress: String!) {
+    auctions(where: { nftId: { collection: { id_eq: $collectionId } }, sellerAddress_eq: $ownerAddress, status_in: [CREATED, ACTIVE] }) {
+      id
+      startPrice
+      nftId {
+        id
+        tokenId
+        name
+        imageUrl
+        collection {
+          id
+          name
+          symbol
+          collectionType
+        }
+      }
+      currency {
+        symbol
+      }
+      endTime
+    }
+  }
+`;
+
+export const GET_COLLECTION_USER_OFFERS_QUERY = `
+  query GetCollectionUserOffers($collectionId: String!, $buyerAddress: String!) {
+    offers(where: { nftId: { collection: { id_eq: $collectionId } }, buyerAddress_eq: $buyerAddress, status_eq: ACTIVE }) {
+      id
+      totalPrice
+      quantity
+      expirationTime
+      nftId {
+        id
+        tokenId
+        name
+        imageUrl
+        collection {
+          id
+          name
+          symbol
+          collectionType
+        }
+      }
+      currency {
+        symbol
       }
     }
   }
@@ -559,6 +746,17 @@ export const GET_USER_NFTS_QUERY = `
   }
 `;
 
+export const GET_USER_ACTIVE_LISTINGS_QUERY = `
+  query GetUserActiveListings($address: String!) {
+    listings(where: { owner: { id_eq: $address }, status_eq: CREATED }) {
+      id
+      nft {
+        id
+      }
+    }
+  }
+`;
+
 export const GET_ROLE_ASSIGNMENTS_QUERY = `
   query GetRoleAssignments {
     roleAssignments(orderBy: assignedAt_DESC) {
@@ -698,6 +896,67 @@ export const GET_WHITELISTED_CURRENCIES_QUERY = `
     }
     supportedCurrenciesConnection(where: { isActive_eq: true }, orderBy: id_ASC) {
       totalCount
+    }
+  }
+`;
+
+export const GET_TRENDING_COLLECTIONS_QUERY = `
+  query GetTrendingCollections($limit: Int!) {
+    collections(limit: $limit, orderBy: createdAt_DESC) {
+      id
+      name
+      symbol
+      description
+      logoUrl
+      bannerUrl
+      collectionType
+      totalSupply
+      floorPrice
+      createdAt
+      creator {
+        id
+        name
+        avatarUrl
+      }
+      nfts(limit: 1) {
+        id
+        imageUrl
+        purchaseHistory(limit: 1000) {
+          id
+        }
+      }
+    }
+  }
+`;
+
+export const GET_TRENDING_NFTS_QUERY = `
+  query GetTrendingNFTs($limit: Int!) {
+    nfts(limit: $limit, orderBy: tokenId_ASC) {
+      id
+      tokenId
+      name
+      imageUrl
+      description
+      collection {
+        id
+        name
+        symbol
+        collectionType
+      }
+      purchaseHistory(limit: 1000) {
+        id
+        timestamp
+        totalPrice
+      }
+      listings(where: { status_eq: CREATED }, limit: 1) {
+        id
+        pricePerToken
+        currencyApprovals {
+          currency {
+            symbol
+          }
+        }
+      }
     }
   }
 `;

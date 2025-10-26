@@ -20,7 +20,6 @@ export function Header() {
     { href: '/', label: 'Home' },
     { href: '/explore', label: 'Explore' },
     { href: '/collections', label: 'Collections' },
-    { href: '/create', label: 'Create' },
   ];
 
   if (isAdmin) {
