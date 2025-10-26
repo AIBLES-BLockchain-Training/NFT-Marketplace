@@ -2,15 +2,19 @@ import Image from 'next/image';
 import { NFT } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
+import { Button } from '../common/Button';
 
 interface NFTDetailProps {
   nft: NFT;
+  isOwner?: boolean;
+  onCreateListing?: () => void;
+  onCreateAuction?: () => void;
 }
 
-export function NFTDetail({ nft }: NFTDetailProps) {
+export function NFTDetail({ nft, isOwner, onCreateListing, onCreateAuction }: NFTDetailProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <div>
+    <div className="grid grid-cols-1 lg:grid-cols-[0.7fr_1fr] gap-8">
+      <div className="max-w-md">
         <div className="aspect-square relative overflow-hidden rounded-2xl bg-dark-border border border-dark-border">
           {nft.imageUrl ? (
             <Image
@@ -51,6 +55,36 @@ export function NFTDetail({ nft }: NFTDetailProps) {
             <p className="text-gray-400">{nft.description}</p>
           )}
         </div>
+
+        {/* Owner Actions */}
+        {isOwner && (
+          <Card>
+            <h3 className="text-sm font-semibold text-gray-400 mb-4">List for Sale</h3>
+            <div className="space-y-3">
+              {onCreateListing && (
+                <Button
+                  variant="primary"
+                  onClick={onCreateListing}
+                  className="w-full"
+                >
+                  Create Fixed Price Listing
+                </Button>
+              )}
+              {onCreateAuction && (
+                <Button
+                  variant="secondary"
+                  onClick={onCreateAuction}
+                  className="w-full"
+                >
+                  Create Auction
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-4">
+              Note: Your NFT is always open to receive offers from buyers
+            </p>
+          </Card>
+        )}
 
         <Card>
           <h3 className="text-sm font-semibold text-gray-400 mb-4">Details</h3>

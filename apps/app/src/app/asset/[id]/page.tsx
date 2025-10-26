@@ -9,11 +9,14 @@ import { AuctionCard } from '../../../components/marketplace/AuctionCard';
 import { OfferCard } from '../../../components/marketplace/OfferCard';
 import { BuyModal } from '../../../components/marketplace/BuyModal';
 import { BidModal } from '../../../components/marketplace/BidModal';
+import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
+import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
+import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { Spinner } from '../../../components/common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_NFT_BY_ID_QUERY } from '../../../lib/graphql/queries';
 import { useWallet } from '../../../hooks/useWallet';
-import { useContract } from '../../../hooks/useContract';
+import { useTransactionModal } from '../../../hooks/useTransactionModal';
 import { NFT, Listing, Auction, Offer } from '../../../types';
 import {
   encodeCancelListing,
@@ -23,11 +26,20 @@ import {
 } from '../../../lib/web3/encoding';
 import toast from 'react-hot-toast';
 
+// Helper to convert IPFS URLs
+function convertIpfsUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('ipfs://')) {
+    return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
+  }
+  return url;
+}
+
 export default function AssetPage() {
   const params = useParams();
   const id = params?.id as string;
   const { address } = useWallet();
-  const { sendTransaction } = useContract();
+  const { sendTransaction, showResultModal, result, closeModal } = useTransactionModal();
 
   const [nft, setNft] = useState<NFT | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,20 +47,86 @@ export default function AssetPage() {
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
+  const [showCreateListing, setShowCreateListing] = useState(false);
+  const [showCreateAuction, setShowCreateAuction] = useState(false);
+  const [isNFTOwner, setIsNFTOwner] = useState(false);
+  const [isCheckingOwnership, setIsCheckingOwnership] = useState(false);
 
   const loadNFT = useCallback(async () => {
     if (!id) return;
 
     setIsLoading(true);
     try {
+      // Try to load from GraphQL indexer first
       const result = await graphqlClient.query(GET_NFT_BY_ID_QUERY, { id });
 
-      if (result.data?.nft) {
-        setNft(result.data.nft);
+      if (result?.nft) {
+        setNft(result.nft);
+        return;
+      }
+
+      // NFT not found in indexer - parse ID and fetch from Moralis
+      // ID format: "0xcontract-tokenId"
+      const [contractAddress, tokenId] = id.split('-');
+
+      if (!contractAddress || !tokenId) {
+        throw new Error('Invalid NFT ID format');
+      }
+
+      // Fetch from Moralis API
+      const response = await fetch(`/api/nft/${contractAddress}/${tokenId}`);
+
+      if (!response.ok) {
+        throw new Error('NFT not found');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const moralisNFT = data.data;
+        const metadata = moralisNFT.normalized_metadata || {};
+
+        // Transform to app NFT format (without listings/auctions/offers)
+        const nft: NFT = {
+          id: id,
+          tokenId: tokenId,
+          name: metadata.name || moralisNFT.name || `Token #${tokenId}`,
+          imageUrl: convertIpfsUrl(metadata.image),
+          description: metadata.description,
+          metadataUri: moralisNFT.token_uri,
+          collection: {
+            id: contractAddress.toLowerCase(),
+            name: moralisNFT.name || 'Unknown Collection',
+            symbol: moralisNFT.symbol || 'NFT',
+            collectionType: moralisNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            creator: {
+              id: contractAddress.toLowerCase(),
+              name: moralisNFT.name || 'Unknown',
+              subjectType: 'CONTRACT' as const,
+              createdAt: new Date().toISOString(),
+            },
+            totalSupply: '0',
+            createdAt: new Date().toISOString(),
+          },
+          traits: metadata.attributes?.map((attr: any, idx: number) => ({
+            id: `${id}-${idx}`,
+            traitType: attr.trait_type,
+            value: String(attr.value),
+            displayType: undefined,
+          })) || [],
+          // No listings/auctions/offers for NFTs not in indexer
+          listings: [],
+          auctions: [],
+          offers: [],
+        };
+
+        setNft(nft);
+      } else {
+        throw new Error('NFT not found');
       }
     } catch (error) {
       console.error('Failed to load NFT:', error);
-      toast.error('Failed to load NFT');
+      setNft(null);
     } finally {
       setIsLoading(false);
     }
@@ -57,6 +135,64 @@ export default function AssetPage() {
   useEffect(() => {
     loadNFT();
   }, [loadNFT]);
+
+  // Verify ownership
+  useEffect(() => {
+    const verifyOwnership = async () => {
+      if (!address || !nft || !id) {
+        setIsNFTOwner(false);
+        return;
+      }
+
+      // First check if nft.owners exists (from indexer)
+      if (nft.owners && nft.owners.length > 0) {
+        const ownerCheck = nft.owners.some(
+          (o) => o.ownerAddress.toLowerCase() === address.toLowerCase()
+        );
+        setIsNFTOwner(ownerCheck);
+        return;
+      }
+
+      // Otherwise verify via API (for NFTs not in indexer)
+      setIsCheckingOwnership(true);
+      try {
+        const parts = id.split('-');
+        if (parts.length < 2) {
+          setIsNFTOwner(false);
+          setIsCheckingOwnership(false);
+          return;
+        }
+
+        const contractAddress = parts[0];
+        const tokenId = parts.slice(1).join('-');
+
+        const response = await fetch('/api/nft/verify-owner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            contractAddress,
+            tokenId,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setIsNFTOwner(data.data.isOwner);
+        } else {
+          setIsNFTOwner(false);
+        }
+      } catch (error) {
+        console.error('Failed to verify ownership:', error);
+        setIsNFTOwner(false);
+      } finally {
+        setIsCheckingOwnership(false);
+      }
+    };
+
+    verifyOwnership();
+  }, [address, nft, id]);
 
   const handleBuyClick = (listing: Listing) => {
     if (!address) {
@@ -88,17 +224,13 @@ export default function AssetPage() {
 
     try {
       const tx = encodeCancelListing(BigInt(listing.listingId));
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Listing cancelled successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Listing cancelled successfully!');
         loadNFT();
-      } else {
-        toast.error('Transaction failed');
       }
     } catch (error: unknown) {
       console.error('Cancel listing error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel listing');
     }
   };
 
@@ -110,17 +242,13 @@ export default function AssetPage() {
 
     try {
       const tx = encodeCancelAuction(BigInt(auction.auctionId));
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Auction cancelled successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Auction cancelled successfully!');
         loadNFT();
-      } else {
-        toast.error('Transaction failed');
       }
     } catch (error: unknown) {
       console.error('Cancel auction error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel auction');
     }
   };
 
@@ -132,17 +260,13 @@ export default function AssetPage() {
 
     try {
       const tx = encodeAcceptOffer(BigInt(offer.offerId));
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Offer accepted successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Offer accepted successfully!');
         loadNFT();
-      } else {
-        toast.error('Transaction failed');
       }
     } catch (error: unknown) {
       console.error('Accept offer error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to accept offer');
     }
   };
 
@@ -154,17 +278,13 @@ export default function AssetPage() {
 
     try {
       const tx = encodeCancelOffer(BigInt(offer.offerId));
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Offer cancelled successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Offer cancelled successfully!');
         loadNFT();
-      } else {
-        toast.error('Transaction failed');
       }
     } catch (error: unknown) {
       console.error('Cancel offer error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel offer');
     }
   };
 
@@ -196,7 +316,36 @@ export default function AssetPage() {
   return (
     <MainLayout>
       <div className="container mx-auto px-4 py-8">
-        <NFTDetail nft={nft} />
+        <NFTDetail
+          nft={nft}
+          isOwner={isNFTOwner}
+          onCreateListing={() => setShowCreateListing(true)}
+          onCreateAuction={() => setShowCreateAuction(true)}
+        />
+
+        {/* Create Listing Modal */}
+        {isNFTOwner && (
+          <CreateListingModal
+            nft={nft}
+            isOpen={showCreateListing}
+            onClose={() => setShowCreateListing(false)}
+            onSuccess={() => {
+              loadNFT();
+            }}
+          />
+        )}
+
+        {/* Create Auction Modal */}
+        {isNFTOwner && (
+          <CreateAuctionModal
+            nft={nft}
+            isOpen={showCreateAuction}
+            onClose={() => setShowCreateAuction(false)}
+            onSuccess={() => {
+              loadNFT();
+            }}
+          />
+        )}
 
         {/* Trading Section */}
         <div className="mt-12">
@@ -301,6 +450,16 @@ export default function AssetPage() {
           }}
           auction={selectedAuction}
           onSuccess={loadNFT}
+        />
+      )}
+
+      {result && (
+        <TransactionResultModal
+          isOpen={showResultModal}
+          onClose={closeModal}
+          success={result.success}
+          message={result.message}
+          txHash={result.txHash}
         />
       )}
     </MainLayout>

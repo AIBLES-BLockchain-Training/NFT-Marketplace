@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminCheck } from '../../hooks/useAdminCheck';
@@ -32,7 +33,15 @@ export function Header() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500" />
+              <Image
+                src="/icon.png"
+                alt="AIBLES Logo"
+                width={100}
+                height={100}
+                quality={100}
+                priority
+                className="h-[60px] w-[60px] rounded-lg"
+              />
               <span className="text-xl font-bold gradient-text">AIBLES</span>
             </Link>
 

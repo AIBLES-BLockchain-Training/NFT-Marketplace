@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Auction } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
+import { TransactionResultModal } from '../common/TransactionResultModal';
 import { formatEth } from '../../lib/web3/utils';
-import { useContract } from '../../hooks/useContract';
+import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeBidInAuction } from '../../lib/web3/encoding';
 import toast from 'react-hot-toast';
 
@@ -15,7 +16,7 @@ interface BidModalProps {
 }
 
 export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps) {
-  const { sendTransaction, isLoading } = useContract();
+  const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const [bidAmount, setBidAmount] = useState('');
 
   const minimumBidAmount = BigInt(auction.minimumBidAmount);
@@ -42,18 +43,14 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
         bidAmount: bidWei,
       });
 
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Bid placed successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Bid placed successfully!');
         onSuccess?.();
         onClose();
-      } else {
-        toast.error('Transaction failed');
       }
     } catch (error: unknown) {
       console.error('Bid error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to place bid');
     }
   };
 
@@ -117,6 +114,16 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
           </Button>
         </div>
       </div>
+
+      {result && (
+        <TransactionResultModal
+          isOpen={showResultModal}
+          onClose={closeModal}
+          success={result.success}
+          message={result.message}
+          txHash={result.txHash}
+        />
+      )}
     </Modal>
   );
 }

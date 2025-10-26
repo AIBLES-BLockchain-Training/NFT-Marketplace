@@ -38,3 +38,7 @@ export const ZERO_ADDRESS: Address = '0x0000000000000000000000000000000000000000
 // Native token address (represents ETH - used for native currency listings/auctions)
 // This is the standard representation used by many protocols for native tokens
 export const NATIVE_TOKEN_ADDRESS: Address = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+
+// Shorthand exports for convenience
+export const ROUTER_ADDRESS = CONTRACT_ADDRESSES.ROUTER;
+export const PERMISSIONS_ADDRESS = CONTRACT_ADDRESSES.PERMISSIONS;

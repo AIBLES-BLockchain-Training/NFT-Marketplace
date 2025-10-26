@@ -1,6 +1,6 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAdminCheck } from '../../hooks/useAdminCheck';
+import { useAdminRole } from '../../hooks/useAdminRole';
 import { useWallet } from '../../hooks/useWallet';
 import { Spinner } from '../common/Spinner';
 import toast from 'react-hot-toast';
@@ -12,21 +12,24 @@ interface RoleProtectedProps {
 export function RoleProtected({ children }: RoleProtectedProps) {
   const router = useRouter();
   const { address } = useWallet();
-  const { isAdmin, isLoading } = useAdminCheck();
+  const { isAdmin, isChecking } = useAdminRole(address);
+  const hasShownError = useRef(false);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isChecking && !hasShownError.current) {
       if (!address) {
+        hasShownError.current = true;
         toast.error('Please connect your wallet');
         router.push('/');
       } else if (!isAdmin) {
+        hasShownError.current = true;
         toast.error('Access denied: Admin privileges required');
         router.push('/');
       }
     }
-  }, [address, isAdmin, isLoading, router]);
+  }, [address, isAdmin, isChecking, router]);
 
-  if (isLoading) {
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

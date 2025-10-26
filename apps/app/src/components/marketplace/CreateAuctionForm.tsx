@@ -62,18 +62,34 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
       if (receipt?.status === 1) {
         toast.success('Auction created successfully!');
         onSuccess?.();
-      } else {
-        toast.error('Transaction failed');
       }
+      // Error handling is done in useContract hook
     } catch (error: unknown) {
       console.error('Create auction error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to create auction');
+      // Error toast is already shown by useContract
     }
   };
 
   return (
     <Card>
       <h2 className="text-2xl font-bold text-white mb-6">Create Auction</h2>
+
+      {/* Info Banner */}
+      <div className="mb-6 p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
+        <div className="flex gap-3">
+          <svg className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-sm">
+            <p className="text-primary-400 font-semibold mb-1">Before creating an auction:</p>
+            <ul className="text-gray-300 space-y-1 text-xs">
+              <li>• Make sure you own this NFT</li>
+              <li>• You may need to approve the marketplace contract to manage your NFT</li>
+              <li>• The NFT contract must be whitelisted by an admin</li>
+            </ul>
+          </div>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>

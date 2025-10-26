@@ -1,5 +1,5 @@
-module.exports = class Data1761325468840 {
-    name = 'Data1761325468840'
+module.exports = class Data1761445429147 {
+    name = 'Data1761445429147'
 
     async up(db) {
         await db.query(`CREATE TABLE "bid" ("id" character varying NOT NULL, "bidder_address" text NOT NULL, "bid_amount" numeric NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "auction_id" character varying, CONSTRAINT "PK_ed405dda320051aca2dcb1a50bb" PRIMARY KEY ("id"))`)
@@ -105,6 +105,23 @@ module.exports = class Data1761325468840 {
         await db.query(`CREATE INDEX "IDX_82c8add5324e0e1cdc62d3ab81" ON "permission_event" ("timestamp") `)
         await db.query(`CREATE INDEX "IDX_db38cf80352c558992739a5e19" ON "permission_event" ("transaction_hash") `)
         await db.query(`CREATE INDEX "IDX_d53dbc7f4e1920ca68925dd526" ON "permission_event" ("block_number") `)
+        await db.query(`CREATE TABLE "role_request" ("id" character varying NOT NULL, "status" character varying(8) NOT NULL, "requested_at" TIMESTAMP WITH TIME ZONE NOT NULL, "processed_at" TIMESTAMP WITH TIME ZONE, "processed_by" text, "transaction_hash" text NOT NULL, "block_number" integer NOT NULL, "requester_id" character varying, "role_id" character varying, CONSTRAINT "PK_56e5c87e0e09b2416e398992a88" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE INDEX "IDX_c4f1d41fbcd1c9926c81a9125e" ON "role_request" ("requester_id") `)
+        await db.query(`CREATE INDEX "IDX_44dcb5bd9d9d599587d70d2819" ON "role_request" ("role_id") `)
+        await db.query(`CREATE INDEX "IDX_f253bd9b47ae641fb1545b31a1" ON "role_request" ("status") `)
+        await db.query(`CREATE INDEX "IDX_0286f040b31e22ca80bf7ef1e9" ON "role_request" ("requested_at") `)
+        await db.query(`CREATE INDEX "IDX_7bea020c874841f850bb57fc77" ON "role_request" ("processed_by") `)
+        await db.query(`CREATE INDEX "IDX_79bbd8970e05304bfb0c1e9e28" ON "role_request" ("transaction_hash") `)
+        await db.query(`CREATE INDEX "IDX_7804b493ca3f5fd6c57de42ca0" ON "role_request" ("block_number") `)
+        await db.query(`CREATE TABLE "nft_role_request" ("id" character varying NOT NULL, "nft_address" text NOT NULL, "token_id" numeric NOT NULL, "status" character varying(8) NOT NULL, "requested_at" TIMESTAMP WITH TIME ZONE NOT NULL, "processed_at" TIMESTAMP WITH TIME ZONE, "processed_by" text, "transaction_hash" text NOT NULL, "block_number" integer NOT NULL, "requester_id" character varying, CONSTRAINT "PK_bd4f8f66ecee979635bcf6c4b12" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE INDEX "IDX_143ffdc5c128c6a39b1e4c45e2" ON "nft_role_request" ("requester_id") `)
+        await db.query(`CREATE INDEX "IDX_52f0c8c552a842383b79e1ac92" ON "nft_role_request" ("nft_address") `)
+        await db.query(`CREATE INDEX "IDX_32ebc683946749fd1d609c0741" ON "nft_role_request" ("token_id") `)
+        await db.query(`CREATE INDEX "IDX_ece4b2c7faa4c4b8d18d91753b" ON "nft_role_request" ("status") `)
+        await db.query(`CREATE INDEX "IDX_cb24eee08326e36c6e79a4005e" ON "nft_role_request" ("requested_at") `)
+        await db.query(`CREATE INDEX "IDX_4cb00583b28f578b2f42b849eb" ON "nft_role_request" ("processed_by") `)
+        await db.query(`CREATE INDEX "IDX_557b8cb4f69ec16dce691e7221" ON "nft_role_request" ("transaction_hash") `)
+        await db.query(`CREATE INDEX "IDX_b5efd7c43e4baf070a0f4de5ad" ON "nft_role_request" ("block_number") `)
         await db.query(`ALTER TABLE "bid" ADD CONSTRAINT "FK_9e594e5a61c0f3cb25679f6ba8d" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_dba13de832980011b5d815c8dd2" FOREIGN KEY ("nft_id_id") REFERENCES "nft"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "auction" ADD CONSTRAINT "FK_4855125e8c0afa924db50cc1cf2" FOREIGN KEY ("currency_id") REFERENCES "supported_currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
@@ -133,6 +150,9 @@ module.exports = class Data1761325468840 {
         await db.query(`ALTER TABLE "offer" ADD CONSTRAINT "FK_dd550e23fe7a3843c05526c167c" FOREIGN KEY ("currency_id") REFERENCES "supported_currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "permission_event" ADD CONSTRAINT "FK_927f4b16a9cfadec0bc64c0fc38" FOREIGN KEY ("role_id") REFERENCES "role"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "permission_event" ADD CONSTRAINT "FK_87c13431810f47d9dcaf69f2ebf" FOREIGN KEY ("subject_id") REFERENCES "subject"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "role_request" ADD CONSTRAINT "FK_c4f1d41fbcd1c9926c81a9125e6" FOREIGN KEY ("requester_id") REFERENCES "subject"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "role_request" ADD CONSTRAINT "FK_44dcb5bd9d9d599587d70d2819c" FOREIGN KEY ("role_id") REFERENCES "role"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "nft_role_request" ADD CONSTRAINT "FK_143ffdc5c128c6a39b1e4c45e24" FOREIGN KEY ("requester_id") REFERENCES "subject"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
     }
 
     async down(db) {
@@ -239,6 +259,23 @@ module.exports = class Data1761325468840 {
         await db.query(`DROP INDEX "public"."IDX_82c8add5324e0e1cdc62d3ab81"`)
         await db.query(`DROP INDEX "public"."IDX_db38cf80352c558992739a5e19"`)
         await db.query(`DROP INDEX "public"."IDX_d53dbc7f4e1920ca68925dd526"`)
+        await db.query(`DROP TABLE "role_request"`)
+        await db.query(`DROP INDEX "public"."IDX_c4f1d41fbcd1c9926c81a9125e"`)
+        await db.query(`DROP INDEX "public"."IDX_44dcb5bd9d9d599587d70d2819"`)
+        await db.query(`DROP INDEX "public"."IDX_f253bd9b47ae641fb1545b31a1"`)
+        await db.query(`DROP INDEX "public"."IDX_0286f040b31e22ca80bf7ef1e9"`)
+        await db.query(`DROP INDEX "public"."IDX_7bea020c874841f850bb57fc77"`)
+        await db.query(`DROP INDEX "public"."IDX_79bbd8970e05304bfb0c1e9e28"`)
+        await db.query(`DROP INDEX "public"."IDX_7804b493ca3f5fd6c57de42ca0"`)
+        await db.query(`DROP TABLE "nft_role_request"`)
+        await db.query(`DROP INDEX "public"."IDX_143ffdc5c128c6a39b1e4c45e2"`)
+        await db.query(`DROP INDEX "public"."IDX_52f0c8c552a842383b79e1ac92"`)
+        await db.query(`DROP INDEX "public"."IDX_32ebc683946749fd1d609c0741"`)
+        await db.query(`DROP INDEX "public"."IDX_ece4b2c7faa4c4b8d18d91753b"`)
+        await db.query(`DROP INDEX "public"."IDX_cb24eee08326e36c6e79a4005e"`)
+        await db.query(`DROP INDEX "public"."IDX_4cb00583b28f578b2f42b849eb"`)
+        await db.query(`DROP INDEX "public"."IDX_557b8cb4f69ec16dce691e7221"`)
+        await db.query(`DROP INDEX "public"."IDX_b5efd7c43e4baf070a0f4de5ad"`)
         await db.query(`ALTER TABLE "bid" DROP CONSTRAINT "FK_9e594e5a61c0f3cb25679f6ba8d"`)
         await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_dba13de832980011b5d815c8dd2"`)
         await db.query(`ALTER TABLE "auction" DROP CONSTRAINT "FK_4855125e8c0afa924db50cc1cf2"`)
@@ -267,5 +304,8 @@ module.exports = class Data1761325468840 {
         await db.query(`ALTER TABLE "offer" DROP CONSTRAINT "FK_dd550e23fe7a3843c05526c167c"`)
         await db.query(`ALTER TABLE "permission_event" DROP CONSTRAINT "FK_927f4b16a9cfadec0bc64c0fc38"`)
         await db.query(`ALTER TABLE "permission_event" DROP CONSTRAINT "FK_87c13431810f47d9dcaf69f2ebf"`)
+        await db.query(`ALTER TABLE "role_request" DROP CONSTRAINT "FK_c4f1d41fbcd1c9926c81a9125e6"`)
+        await db.query(`ALTER TABLE "role_request" DROP CONSTRAINT "FK_44dcb5bd9d9d599587d70d2819c"`)
+        await db.query(`ALTER TABLE "nft_role_request" DROP CONSTRAINT "FK_143ffdc5c128c6a39b1e4c45e24"`)
     }
 }

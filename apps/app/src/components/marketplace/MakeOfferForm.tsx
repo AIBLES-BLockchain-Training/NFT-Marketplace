@@ -3,7 +3,8 @@ import { NFT } from '../../types';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { useContract } from '../../hooks/useContract';
+import { TransactionResultModal } from '../common/TransactionResultModal';
+import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeMakeOffer } from '../../lib/web3/encoding';
 import { NATIVE_TOKEN_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
@@ -17,7 +18,7 @@ interface MakeOfferFormProps {
 }
 
 export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOfferFormProps) {
-  const { sendTransaction, isLoading } = useContract();
+  const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const [totalPrice, setTotalPrice] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [duration, setDuration] = useState('7'); // days
@@ -43,17 +44,13 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
         expirationTime: expirationTime,
       });
 
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Offer made successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Offer made successfully!');
         onSuccess?.();
-      } else {
-        toast.error('Transaction failed');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Make offer error:', error);
-      toast.error(error.message || 'Failed to make offer');
     }
   };
 
@@ -149,6 +146,16 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
           </Button>
         </div>
       </form>
+
+      {result && (
+        <TransactionResultModal
+          isOpen={showResultModal}
+          onClose={closeModal}
+          success={result.success}
+          message={result.message}
+          txHash={result.txHash}
+        />
+      )}
     </Card>
   );
 }

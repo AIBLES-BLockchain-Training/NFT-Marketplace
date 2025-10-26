@@ -10,9 +10,12 @@ import {
   TradeType,
   CurrencyApproval,
   BuyerApproval,
-  SupportedCurrency
+  SupportedCurrency,
+  TokenOwnership
 } from '../model'
 import * as ListingABI from '../abi/Listing'
+import { fetchCollectionMetadata, detectContractType } from '../utils/metadata'
+import { ethers } from 'ethers'
 
 export function getListingTopics(): string[] {
   return [
@@ -29,6 +32,11 @@ export function getListingTopics(): string[] {
   ].filter(Boolean) as string[]
 }
 
+// Initialize provider for fetching on-chain metadata
+const provider = new ethers.JsonRpcProvider(
+  process.env.RPC_ENDPOINT || process.env.RPC_SEPOLIA_HTTP
+)
+
 export async function processListingEvents(
   logs: any[],
   ctx: any,
@@ -40,7 +48,8 @@ export async function processListingEvents(
   currencyMap: Map<string, SupportedCurrency>,
   purchaseHistories: PurchaseHistory[],
   currencyApprovals: CurrencyApproval[],
-  buyerApprovals: BuyerApproval[]
+  buyerApprovals: BuyerApproval[],
+  tokenOwnershipMap: Map<string, TokenOwnership>
 ) {
   async function getOrCreateSubject(address: string, type?: SubjectType): Promise<Subject> {
     const subjectId = address.toLowerCase()
@@ -75,14 +84,21 @@ export async function processListingEvents(
     }
     let collection = await ctx.store.get(Collection, collectionId)
     if (!collection) {
-      collection = new Collection({
+      console.log(`Fetching metadata for new collection: ${contractAddress}`)
+
+      const [metadata, contractType] = await Promise.all([
+        fetchCollectionMetadata(contractAddress, provider),
+        detectContractType(contractAddress, provider)
+      ])
+        
+        collection = new Collection({
         id: collectionId,
-        name: `Collection ${contractAddress.slice(0, 6)}`,
-        symbol: 'NFT',
-        description: undefined,
-        logoUrl: undefined,
-        bannerUrl: undefined,
-        collectionType: CollectionType.ERC721,
+        name: metadata.name,
+        symbol: metadata.symbol,
+        description: metadata.description,
+        logoUrl: metadata.image,
+        bannerUrl: metadata.banner_image,
+        collectionType: contractType === 'ERC721' ? CollectionType.ERC721 : CollectionType.ERC1155,
         creator: creator,
         totalSupply: BigInt(0),
         floorPrice: undefined,
@@ -91,6 +107,8 @@ export async function processListingEvents(
         traits: [],
         traitStats: []
       })
+
+      console.log(`Collection created: ${metadata.name} (${metadata.symbol})`)
     }
     collectionMap.set(collectionId, collection)
     return collection
@@ -159,6 +177,48 @@ export async function processListingEvents(
       return listing
     }
     return null
+  }
+
+  async function getOrCreateTokenOwnership(nft: NFT, ownerAddress: string): Promise<TokenOwnership> {
+    const ownershipId = `${nft.id}-${ownerAddress.toLowerCase()}`
+
+    if (tokenOwnershipMap.has(ownershipId)) {
+      return tokenOwnershipMap.get(ownershipId)!
+    }
+
+    let ownership = await ctx.store.get(TokenOwnership, ownershipId)
+    if (!ownership) {
+      ownership = new TokenOwnership({
+        id: ownershipId,
+        nft: nft,
+        ownerAddress: ownerAddress.toLowerCase(),
+        balance: BigInt(0),
+        updatedAt: new Date()
+      })
+    }
+    tokenOwnershipMap.set(ownershipId, ownership)
+    return ownership
+  }
+
+  async function updateTokenOwnership(
+    nft: NFT,
+    fromAddress: string,
+    toAddress: string,
+    quantity: bigint,
+    timestamp: Date
+  ) {
+    const sellerOwnership = await getOrCreateTokenOwnership(nft, fromAddress)
+    sellerOwnership.balance = sellerOwnership.balance - quantity
+    sellerOwnership.updatedAt = timestamp
+
+    if (sellerOwnership.balance < BigInt(0)) {
+      console.warn(`Negative balance for ${fromAddress} on NFT ${nft.id}. Setting to 0.`)
+      sellerOwnership.balance = BigInt(0)
+    }
+
+    const buyerOwnership = await getOrCreateTokenOwnership(nft, toAddress)
+    buyerOwnership.balance = buyerOwnership.balance + quantity
+    buyerOwnership.updatedAt = timestamp
   }
 
   for (let log of logs) {
@@ -392,6 +452,14 @@ export async function processListingEvents(
             listing: listing
           })
           purchaseHistories.push(purchaseHistory)
+
+          await updateTokenOwnership(
+            listing.nft,
+            listing.owner.id,
+            buyerSubject.id,
+            quantity,
+            timestamp
+          )
 
           if (listing.quantity >= quantity) {
             listing.quantity = listing.quantity - quantity

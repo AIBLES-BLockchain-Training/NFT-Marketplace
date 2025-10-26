@@ -12,7 +12,10 @@ import {
   PermissionEvent,
   PurchaseHistory,
   CurrencyApproval,
-  BuyerApproval
+  BuyerApproval,
+  TokenOwnership,
+  RoleRequest,
+  NFTRoleRequest
 } from './model'
 
 import {
@@ -101,12 +104,15 @@ class CombinedIndexer {
       const nftMap: Map<string, NFT> = new Map()
       const currencyMap: Map<string, SupportedCurrency> = new Map()
       const roleMap: Map<string, Role> = new Map()
+      const tokenOwnershipMap: Map<string, TokenOwnership> = new Map()
 
       const roleAssignments: RoleAssignment[] = []
       const permissionEvents: PermissionEvent[] = []
       const purchaseHistories: PurchaseHistory[] = []
       const currencyApprovals: CurrencyApproval[] = []
       const buyerApprovals: BuyerApproval[] = []
+      const roleRequests: RoleRequest[] = []
+      const nftRoleRequests: NFTRoleRequest[] = []
 
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
@@ -135,7 +141,8 @@ class CombinedIndexer {
           currencyMap,
           roleAssignments,
           permissionEvents,
-          collectionMap
+          roleRequests,
+          nftRoleRequests
         )
       }
 
@@ -153,7 +160,8 @@ class CombinedIndexer {
           currencyMap,
           purchaseHistories,
           currencyApprovals,
-          buyerApprovals
+          buyerApprovals,
+          tokenOwnershipMap
         )
       }
 
@@ -162,6 +170,7 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(roleMap.values()))
       await ctx.store.save(Array.from(collectionMap.values()))
       await ctx.store.save(Array.from(nftMap.values()))
+      await ctx.store.save(Array.from(tokenOwnershipMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
 
@@ -181,8 +190,11 @@ class CombinedIndexer {
       await ctx.store.save(currencyApprovals)
       await ctx.store.save(buyerApprovals)
       await ctx.store.save(purchaseHistories)
+      await ctx.store.save(roleRequests)
+      await ctx.store.save(nftRoleRequests)
 
       console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
+      console.log(`Role requests: ${roleRequests.length}, NFT role requests: ${nftRoleRequests.length}`)
     })
   }
 }

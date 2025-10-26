@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'AIBLES NFT Marketplace',
   description: 'Decentralized NFT Marketplace built on Ethereum',
+  icons: {
+    icon: '/icon.jpg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

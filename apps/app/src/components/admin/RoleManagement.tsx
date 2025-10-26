@@ -3,7 +3,8 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Badge } from '../common/Badge';
-import { useContract } from '../../hooks/useContract';
+import { TransactionResultModal } from '../common/TransactionResultModal';
+import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeGrantRole, encodeRevokeRole } from '../../lib/web3/encoding';
 import { MANAGEMENT_ROLE_HASH, isValidAddress } from '../../lib/web3/utils';
 import { Address } from '../../types';
@@ -16,12 +17,12 @@ interface Role {
 }
 
 interface RoleManagementProps {
-  roles: Role[];
+  roles?: Role[];
   onRoleUpdate?: () => void;
 }
 
-export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
-  const { sendTransaction, isLoading } = useContract();
+export function RoleManagement({ roles = [], onRoleUpdate }: RoleManagementProps) {
+  const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const [newAdminAddress, setNewAdminAddress] = useState('');
   const [showGrantForm, setShowGrantForm] = useState(false);
 
@@ -44,10 +45,9 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
         trimmedAddress as Address
       );
 
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Admin role granted successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Admin role granted successfully!');
         setNewAdminAddress('');
         setShowGrantForm(false);
         onRoleUpdate?.();
@@ -72,10 +72,9 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
         address as Address
       );
 
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Admin role revoked successfully!');
 
       if (receipt?.status === 1) {
-        toast.success('Admin role revoked successfully!');
         onRoleUpdate?.();
       } else {
         toast.error('Transaction failed');
@@ -92,14 +91,14 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
     <Card>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-1">Role Management</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Role Management</h2>
           <p className="text-sm text-gray-400">
-            Manage admin access and permissions
+            Grant or revoke admin permissions
           </p>
         </div>
         <Button
           onClick={() => setShowGrantForm(!showGrantForm)}
-          variant="primary"
+          variant={showGrantForm ? "secondary" : "primary"}
           size="sm"
         >
           {showGrantForm ? 'Cancel' : 'Add Admin'}
@@ -107,13 +106,13 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
       </div>
 
       {showGrantForm && (
-        <div className="mb-6 p-4 bg-dark-bg rounded-lg border border-dark-border">
+        <div className="mb-6 p-5 bg-gradient-to-br from-primary/5 to-secondary/5 rounded-xl border border-primary/20">
           <h3 className="text-lg font-semibold text-white mb-4">
             Grant Admin Role
           </h3>
           <div className="flex gap-3">
             <Input
-              placeholder="0x..."
+              placeholder="Enter wallet address (0x...)"
               value={newAdminAddress}
               onChange={(e) => setNewAdminAddress(e.target.value)}
             />
@@ -121,8 +120,9 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
               onClick={handleGrantRole}
               variant="primary"
               isLoading={isLoading}
+              className="whitespace-nowrap"
             >
-              Grant
+              Grant Role
             </Button>
           </div>
         </div>
@@ -130,22 +130,21 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
 
       <div className="space-y-3">
         {adminRoles.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            No admin roles assigned
+          <div className="text-center py-12 px-4">
+            <p className="text-gray-400 mb-1">No admin roles assigned</p>
+            <p className="text-sm text-gray-500">Click &quot;Add Admin&quot; to grant admin permissions</p>
           </div>
         ) : (
           adminRoles.map((role, index) => (
             <div
               key={index}
-              className="flex items-center justify-between p-4 bg-dark-bg rounded-lg border border-dark-border"
+              className="flex items-center justify-between p-4 bg-dark-bg/50 rounded-xl border border-dark-border hover:border-primary/30 transition-all"
             >
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <p className="font-mono text-sm text-white">{role.address}</p>
-                  <Badge variant="success">Admin</Badge>
-                </div>
+                <p className="font-mono text-sm text-white mb-2">{role.address}</p>
+                <Badge variant="success">Admin Access</Badge>
                 {role.grantedAt && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 mt-2">
                     Granted: {new Date(role.grantedAt).toLocaleString()}
                   </p>
                 )}
@@ -162,6 +161,16 @@ export function RoleManagement({ roles, onRoleUpdate }: RoleManagementProps) {
           ))
         )}
       </div>
+
+      {result && (
+        <TransactionResultModal
+          isOpen={showResultModal}
+          onClose={closeModal}
+          success={result.success}
+          message={result.message}
+          txHash={result.txHash}
+        />
+      )}
     </Card>
   );
 }

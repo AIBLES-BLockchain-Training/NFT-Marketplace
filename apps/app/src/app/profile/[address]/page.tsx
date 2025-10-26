@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { NFTGrid } from '../../../components/nft/NFTGrid';
 import { Badge } from '../../../components/common/Badge';
-import { graphqlClient } from '../../../lib/graphql/client';
-import { GET_USER_NFTS_QUERY } from '../../../lib/graphql/queries';
+import { getNFTsByAddress, MoralisNFT } from '../../../lib/moralis/client';
 import { useWallet } from '../../../hooks/useWallet';
 import { NFT } from '../../../types';
+import { RequestRoles } from '../../../components/profile/RequestRoles';
 import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
@@ -18,23 +19,77 @@ export default function ProfilePage() {
 
   const [nfts, setNfts] = useState<NFT[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'owned' | 'listed' | 'offers'>('owned');
+  const [activeTab, setActiveTab] = useState<'owned' | 'listed' | 'offers' | 'roles'>('owned');
 
   const isOwnProfile = connectedAddress?.toLowerCase() === profileAddress?.toLowerCase();
+
+  // Group NFTs by collection
+  const groupedNFTs = useMemo(() => {
+    const groups: Record<string, NFT[]> = {};
+    nfts.forEach(nft => {
+      const collectionId = nft.collection.id;
+      if (!groups[collectionId]) {
+        groups[collectionId] = [];
+      }
+      groups[collectionId].push(nft);
+    });
+    return groups;
+  }, [nfts]);
+
+  const collectionsCount = Object.keys(groupedNFTs).length;
 
   const loadUserNFTs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await graphqlClient.query(GET_USER_NFTS_QUERY, {
-        address: profileAddress.toLowerCase(),
+      // ✅ Fetch NFTs from Moralis API (real-time from blockchain)
+      const moralisNFTs = await getNFTsByAddress(profileAddress);
+
+      // Transform Moralis NFTs to app NFT format
+      const transformedNFTs: NFT[] = moralisNFTs.map((nft: MoralisNFT) => {
+        const metadata = nft.normalized_metadata || {};
+
+        // Convert IPFS URLs to HTTP gateway URLs
+        const convertIpfsUrl = (url: string | undefined): string | undefined => {
+          if (!url) return undefined;
+          if (url.startsWith('ipfs://')) {
+            return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
+          }
+          return url;
+        };
+
+        return {
+          id: `${nft.token_address.toLowerCase()}-${nft.token_id}`,
+          tokenId: nft.token_id,
+          name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
+          imageUrl: convertIpfsUrl(metadata.image) || undefined,
+          description: metadata.description || undefined,
+          metadataUri: nft.token_uri || undefined,
+          collection: {
+            id: nft.token_address.toLowerCase(),
+            name: nft.name || 'Unknown Collection',
+            symbol: nft.symbol || 'NFT',
+            collectionType: nft.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            creator: {
+              id: nft.token_address.toLowerCase(),
+              name: nft.name || 'Unknown',
+              subjectType: 'CONTRACT' as const,
+              createdAt: new Date().toISOString(),
+            },
+            totalSupply: '0',
+            createdAt: new Date().toISOString(),
+          },
+          traits: metadata.attributes?.map((attr, idx) => ({
+            id: `${nft.token_address}_${nft.token_id}_${idx}`,
+            traitType: attr.trait_type,
+            value: String(attr.value),
+            displayType: undefined,
+          })) || [],
+        };
       });
 
-      if (result.data?.tokenOwnerships) {
-        const ownedNFTs = result.data.tokenOwnerships.map((ownership: { nft: NFT }) => ownership.nft);
-        setNfts(ownedNFTs);
-      }
+      setNfts(transformedNFTs);
     } catch (error) {
-      console.error('Failed to load user NFTs:', error);
+      console.error('Failed to load NFTs:', error);
       toast.error('Failed to load NFTs. Please try again.');
     } finally {
       setIsLoading(false);
@@ -77,7 +132,7 @@ export default function ProfilePage() {
                   <p className="text-sm text-gray-400">NFTs Owned</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">-</p>
+                  <p className="text-2xl font-bold text-white">{collectionsCount}</p>
                   <p className="text-sm text-gray-400">Collections</p>
                 </div>
               </div>
@@ -86,10 +141,10 @@ export default function ProfilePage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-dark-border">
+        <div className="flex gap-4 mb-8 border-b border-dark-border overflow-x-auto">
           <button
             onClick={() => setActiveTab('owned')}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
+            className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
               activeTab === 'owned'
                 ? 'text-primary-400'
                 : 'text-gray-400 hover:text-white'
@@ -102,7 +157,7 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={() => setActiveTab('listed')}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
+            className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
               activeTab === 'listed'
                 ? 'text-primary-400'
                 : 'text-gray-400 hover:text-white'
@@ -115,7 +170,7 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={() => setActiveTab('offers')}
-            className={`px-6 py-3 font-semibold transition-colors relative ${
+            className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
               activeTab === 'offers'
                 ? 'text-primary-400'
                 : 'text-gray-400 hover:text-white'
@@ -126,10 +181,31 @@ export default function ProfilePage() {
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
             )}
           </button>
+          {isOwnProfile && (
+            <button
+              onClick={() => setActiveTab('roles')}
+              className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
+                activeTab === 'roles'
+                  ? 'text-primary-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Request Roles
+              {activeTab === 'roles' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
+              )}
+            </button>
+          )}
         </div>
 
         {/* Content */}
-        {activeTab === 'owned' && <NFTGrid nfts={nfts} isLoading={isLoading} />}
+        {activeTab === 'owned' && (
+          <CollectionGroups
+            groupedNFTs={groupedNFTs}
+            isLoading={isLoading}
+            ownerAddress={profileAddress}
+          />
+        )}
 
         {activeTab === 'listed' && (
           <div className="text-center py-16">
@@ -142,7 +218,115 @@ export default function ProfilePage() {
             <p className="text-gray-400">Offers view - Coming soon</p>
           </div>
         )}
+
+        {activeTab === 'roles' && isOwnProfile && (
+          <RequestRoles />
+        )}
       </div>
     </MainLayout>
+  );
+}
+
+function CollectionGroups({
+  groupedNFTs,
+  isLoading,
+  ownerAddress,
+}: {
+  groupedNFTs: Record<string, NFT[]>;
+  isLoading: boolean;
+  ownerAddress: string;
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      </div>
+    );
+  }
+
+  const collections = Object.entries(groupedNFTs);
+
+  if (collections.length === 0) {
+    return (
+      <div className="text-center py-16 bg-dark-card border border-dark-border rounded-2xl">
+        <p className="text-gray-400">No NFTs found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {collections.map(([collectionId, nfts]) => {
+        const collection = nfts[0].collection;
+        const displayNFTs = nfts.slice(0, 4);
+        const hasMore = nfts.length > 4;
+
+        return (
+          <div key={collectionId} className="space-y-4">
+            {/* Collection Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">{collection.name}</h3>
+                <p className="text-sm text-gray-400">
+                  {nfts.length} {nfts.length === 1 ? 'item' : 'items'}
+                </p>
+              </div>
+              {hasMore && (
+                <Link
+                  href={`/profile/${ownerAddress}/collection/${collectionId}`}
+                  className="text-primary-400 hover:text-primary-300 text-sm font-medium"
+                >
+                  View All →
+                </Link>
+              )}
+            </div>
+
+            {/* NFT Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+              {displayNFTs.map((nft) => (
+                <Link
+                  key={nft.id}
+                  href={`/asset/${nft.id}`}
+                  className="group rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card"
+                >
+                  <div className="aspect-square bg-dark-bg relative overflow-hidden">
+                    {nft.imageUrl ? (
+                      <img
+                        src={nft.imageUrl}
+                        alt={nft.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-500">
+                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <p className="text-xs font-semibold text-white truncate">{nft.name}</p>
+                    <p className="text-[10px] text-gray-500 truncate">#{nft.tokenId}</p>
+                  </div>
+                </Link>
+              ))}
+
+              {/* View All Card */}
+              {hasMore && (
+                <Link
+                  href={`/profile/${ownerAddress}/collection/${collectionId}`}
+                  className="rounded-lg overflow-hidden border-2 border-dashed border-dark-border hover:border-primary-500 transition-all bg-dark-card flex items-center justify-center aspect-square"
+                >
+                  <div className="text-center p-4">
+                    <div className="text-3xl font-bold text-primary-400 mb-1">+{nfts.length - 4}</div>
+                    <p className="text-xs text-gray-400">View All</p>
+                  </div>
+                </Link>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Listing } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
+import { TransactionResultModal } from '../common/TransactionResultModal';
 import { formatEth } from '../../lib/web3/utils';
-import { useContract } from '../../hooks/useContract';
+import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
 import { encodeBuyFromListing } from '../../lib/web3/encoding';
 import toast from 'react-hot-toast';
@@ -16,7 +17,7 @@ interface BuyModalProps {
 }
 
 export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps) {
-  const { sendTransaction, isLoading } = useContract();
+  const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const { address } = useWallet();
   const [quantity, setQuantity] = useState('1');
 
@@ -45,18 +46,14 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
         expectedTotalPrice: totalPrice,
       });
 
-      const receipt = await sendTransaction(tx);
+      const receipt = await sendTransaction(tx, 'Purchase successful!');
 
       if (receipt?.status === 1) {
-        toast.success('Purchase successful!');
         onSuccess?.();
         onClose();
-      } else {
-        toast.error('Transaction failed');
       }
     } catch (error: unknown) {
       console.error('Buy error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to buy NFT');
     }
   };
 
@@ -104,6 +101,16 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
           </Button>
         </div>
       </div>
+
+      {result && (
+        <TransactionResultModal
+          isOpen={showResultModal}
+          onClose={closeModal}
+          success={result.success}
+          message={result.message}
+          txHash={result.txHash}
+        />
+      )}
     </Modal>
   );
 }

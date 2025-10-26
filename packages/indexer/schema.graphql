@@ -258,6 +258,33 @@ type PermissionEvent @entity {
   blockNumber: Int! @index
 }
 
+# Role request from users
+type RoleRequest @entity {
+  id: ID! @index
+  requester: Subject! @index
+  role: Role! @index
+  status: RequestStatus! @index
+  requestedAt: DateTime! @index
+  processedAt: DateTime
+  processedBy: String @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
+# NFT role request from users
+type NFTRoleRequest @entity {
+  id: ID! @index
+  requester: Subject! @index
+  nftAddress: String! @index
+  tokenId: BigInt! @index
+  status: RequestStatus! @index
+  requestedAt: DateTime! @index
+  processedAt: DateTime
+  processedBy: String @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
 # Enums
 enum SubjectType {
   USER
@@ -305,5 +332,11 @@ enum PermissionEventType {
   ROLE_GRANTED
   ROLE_REVOKED
   ADMIN_ROLE_CHANGED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 

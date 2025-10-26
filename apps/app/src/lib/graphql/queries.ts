@@ -92,79 +92,80 @@ export const GET_NFT_BY_ID_QUERY = `
           }
         }
       }
-      auctions(where: { status_in: [CREATED, ACTIVE] }) {
-        id
-        auctionId
-        sellerAddress
-        quantity
-        minimumBidAmount
-        bidBufferBps
-        startPrice
-        stepAmount
-        ceilingPrice
-        startTime
-        endTime
-        timeBufferInSeconds
-        status
-        auctionCreator {
-          id
-          name
-          avatarUrl
-        }
-        currency {
-          id
-          symbol
-          decimals
-        }
-        winningBid {
-          id
-          bidderAddress
-          bidAmount
-          timestamp
-          bidder {
-            id
-            name
-            avatarUrl
-          }
-        }
-        bids {
-          id
-          bidderAddress
-          bidAmount
-          timestamp
-          bidder {
-            id
-            name
-            avatarUrl
-          }
-        }
-      }
-      offers(where: { status_eq: ACTIVE }) {
-        id
-        offerId
-        buyerAddress
-        quantity
-        totalPrice
-        expirationTime
-        expirationTimestamp
-        status
-        createdAt
-        offeror {
-          id
-          name
-          avatarUrl
-        }
-        tokenOwner {
-          id
-          name
-          avatarUrl
-        }
-        currency {
-          id
-          symbol
-          decimals
-        }
-      }
+      # TODO: Uncomment when Auction and Offer are added to schema
+      # auctions(where: { status_in: [CREATED, ACTIVE] }) {
+      #   id
+      #   auctionId
+      #   sellerAddress
+      #   quantity
+      #   minimumBidAmount
+      #   bidBufferBps
+      #   startPrice
+      #   stepAmount
+      #   ceilingPrice
+      #   startTime
+      #   endTime
+      #   timeBufferInSeconds
+      #   status
+      #   auctionCreator {
+      #     id
+      #     name
+      #     avatarUrl
+      #   }
+      #   currency {
+      #     id
+      #     symbol
+      #     decimals
+      #   }
+      #   winningBid {
+      #     id
+      #     bidderAddress
+      #     bidAmount
+      #     timestamp
+      #     bidder {
+      #       id
+      #       name
+      #       avatarUrl
+      #     }
+      #   }
+      #   bids {
+      #     id
+      #     bidderAddress
+      #     bidAmount
+      #     timestamp
+      #     bidder {
+      #       id
+      #       name
+      #       avatarUrl
+      #     }
+      #   }
+      # }
+      # offers(where: { status_eq: ACTIVE }) {
+      #   id
+      #   offerId
+      #   buyerAddress
+      #   quantity
+      #   totalPrice
+      #   expirationTime
+      #   expirationTimestamp
+      #   status
+      #   createdAt
+      #   offeror {
+      #     id
+      #     name
+      #     avatarUrl
+      #   }
+      #   tokenOwner {
+      #     id
+      #     name
+      #     avatarUrl
+      #   }
+      #   currency {
+      #     id
+      #     symbol
+      #     decimals
+      #   }
+      # }
     }
   }
 `;
@@ -509,22 +510,22 @@ export const GET_PURCHASE_HISTORY_QUERY = `
 
 export const GET_ADMIN_STATS_QUERY = `
   query GetAdminStats {
-    collectionsConnection {
+    collectionsConnection(orderBy: id_ASC) {
       totalCount
     }
-    nftsConnection {
+    nftsConnection(orderBy: id_ASC) {
       totalCount
     }
-    listingsConnection(where: { status_eq: CREATED }) {
+    listingsConnection(where: { status_eq: CREATED }, orderBy: id_ASC) {
       totalCount
     }
-    auctionsConnection(where: { status_eq: CREATED }) {
+    auctionsConnection(where: { status_eq: CREATED }, orderBy: id_ASC) {
       totalCount
     }
-    subjectsConnection(where: { subjectType_eq: USER }) {
+    subjectsConnection(where: { subjectType_eq: USER }, orderBy: id_ASC) {
       totalCount
     }
-    tradesConnection {
+    purchaseHistoriesConnection(orderBy: id_ASC) {
       totalCount
     }
   }
@@ -590,6 +591,113 @@ export const GET_RECENT_TRADES_QUERY = `
         name
       }
       metadata
+    }
+  }
+`;
+
+export const GET_ROLE_REQUESTS_QUERY = `
+  query GetRoleRequests($where: RoleRequestWhereInput) {
+    roleRequests(where: $where, orderBy: requestedAt_DESC) {
+      id
+      status
+      requestedAt
+      processedAt
+      processedBy
+      transactionHash
+      blockNumber
+      requester {
+        id
+        name
+        avatarUrl
+      }
+      role {
+        id
+        roleName
+        roleHash
+      }
+    }
+  }
+`;
+
+export const GET_NFT_ROLE_REQUESTS_QUERY = `
+  query GetNFTRoleRequests($where: NFTRoleRequestWhereInput) {
+    nftRoleRequests(where: $where, orderBy: requestedAt_DESC) {
+      id
+      nftAddress
+      tokenId
+      status
+      requestedAt
+      processedAt
+      processedBy
+      transactionHash
+      blockNumber
+      requester {
+        id
+        name
+        avatarUrl
+      }
+    }
+  }
+`;
+
+export const GET_ALL_ROLE_ASSIGNMENTS_QUERY = `
+  query GetAllRoleAssignments($limit: Int!, $offset: Int!, $where: RoleAssignmentWhereInput) {
+    roleAssignments(limit: $limit, offset: $offset, where: $where, orderBy: assignedAt_DESC) {
+      id
+      assignedAt
+      transactionHash
+      subject {
+        id
+        name
+        avatarUrl
+        subjectType
+      }
+      role {
+        id
+        roleName
+        roleHash
+      }
+    }
+    roleAssignmentsConnection(where: $where, orderBy: id_ASC) {
+      totalCount
+    }
+  }
+`;
+
+export const GET_WHITELISTED_NFTS_QUERY = `
+  query GetWhitelistedNFTs($limit: Int!, $offset: Int!) {
+    nftRoleRequests(limit: $limit, offset: $offset, where: { status_eq: APPROVED }, orderBy: processedAt_DESC) {
+      id
+      nftAddress
+      tokenId
+      requestedAt
+      processedAt
+      processedBy
+      transactionHash
+      requester {
+        id
+        name
+      }
+    }
+    nftRoleRequestsConnection(where: { status_eq: APPROVED }, orderBy: id_ASC) {
+      totalCount
+    }
+  }
+`;
+
+export const GET_WHITELISTED_CURRENCIES_QUERY = `
+  query GetWhitelistedCurrencies($limit: Int!, $offset: Int!) {
+    supportedCurrencies(limit: $limit, offset: $offset, where: { isActive_eq: true }, orderBy: id_ASC) {
+      id
+      name
+      symbol
+      decimals
+      isActive
+      feePercentage
+      totalAmountFee
+    }
+    supportedCurrenciesConnection(where: { isActive_eq: true }, orderBy: id_ASC) {
+      totalCount
     }
   }
 `;

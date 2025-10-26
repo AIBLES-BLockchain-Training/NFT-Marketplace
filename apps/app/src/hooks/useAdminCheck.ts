@@ -21,14 +21,9 @@ export function useAdminCheck() {
           address: address.toLowerCase(),
         });
 
-        if (result.error) {
-          console.error('Error checking admin role:', result.error);
-          setIsAdmin(false);
-          return;
-        }
-
-        const hasManagementRole = result.data?.roleAssignments?.some(
-          (assignment: any) => assignment.role.roleName === 'MANAGEMENT_ROLE'
+        // After GraphQL client update, result is data directly (not nested)
+        const hasManagementRole = result?.roleAssignments?.some(
+          (assignment: { role: { roleName: string } }) => assignment.role.roleName === 'MANAGEMENT_ROLE'
         );
 
         setIsAdmin(hasManagementRole || false);
