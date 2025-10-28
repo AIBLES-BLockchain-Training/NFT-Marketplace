@@ -99,7 +99,7 @@ export default function AdminDashboard() {
     return (
       <RoleProtected>
         <MainLayout>
-          <div className="container mx-auto px-4 py-20 flex justify-center">
+          <div className="w-full px-4 py-20 flex justify-center">
             <Spinner size="lg" />
           </div>
         </MainLayout>
@@ -110,7 +110,7 @@ export default function AdminDashboard() {
   return (
     <RoleProtected>
       <MainLayout>
-        <div className="container mx-auto px-4 py-8">
+        <div className="w-full px-4 py-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-white mb-2">Admin Dashboard</h1>

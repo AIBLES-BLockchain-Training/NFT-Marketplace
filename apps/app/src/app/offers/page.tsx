@@ -6,6 +6,7 @@ import { MainLayout } from '../../components/layout/MainLayout';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
 import { Spinner } from '../../components/common/Spinner';
+import { NFTImage } from '../../components/common/NFTImage';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_OFFERS_QUERY } from '../../lib/graphql/queries';
 import { Offer } from '../../types';
@@ -86,7 +87,7 @@ export default function OffersPage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Offers</h1>
           <p className="text-gray-400">Browse all NFT offers on the marketplace</p>
@@ -158,18 +159,14 @@ export default function OffersPage() {
                   )}
 
                   {/* NFT Image */}
-                  <div className="aspect-square bg-dark-bg rounded-lg overflow-hidden mb-4">
-                    {offer.nft.imageUrl ? (
-                      <img
-                        src={offer.nft.imageUrl}
-                        alt={offer.nft.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500">
-                        No Image
-                      </div>
-                    )}
+                  <div className="aspect-square bg-dark-bg rounded-lg overflow-hidden mb-4 relative">
+                    <NFTImage
+                      src={offer.nft.imageUrl}
+                      alt={offer.nft.name}
+                      className="object-cover"
+                      sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      width={300}
+                    />
                   </div>
 
                   {/* NFT Info */}

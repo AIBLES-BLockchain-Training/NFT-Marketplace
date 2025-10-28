@@ -125,7 +125,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create Auction">
+    <Modal isOpen={isOpen} onClose={onClose} title="Create Auction" zIndex="z-[60]">
       {/* Info Banner */}
       <div className="mb-6 p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
         <div className="flex gap-3">

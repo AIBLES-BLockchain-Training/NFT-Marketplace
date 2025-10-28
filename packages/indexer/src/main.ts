@@ -170,6 +170,16 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(roleMap.values()))
       await ctx.store.save(Array.from(collectionMap.values()))
       await ctx.store.save(Array.from(nftMap.values()))
+
+      // Save traits from all NFTs
+      const allTraits = Array.from(nftMap.values())
+        .flatMap(nft => nft.traits || [])
+        .filter(trait => trait != null)
+      if (allTraits.length > 0) {
+        console.log(`Saving ${allTraits.length} traits...`)
+        await ctx.store.save(allTraits)
+      }
+
       await ctx.store.save(Array.from(tokenOwnershipMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))

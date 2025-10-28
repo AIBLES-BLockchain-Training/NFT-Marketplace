@@ -3,6 +3,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { truncate } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
 interface OfferCardProps {
@@ -36,6 +37,9 @@ export function OfferCard({ offer, onAccept, onCancel, isTokenOwner, isOfferMake
                 {hasExpired ? 'EXPIRED' : offer.status}
               </Badge>
             </div>
+            <p className="text-xs text-gray-500 font-mono mb-1">
+              ID: {truncate(offer.offerId, 6, 4)}
+            </p>
             <p className="text-sm text-gray-400">
               Made {formatDistanceToNow(new Date(offer.createdAt), { addSuffix: true })}
             </p>

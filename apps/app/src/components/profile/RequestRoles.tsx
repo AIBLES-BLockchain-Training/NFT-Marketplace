@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
+import { NFTImage } from '../common/NFTImage';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
@@ -10,6 +10,7 @@ import { GET_USER_ROLE_ASSIGNMENTS_QUERY } from '../../lib/graphql/queries';
 import { getNFTsByAddress, MoralisNFT } from '../../lib/moralis/client';
 import { REQUESTABLE_ROLES } from '../../lib/constants/roles';
 import { PERMISSIONS_ADDRESS } from '../../lib/contracts/addresses';
+import { truncateTokenId } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface NFT {
@@ -53,20 +54,11 @@ export function RequestRoles() {
       const transformedNFTs: NFT[] = moralisResponse.data.map((nft: MoralisNFT) => {
         const metadata = nft.normalized_metadata || {};
 
-        // Convert IPFS URLs to HTTP gateway URLs
-        const convertIpfsUrl = (url: string | undefined): string | undefined => {
-          if (!url) return undefined;
-          if (url.startsWith('ipfs://')) {
-            return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
-          }
-          return url;
-        };
-
         return {
           id: `${nft.token_address.toLowerCase()}-${nft.token_id}`,
           tokenId: nft.token_id,
           name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
-          imageUrl: convertIpfsUrl(metadata.image),
+          imageUrl: metadata.image,
           collection: {
             id: nft.token_address.toLowerCase(),
             name: nft.name || 'Unknown Collection',
@@ -375,20 +367,12 @@ export function RequestRoles() {
                         }`}
                       >
                         <div className="aspect-square bg-dark-bg relative overflow-hidden">
-                          {nft.imageUrl ? (
-                            <Image
-                              src={nft.imageUrl}
-                              alt={nft.name}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-500">
-                              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          )}
+                          <NFTImage
+                            src={nft.imageUrl}
+                            alt={nft.name}
+                            className="object-cover"
+                            width={200}
+                          />
                           {isSelected && (
                             <div className="absolute top-2 right-2 w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center">
                               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,7 +383,7 @@ export function RequestRoles() {
                         </div>
                         <div className="p-2 bg-dark-card">
                           <p className="text-xs font-semibold text-white truncate">{nft.name}</p>
-                          <p className="text-[10px] text-gray-500 truncate">#{nft.tokenId}</p>
+                          <p className="text-[10px] text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
                           <p className="text-[10px] text-gray-600 truncate font-mono">{nft.collection.id.slice(0, 10)}...</p>
                         </div>
                       </button>

@@ -171,7 +171,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create Fixed Price Listing">
+    <Modal isOpen={isOpen} onClose={onClose} title="Create Fixed Price Listing" zIndex="z-[60]">
       {/* Info Banner */}
       <div className="mb-6 p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
         <div className="flex gap-3">

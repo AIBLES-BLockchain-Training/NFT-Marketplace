@@ -10,7 +10,7 @@ export default function HomePage() {
     <MainLayout>
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-dark-bg via-dark-card to-dark-bg py-20 px-4 border-b border-dark-border">
-        <div className="container mx-auto text-center">
+        <div className="w-full text-center">
           <div className="max-w-4xl mx-auto">
             <h1 className="text-5xl md:text-6xl font-bold gradient-text mb-6">
               Discover, Collect, and Trade NFTs
@@ -40,7 +40,7 @@ export default function HomePage() {
 
       {/* Stats Section */}
       <section className="py-12 px-4 bg-dark-card border-b border-dark-border">
-        <div className="container mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center">
               <p className="text-3xl font-bold text-primary-400 mb-2">10K+</p>
@@ -64,7 +64,7 @@ export default function HomePage() {
 
       {/* How It Works */}
       <section className="py-16 px-4 bg-dark-card border-y border-dark-border">
-        <div className="container mx-auto">
+        <div className="w-full">
           <h2 className="text-3xl font-bold text-white text-center mb-12">
             How It Works
           </h2>

@@ -4,9 +4,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { NFTDetail } from '../../../components/nft/NFTDetail';
-import { ListingCard } from '../../../components/marketplace/ListingCard';
-import { AuctionCard } from '../../../components/marketplace/AuctionCard';
-import { OfferCard } from '../../../components/marketplace/OfferCard';
 import { BuyModal } from '../../../components/marketplace/BuyModal';
 import { BidModal } from '../../../components/marketplace/BidModal';
 import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
@@ -25,15 +22,6 @@ import {
   encodeCancelOffer,
 } from '../../../lib/web3/encoding';
 import toast from 'react-hot-toast';
-
-// Helper to convert IPFS URLs
-function convertIpfsUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  if (url.startsWith('ipfs://')) {
-    return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
-  }
-  return url;
-}
 
 export default function AssetPage() {
   const params = useParams();
@@ -61,6 +49,12 @@ export default function AssetPage() {
       const result = await graphqlClient.query(GET_NFT_BY_ID_QUERY, { id });
 
       if (result?.nft) {
+        console.log('NFT loaded from indexer:', {
+          id: result.nft.id,
+          name: result.nft.name,
+          traits: result.nft.traits,
+          traitsCount: result.nft.traits?.length || 0
+        });
         setNft(result.nft);
         return;
       }
@@ -91,7 +85,7 @@ export default function AssetPage() {
           id: id,
           tokenId: tokenId,
           name: metadata.name || moralisNFT.name || `Token #${tokenId}`,
-          imageUrl: convertIpfsUrl(metadata.image),
+          imageUrl: metadata.image,
           description: metadata.description,
           metadataUri: moralisNFT.token_uri,
           collection: {
@@ -291,7 +285,7 @@ export default function AssetPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="container mx-auto px-4 py-20 flex justify-center">
+        <div className="w-full px-4 py-20 flex justify-center">
           <Spinner size="lg" />
         </div>
       </MainLayout>
@@ -301,7 +295,7 @@ export default function AssetPage() {
   if (!nft) {
     return (
       <MainLayout>
-        <div className="container mx-auto px-4 py-20 text-center">
+        <div className="w-full px-4 py-20 text-center">
           <h2 className="text-2xl font-bold text-white mb-4">NFT Not Found</h2>
           <p className="text-gray-400">The NFT you&apos;re looking for doesn&apos;t exist.</p>
         </div>
@@ -315,7 +309,7 @@ export default function AssetPage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         <NFTDetail
           nft={nft}
           isOwner={isNFTOwner}

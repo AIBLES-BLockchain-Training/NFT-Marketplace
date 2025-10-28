@@ -3,15 +3,19 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { Badge } from '../../../components/common/Badge';
+import { NFTImage } from '../../../components/common/NFTImage';
 import { getNFTsByAddress, MoralisNFT } from '../../../lib/moralis/client';
 import { useWallet } from '../../../hooks/useWallet';
 import { NFT } from '../../../types';
 import { RequestRoles } from '../../../components/profile/RequestRoles';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_USER_ACTIVE_LISTINGS_QUERY } from '../../../lib/graphql/queries';
+import { truncateTokenId } from '../../../lib/utils/format';
+import { NFTDetailModal } from '../../../components/nft/NFTDetailModal';
+import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
+import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
 import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
@@ -25,7 +29,14 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'owned' | 'roles'>('owned');
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [totalNFTCount, setTotalNFTCount] = useState<number>(0);
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  // NFT Detail Modal states
+  const [showNFTDetail, setShowNFTDetail] = useState(false);
+  const [selectedNFTIndex, setSelectedNFTIndex] = useState(0);
+  const [showCreateListing, setShowCreateListing] = useState(false);
+  const [showCreateAuction, setShowCreateAuction] = useState(false);
 
   const isOwnProfile = connectedAddress?.toLowerCase() === profileAddress?.toLowerCase();
 
@@ -43,7 +54,46 @@ export default function ProfilePage() {
     return groups;
   }, [nfts, listedNFTIds]);
 
+  // Flatten NFTs for modal navigation
+  const flatNFTs = useMemo(() => {
+    return nfts.filter(nft => !listedNFTIds.has(nft.id));
+  }, [nfts, listedNFTIds]);
+
   const collectionsCount = Object.keys(groupedNFTs).length;
+
+  const handleNFTClick = (nftId: string) => {
+    const index = flatNFTs.findIndex(n => n.id === nftId);
+    if (index !== -1) {
+      setSelectedNFTIndex(index);
+      setShowNFTDetail(true);
+    }
+  };
+
+  const handleNavigateNFT = (index: number) => {
+    setSelectedNFTIndex(index);
+  };
+
+  const handleCloseNFTDetail = () => {
+    setShowNFTDetail(false);
+  };
+
+  const handleCreateListingClick = () => {
+    setShowCreateListing(true);
+    // Keep detail modal open in background
+  };
+
+  const handleCreateAuctionClick = () => {
+    setShowCreateAuction(true);
+    // Keep detail modal open in background
+  };
+
+  const handleCloseCreateListing = () => {
+    setShowCreateListing(false);
+  };
+
+  const handleCloseCreateAuction = () => {
+    setShowCreateAuction(false);
+  };
 
   const loadUserNFTs = useCallback(async (loadCursor?: string | null, append = false) => {
     if (!append) {
@@ -78,20 +128,11 @@ export default function ProfilePage() {
       const transformedNFTs: NFT[] = response.data.map((nft: MoralisNFT) => {
         const metadata = nft.normalized_metadata || {};
 
-        // Convert IPFS URLs to HTTP gateway URLs
-        const convertIpfsUrl = (url: string | undefined): string | undefined => {
-          if (!url) return undefined;
-          if (url.startsWith('ipfs://')) {
-            return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
-          }
-          return url;
-        };
-
         return {
           id: `${nft.token_address.toLowerCase()}-${nft.token_id}`,
           tokenId: nft.token_id,
           name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
-          imageUrl: convertIpfsUrl(metadata.image) || undefined,
+          imageUrl: metadata.image || undefined,
           description: metadata.description || undefined,
           metadataUri: nft.token_uri || undefined,
           collection: {
@@ -125,6 +166,11 @@ export default function ProfilePage() {
 
       setCursor(response.cursor);
       setHasMore(response.hasMore);
+
+      // Set total count if available (from first load only)
+      if (!append && response.total) {
+        setTotalNFTCount(response.total);
+      }
     } catch (error) {
       console.error('Failed to load NFTs:', error);
       toast.error('Failed to load NFTs. Please try again.');
@@ -184,7 +230,7 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         {/* Viewing Other Profile Banner */}
         {!isOwnProfile && connectedAddress && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6 flex items-center justify-between">
@@ -229,11 +275,17 @@ export default function ProfilePage() {
 
               <div className="flex items-center gap-6">
                 <div>
-                  <p className="text-2xl font-bold text-white">{nfts.length}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {totalNFTCount > 0 ? totalNFTCount : nfts.length}
+                    {hasMore && totalNFTCount === 0 && '+'}
+                  </p>
                   <p className="text-sm text-gray-400">NFTs Owned</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{collectionsCount}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {collectionsCount}
+                    {hasMore && '+'}
+                  </p>
                   <p className="text-sm text-gray-400">Collections</p>
                 </div>
               </div>
@@ -281,6 +333,7 @@ export default function ProfilePage() {
             ownerAddress={profileAddress}
             observerTarget={observerTarget}
             hasMore={hasMore}
+            onNFTClick={handleNFTClick}
           />
         )}
 
@@ -288,6 +341,40 @@ export default function ProfilePage() {
           <RequestRoles />
         )}
       </div>
+
+      {/* NFT Detail Modal */}
+      {showNFTDetail && flatNFTs.length > 0 && (
+        <NFTDetailModal
+          isOpen={showNFTDetail}
+          onClose={handleCloseNFTDetail}
+          nft={flatNFTs[selectedNFTIndex]}
+          allNFTs={flatNFTs}
+          currentIndex={selectedNFTIndex}
+          onNavigate={handleNavigateNFT}
+          isOwner={isOwnProfile}
+          activeListing={null}
+          onCreateListing={handleCreateListingClick}
+          onCreateAuction={handleCreateAuctionClick}
+        />
+      )}
+
+      {/* Create Listing Modal */}
+      {showCreateListing && flatNFTs.length > 0 && (
+        <CreateListingModal
+          isOpen={showCreateListing}
+          onClose={handleCloseCreateListing}
+          nft={flatNFTs[selectedNFTIndex]}
+        />
+      )}
+
+      {/* Create Auction Modal */}
+      {showCreateAuction && flatNFTs.length > 0 && (
+        <CreateAuctionModal
+          isOpen={showCreateAuction}
+          onClose={handleCloseCreateAuction}
+          nft={flatNFTs[selectedNFTIndex]}
+        />
+      )}
     </MainLayout>
   );
 }
@@ -298,12 +385,14 @@ function CollectionGroups({
   ownerAddress,
   observerTarget,
   hasMore: hasMoreNFTs,
+  onNFTClick,
 }: {
   groupedNFTs: Record<string, NFT[]>;
   isLoading: boolean;
   ownerAddress: string;
   observerTarget: React.RefObject<HTMLDivElement>;
   hasMore: boolean;
+  onNFTClick: (nftId: string) => void;
 }) {
   if (isLoading) {
     return (
@@ -353,34 +442,26 @@ function CollectionGroups({
             {/* NFT Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {displayNFTs.map((nft) => (
-                <Link
+                <div
                   key={nft.id}
-                  href={`/asset/${nft.id}`}
-                  className="group rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card"
+                  onClick={() => onNFTClick(nft.id)}
+                  className="group rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card cursor-pointer"
                 >
                   <div className="aspect-square bg-dark-bg relative overflow-hidden">
-                    {nft.imageUrl ? (
-                      <Image
-                        src={nft.imageUrl}
-                        alt={nft.name}
-                        fill
-                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                        className="object-cover group-hover:scale-105 transition-transform"
-                        priority={false}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500">
-                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                    )}
+                    <NFTImage
+                      src={nft.imageUrl}
+                      alt={nft.name}
+                      className="object-cover group-hover:scale-105 transition-transform"
+                      sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                      priority={false}
+                      width={250}
+                    />
                   </div>
                   <div className="p-2">
                     <p className="text-xs font-semibold text-white truncate">{nft.name}</p>
-                    <p className="text-[10px] text-gray-500 truncate">#{nft.tokenId}</p>
+                    <p className="text-[10px] text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
                   </div>
-                </Link>
+                </div>
               ))}
 
               {/* View All Card */}

@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { NFT, Collection } from '../../types';
 import { Card } from './Card';
 import { Badge } from './Badge';
+import { NFTImage } from './NFTImage';
 
 interface TrendingSectionProps {
   title: string;
@@ -82,7 +82,7 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
                 <Card hover className="w-64">
                   <div className="aspect-square bg-dark-bg rounded-lg overflow-hidden mb-4 relative">
                     {nft.imageUrl ? (
-                      <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover" />
+                      <NFTImage src={nft.imageUrl} alt={nft.name} width={256} className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-500">
                         <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,10 +113,10 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
                 <Card hover className="w-64">
                   <div className="aspect-video bg-dark-bg rounded-lg overflow-hidden mb-4 relative">
                     {collection.bannerUrl ? (
-                      <Image
+                      <NFTImage
                         src={collection.bannerUrl}
                         alt={collection.name}
-                        fill
+                        width={256}
                         className="object-cover"
                       />
                     ) : (
@@ -126,10 +126,10 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
                   <div className="flex items-start gap-3 mb-3">
                     {collection.logoUrl && (
                       <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 relative">
-                        <Image
+                        <NFTImage
                           src={collection.logoUrl}
                           alt={collection.name}
-                          fill
+                          width={48}
                           className="object-cover"
                         />
                       </div>

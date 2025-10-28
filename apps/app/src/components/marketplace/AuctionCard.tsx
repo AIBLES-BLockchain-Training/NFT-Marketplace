@@ -4,6 +4,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { truncate } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
 interface AuctionCardProps {
@@ -70,6 +71,9 @@ export function AuctionCard({ auction, onBid, onCancel, isOwner }: AuctionCardPr
                 {hasEnded ? 'ENDED' : auction.status}
               </Badge>
             </div>
+            <p className="text-xs text-gray-500 font-mono mb-1">
+              ID: {truncate(auction.auctionId, 6, 4)}
+            </p>
             <p className="text-sm text-gray-400">
               Started {formatDistanceToNow(new Date(auction.startTime), { addSuffix: true })}
             </p>

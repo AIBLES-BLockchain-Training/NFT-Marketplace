@@ -10,9 +10,10 @@ interface ModalProps {
   children: ReactNode;
   title?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  zIndex?: string;
 }
 
-export function Modal({ isOpen, onClose, children, title, size = 'md' }: ModalProps) {
+export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 'z-50' }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -47,7 +48,7 @@ export function Modal({ isOpen, onClose, children, title, size = 'md' }: ModalPr
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div className={clsx("fixed inset-0 flex items-center justify-center p-4 animate-fade-in", zIndex)}>
       <div
         className="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm"
         onClick={onClose}

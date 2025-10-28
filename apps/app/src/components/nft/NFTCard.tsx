@@ -1,24 +1,20 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState } from 'react';
 import { NFT, ListingStatus } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { formatEth } from '../../lib/web3/utils';
+import { getIpfsGateways } from '../../lib/utils/format';
 
 interface NFTCardProps {
   nft: NFT;
 }
 
-// Convert IPFS URLs to HTTP gateway URLs
-function convertIpfsUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  if (url.startsWith('ipfs://')) {
-    return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
-  }
-  return url;
-}
-
 export function NFTCard({ nft }: NFTCardProps) {
+  const [imageError, setImageError] = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+
   const activeListings = nft.listings?.filter(l => l.status === ListingStatus.CREATED) || [];
   const lowestPrice = activeListings.length > 0
     ? activeListings.reduce((min, listing) => {
@@ -27,13 +23,23 @@ export function NFTCard({ nft }: NFTCardProps) {
       }, BigInt(activeListings[0].pricePerToken))
     : null;
 
-  const imageUrl = convertIpfsUrl(nft.imageUrl);
+  // Get all IPFS gateways for fallback with thumbnail size (300px)
+  const imageGateways = getIpfsGateways(nft.imageUrl, 300);
+  const imageUrl = imageGateways.length > 0 ? imageGateways[fallbackIndex] : nft.imageUrl;
+
+  const handleImageError = () => {
+    if (imageGateways.length > 0 && fallbackIndex < imageGateways.length - 1) {
+      setFallbackIndex(prev => prev + 1);
+    } else {
+      setImageError(true);
+    }
+  };
 
   return (
     <Link href={`/asset/${nft.id}`}>
       <Card hover className="group p-3">
         <div className="aspect-square relative overflow-hidden rounded-lg mb-2 bg-dark-border">
-          {imageUrl ? (
+          {imageUrl && !imageError ? (
             <Image
               src={imageUrl}
               alt={nft.name}
@@ -41,6 +47,8 @@ export function NFTCard({ nft }: NFTCardProps) {
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
               className="object-cover group-hover:scale-105 transition-transform duration-300"
               priority={false}
+              unoptimized
+              onError={handleImageError}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

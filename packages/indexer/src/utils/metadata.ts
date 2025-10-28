@@ -31,6 +31,7 @@ export interface NFTMetadata {
   attributes?: Array<{
     trait_type: string;
     value: string | number;
+    display_type?: string;
   }>;
 }
 
@@ -122,31 +123,114 @@ export async function fetchCollectionMetadata(
 }
 
 /**
- * Fetch metadata from URI (IPFS or HTTP)
+ * Fetch metadata from URI (IPFS or HTTP) with multiple gateway fallbacks
  */
 async function fetchMetadataURI(uri: string): Promise<Partial<CollectionMetadata> | null> {
   try {
-    // Convert IPFS URIs to HTTP gateway
-    let fetchUrl = uri;
+    // Get IPFS hash from URI
+    let hash = '';
+
     if (uri.startsWith('ipfs://')) {
-      fetchUrl = uri.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      hash = uri.replace('ipfs://', '');
+      // Handle Rarible's format: ipfs://ipfs/hash
+      if (hash.startsWith('ipfs/')) {
+        hash = hash.replace('ipfs/', '');
+      }
+    } else if (uri.startsWith('http')) {
+      // Extract IPFS hash from HTTP gateway URLs
+      // Format: https://gateway.com/ipfs/HASH or https://gateway.com/ipfs/HASH/1
+      const ipfsMatch = uri.match(/\/ipfs\/([^/?#]+(?:\/[^/?#]+)?)/);
+      if (ipfsMatch && ipfsMatch[1]) {
+        hash = ipfsMatch[1];
+      } else {
+        // Not an IPFS gateway URL, use as-is (non-IPFS HTTP)
+        try {
+          return await fetchWithTimeout(uri, 15000);
+        } catch (error: any) {
+          console.error(`Failed to fetch from ${uri}: ${error.message || error}`);
+          return null;
+        }
+      }
+    } else {
+      return null;
     }
 
-    const response = await fetch(fetchUrl, {
+    if (!hash) {
+      return null;
+    }
+
+    // Try multiple IPFS gateways in parallel (race condition)
+    const gateways = [
+      `https://cloudflare-ipfs.com/ipfs/${hash}`,
+      `https://ipfs.io/ipfs/${hash}`,
+      `https://gateway.pinata.cloud/ipfs/${hash}`,
+      `https://dweb.link/ipfs/${hash}`,
+    ];
+
+    // Create promises for all gateways and race them
+    const fetchPromises = gateways.map((gateway) =>
+      fetchWithTimeout(gateway, 8000)
+        .then(result => {
+          if (result) {
+            return result;
+          }
+          throw new Error('Empty result');
+        })
+    );
+
+    try {
+      // Promise.any returns the first successful promise
+      // If all fail, it throws AggregateError
+      const result = await Promise.any(fetchPromises);
+      return result;
+    } catch (error: any) {
+      // All gateways failed
+      console.error(`All gateways failed for ${hash.substring(0, 10)}...`);
+      return null;
+    }
+  } catch (error: any) {
+    console.error(`Failed to fetch metadata from ${uri}: ${error.message || error}`);
+    return null;
+  }
+}
+
+/**
+ * Helper function to fetch with timeout
+ */
+async function fetchWithTimeout(url: string, timeout: number): Promise<Partial<CollectionMetadata> | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(5000), // 5s timeout
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
+
+    // Fail fast for 404 - metadata doesn't exist
+    if (response.status === 404) {
+      throw new Error('Not Found (404)');
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    return await response.json() as Partial<CollectionMetadata>;
-  } catch (error) {
-    console.error(`Failed to fetch metadata from ${uri}:`, error);
-    return null;
+    const data = await response.json();
+    return data as Partial<CollectionMetadata>;
+  } catch (error: any) {
+    // Provide better error messages
+    if (error.name === 'AbortError') {
+      throw new Error(`Timeout (${timeout}ms)`);
+    }
+    if (error.message) {
+      throw new Error(error.message);
+    }
+    throw error;
   }
 }
 

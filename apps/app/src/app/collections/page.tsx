@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { MainLayout } from '../../components/layout/MainLayout';
+import { NFTImage } from '../../components/common/NFTImage';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_COLLECTIONS_TABLE_QUERY } from '../../lib/graphql/queries';
 import { formatEth } from '../../lib/web3/utils';
@@ -218,7 +218,7 @@ export default function CollectionsPage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Collections</h1>
           <p className="text-gray-400">Browse all NFT collections</p>
@@ -330,16 +330,12 @@ export default function CollectionsPage() {
                     <div className="col-span-4 flex items-center gap-3">
                       <span className="text-gray-500 text-sm w-8">{index + 1}</span>
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark-bg flex-shrink-0 relative">
-                        {collection.logoUrl ? (
-                          <Image
-                            src={collection.logoUrl}
-                            alt={collection.name}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-primary-500/20 to-purple-500/20" />
-                        )}
+                        <NFTImage
+                          src={collection.logoUrl}
+                          alt={collection.name}
+                          className="object-cover"
+                          width={64}
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-white font-semibold truncate group-hover:text-primary-400 transition-colors">

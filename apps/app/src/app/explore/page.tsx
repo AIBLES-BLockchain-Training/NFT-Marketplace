@@ -12,11 +12,6 @@ import {
 import { NFT, Collection } from '../../types';
 import toast from 'react-hot-toast';
 
-interface TrendingData {
-  collections: Collection[];
-  nfts: NFT[];
-}
-
 export default function ExplorePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [heroCollections, setHeroCollections] = useState<Collection[]>([]);
@@ -87,7 +82,7 @@ export default function ExplorePage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         {isLoading ? (
           <div className="space-y-8">
             <div className="h-96 bg-dark-card border border-dark-border rounded-2xl animate-pulse" />

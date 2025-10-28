@@ -9,6 +9,7 @@ import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeUpdateListing } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
+import { truncateTokenId } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface UpdateListingModalProps {
@@ -76,7 +77,7 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
   const isERC1155 = listing?.nft.collection.collectionType === 'ERC1155';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Update Listing">
+    <Modal isOpen={isOpen} onClose={onClose} title="Update Listing" zIndex="z-[60]">
       {/* Info Banner */}
       <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
         <div className="text-sm">
@@ -98,7 +99,7 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Token ID:</span>
-              <span className="text-white font-mono">{listing?.nft.tokenId}</span>
+              <span className="text-white font-mono">{truncateTokenId(listing?.nft.tokenId)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Type:</span>

@@ -6,6 +6,7 @@ import { graphqlClient } from '../../lib/graphql/client';
 import { GET_NFT_ROLE_REQUESTS_QUERY } from '../../lib/graphql/queries';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { PERMISSIONS_ADDRESS } from '../../lib/contracts/addresses';
+import { truncateTokenId } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface NFTRoleRequest {
@@ -272,7 +273,7 @@ export function NFTWhitelistRequests() {
                   <div className="flex-1">
                     <div className="mb-2">
                       <p className="text-sm text-white font-mono mb-1">
-                        NFT: {request.nftAddress.slice(0, 10)}...{request.nftAddress.slice(-8)} #{request.tokenId}
+                        NFT: {request.nftAddress.slice(0, 10)}...{request.nftAddress.slice(-8)} #{truncateTokenId(request.tokenId)}
                       </p>
                       <p className="text-xs text-gray-400">
                         Requested by: {request.requester.name}

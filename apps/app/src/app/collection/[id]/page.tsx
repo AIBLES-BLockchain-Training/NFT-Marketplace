@@ -2,13 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import Image from 'next/image';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { Badge } from '../../../components/common/Badge';
 import { Spinner } from '../../../components/common/Spinner';
+import { NFTImage } from '../../../components/common/NFTImage';
 import { BuyModal } from '../../../components/marketplace/BuyModal';
 import { UpdateListingModal } from '../../../components/marketplace/UpdateListingModal';
+import { NFTDetailModal } from '../../../components/nft/NFTDetailModal';
+import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
+import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
 import { graphqlClient } from '../../../lib/graphql/client';
 import {
   GET_COLLECTION_BY_ID_QUERY,
@@ -26,6 +28,7 @@ import { formatEth } from '../../../lib/web3/utils';
 import { encodeCancelListing, encodeApproveCurrencyForListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
+import { truncateTokenId } from '../../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 type TabType = 'listed' | 'auctioned' | 'offered' | 'yours';
@@ -50,6 +53,12 @@ export default function CollectionDetailPage() {
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // NFT Detail Modal
+  const [showNFTDetail, setShowNFTDetail] = useState(false);
+  const [selectedNFTIndex, setSelectedNFTIndex] = useState(0);
+  const [showCreateListing, setShowCreateListing] = useState(false);
+  const [showCreateAuction, setShowCreateAuction] = useState(false);
 
   const loadCollection = useCallback(async () => {
     setIsLoading(true);
@@ -267,11 +276,23 @@ export default function CollectionDetailPage() {
     return now >= end;
   };
 
+  const handleNFTClick = (index: number) => {
+    setSelectedNFTIndex(index);
+    setShowNFTDetail(true);
+  };
+
+  const handleNavigateNFT = (index: number) => {
+    setSelectedNFTIndex(index);
+  };
+
+  const handleCloseNFTDetail = () => {
+    setShowNFTDetail(false);
+  };
 
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="container mx-auto px-4 py-20 flex justify-center">
+        <div className="w-full px-4 py-20 flex justify-center">
           <Spinner size="lg" />
         </div>
       </MainLayout>
@@ -281,7 +302,7 @@ export default function CollectionDetailPage() {
   if (!collection) {
     return (
       <MainLayout>
-        <div className="container mx-auto px-4 py-20 text-center">
+        <div className="w-full px-4 py-20 text-center">
           <h2 className="text-2xl font-bold text-white mb-4">Collection Not Found</h2>
           <p className="text-gray-400">The collection you&apos;re looking for doesn&apos;t exist.</p>
         </div>
@@ -291,13 +312,13 @@ export default function CollectionDetailPage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         {/* Collection Header */}
         <div className="bg-dark-card border border-dark-border rounded-2xl p-8 mb-8">
           <div className="flex flex-col md:flex-row items-start gap-6">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex-shrink-0 relative overflow-hidden">
               {collection.logoUrl && (
-                <Image src={collection.logoUrl} alt={collection.name} fill className="object-cover" />
+                <NFTImage src={collection.logoUrl} alt={collection.name} className="object-cover" width={96} />
               )}
             </div>
 
@@ -439,7 +460,7 @@ export default function CollectionDetailPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {nfts.map((nft) => {
+            {nfts.map((nft, index) => {
               const isOwner = nft.listing && address && nft.listing.owner.id.toLowerCase() === address.toLowerCase();
               const price = nft.listing?.currencyApprovals?.[0];
               const hasApprovedCurrencies = nft.listing?.currencyApprovals && nft.listing.currencyApprovals.length > 0;
@@ -459,28 +480,15 @@ export default function CollectionDetailPage() {
               }
 
               return (
-                <div key={nft.id} className="group relative rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card">
-                  <Link href={`/asset/${nft.id}`} className="block">
+                <div key={nft.id} className="group relative rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card cursor-pointer">
+                  <div onClick={() => handleNFTClick(index)} className="block">
                     <div className="aspect-square bg-dark-bg relative overflow-hidden">
-                      {nft.imageUrl ? (
-                        <Image
-                          src={nft.imageUrl}
-                          alt={nft.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-500">
-                          <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </div>
-                      )}
+                      <NFTImage
+                        src={nft.imageUrl}
+                        alt={nft.name}
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        width={300}
+                      />
 
                       {/* Warning Badge for listings without approved currencies */}
                       {isOwner && nft.listing && !hasApprovedCurrencies && !isListingExpired(nft.listing.endTimestamp) && (
@@ -587,9 +595,9 @@ export default function CollectionDetailPage() {
                     </div>
                     <div className="p-3">
                       <p className="text-sm font-semibold text-white truncate">{nft.name}</p>
-                      <p className="text-xs text-gray-500 truncate">#{nft.tokenId}</p>
+                      <p className="text-xs text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
                     </div>
-                  </Link>
+                  </div>
                 </div>
               );
             })}
@@ -622,6 +630,70 @@ export default function CollectionDetailPage() {
           }}
           listing={selectedListing}
           onSuccess={() => {
+            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+          }}
+        />
+      )}
+
+      {/* NFT Detail Modal */}
+      {nfts.length > 0 && nfts[selectedNFTIndex] && (() => {
+        const selectedNFT = nfts[selectedNFTIndex];
+        // Check if user is owner via NFT.owners OR listing.owner
+        const isOwnerByNFT = address && selectedNFT.owners?.some(
+          (o) => o.ownerAddress.toLowerCase() === address.toLowerCase()
+        );
+        const isOwnerByListing = address && selectedNFT.listing &&
+          selectedNFT.listing.owner.id.toLowerCase() === address.toLowerCase();
+
+        const isActualOwner = isOwnerByNFT || isOwnerByListing;
+
+        return (
+          <NFTDetailModal
+            isOpen={showNFTDetail}
+            onClose={handleCloseNFTDetail}
+            nft={selectedNFT}
+            allNFTs={nfts}
+            currentIndex={selectedNFTIndex}
+            onNavigate={handleNavigateNFT}
+            isOwner={isActualOwner}
+            activeListing={selectedNFT.listing || null}
+            onBuy={handleBuyClick}
+            onCreateListing={() => setShowCreateListing(true)}
+            onCreateAuction={() => setShowCreateAuction(true)}
+            onCancelListing={(listing) => {
+              handleCancelListing(listing);
+              setShowNFTDetail(false);
+            }}
+            onUpdateListing={(listing) => {
+              setSelectedListing(listing);
+              setShowUpdateModal(true);
+              // Keep detail modal open in background
+            }}
+          />
+        );
+      })()}
+
+      {/* Create Listing Modal */}
+      {nfts[selectedNFTIndex] && (
+        <CreateListingModal
+          isOpen={showCreateListing}
+          onClose={() => setShowCreateListing(false)}
+          nft={nfts[selectedNFTIndex]}
+          onSuccess={() => {
+            setShowCreateListing(false);
+            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+          }}
+        />
+      )}
+
+      {/* Create Auction Modal */}
+      {nfts[selectedNFTIndex] && (
+        <CreateAuctionModal
+          isOpen={showCreateAuction}
+          onClose={() => setShowCreateAuction(false)}
+          nft={nfts[selectedNFTIndex]}
+          onSuccess={() => {
+            setShowCreateAuction(false);
             loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
           }}
         />

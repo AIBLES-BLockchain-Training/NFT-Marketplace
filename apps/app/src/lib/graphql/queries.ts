@@ -380,11 +380,18 @@ export const GET_COLLECTION_LISTED_NFTS_QUERY = `
         tokenId
         name
         imageUrl
+        description
         collection {
           id
           name
           symbol
           collectionType
+        }
+        traits {
+          id
+          traitType
+          value
+          displayType
         }
       }
       currencyApprovals {
@@ -409,11 +416,18 @@ export const GET_COLLECTION_AUCTIONED_NFTS_QUERY = `
         tokenId
         name
         imageUrl
+        description
         collection {
           id
           name
           symbol
           collectionType
+        }
+        traits {
+          id
+          traitType
+          value
+          displayType
         }
       }
       currency {
@@ -436,11 +450,18 @@ export const GET_COLLECTION_OFFERED_NFTS_QUERY = `
         tokenId
         name
         imageUrl
+        description
         collection {
           id
           name
           symbol
           collectionType
+        }
+        traits {
+          id
+          traitType
+          value
+          displayType
         }
       }
       currency {
@@ -466,11 +487,18 @@ export const GET_COLLECTION_USER_LISTINGS_QUERY = `
         tokenId
         name
         imageUrl
+        description
         collection {
           id
           name
           symbol
           collectionType
+        }
+        traits {
+          id
+          traitType
+          value
+          displayType
         }
       }
       currencyApprovals {
@@ -495,11 +523,18 @@ export const GET_COLLECTION_USER_AUCTIONS_QUERY = `
         tokenId
         name
         imageUrl
+        description
         collection {
           id
           name
           symbol
           collectionType
+        }
+        traits {
+          id
+          traitType
+          value
+          displayType
         }
       }
       currency {
@@ -522,11 +557,18 @@ export const GET_COLLECTION_USER_OFFERS_QUERY = `
         tokenId
         name
         imageUrl
+        description
         collection {
           id
           name
           symbol
           collectionType
+        }
+        traits {
+          id
+          traitType
+          value
+          displayType
         }
       }
       currency {

@@ -3,6 +3,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { truncate } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ListingCardProps {
@@ -31,6 +32,9 @@ export function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardPr
                 {listing.status}
               </Badge>
             </div>
+            <p className="text-xs text-gray-500 font-mono mb-1">
+              ID: {truncate(listing.id, 6, 4)}
+            </p>
             <p className="text-sm text-gray-400">
               Listed {formatDistanceToNow(new Date(listing.createdAt), { addSuffix: true })}
             </p>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { MainLayout } from '../../../../../components/layout/MainLayout';
 import { NFTGrid } from '../../../../../components/nft/NFTGrid';
@@ -12,7 +12,6 @@ import toast from 'react-hot-toast';
 
 export default function CollectionViewPage() {
   const params = useParams();
-  const router = useRouter();
   const ownerAddress = params?.address as string;
   const collectionId = params?.collectionId as string;
 
@@ -50,15 +49,6 @@ export default function CollectionViewPage() {
         collectionType: firstNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
       });
 
-      // Convert IPFS URLs
-      const convertIpfsUrl = (url: string | undefined): string | undefined => {
-        if (!url) return undefined;
-        if (url.startsWith('ipfs://')) {
-          return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
-        }
-        return url;
-      };
-
       // Transform to app NFT format
       const transformedNFTs: NFT[] = filteredNFTs.map((nft: MoralisNFT) => {
         const metadata = nft.normalized_metadata || {};
@@ -67,7 +57,7 @@ export default function CollectionViewPage() {
           id: `${nft.token_address.toLowerCase()}-${nft.token_id}`,
           tokenId: nft.token_id,
           name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
-          imageUrl: convertIpfsUrl(metadata.image) || undefined,
+          imageUrl: metadata.image || undefined,
           description: metadata.description || undefined,
           metadataUri: nft.token_uri || undefined,
           collection: {
@@ -110,7 +100,7 @@ export default function CollectionViewPage() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <Link

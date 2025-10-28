@@ -11,7 +11,8 @@ import {
   CurrencyApproval,
   BuyerApproval,
   SupportedCurrency,
-  TokenOwnership
+  TokenOwnership,
+  Trait
 } from '../model'
 import * as ListingABI from '../abi/Listing'
 import { fetchCollectionMetadata, detectContractType, fetchNFTMetadata } from '../utils/metadata'
@@ -90,8 +91,8 @@ export async function processListingEvents(
         fetchCollectionMetadata(contractAddress, provider),
         detectContractType(contractAddress, provider)
       ])
-        
-        collection = new Collection({
+
+      collection = new Collection({
         id: collectionId,
         name: metadata.name,
         symbol: metadata.symbol,
@@ -108,7 +109,7 @@ export async function processListingEvents(
         traitStats: []
       })
 
-      console.log(`Collection created: ${metadata.name} (${metadata.symbol})`)
+      console.log(`✓ Collection: ${metadata.name} (${metadata.symbol})`)
     }
     collectionMap.set(collectionId, collection)
     return collection
@@ -127,7 +128,6 @@ export async function processListingEvents(
       const collection = await getOrCreateCollection(contractAddress, contractSubject)
 
       // Fetch NFT metadata from blockchain
-      console.log(`Fetching metadata for NFT: ${contractAddress}:${tokenId}`)
       const metadata = await fetchNFTMetadata(contractAddress, tokenId.toString(), provider)
 
       nft = new NFT({
@@ -145,8 +145,31 @@ export async function processListingEvents(
         owners: []
       })
 
-      if (metadata) {
-        console.log(`NFT metadata fetched: ${metadata.name || 'Unnamed'}`)
+      // Create traits from metadata attributes
+      if (metadata?.attributes && Array.isArray(metadata.attributes)) {
+        const traits: Trait[] = []
+        for (const attr of metadata.attributes) {
+          if (attr.trait_type && attr.value !== undefined && attr.value !== null) {
+            const traitId = `${nftId}-${attr.trait_type}-${attr.value}`
+            const trait = new Trait({
+              id: traitId,
+              nft: nft,
+              traitType: String(attr.trait_type),
+              value: String(attr.value),
+              displayType: attr.display_type || undefined
+            })
+            traits.push(trait)
+          }
+        }
+        nft.traits = traits
+        if (traits.length > 0) {
+          console.log(`✓ NFT: ${nft.name} (${traits.length} traits)`)
+        }
+      }
+
+      // Use NFT image as collection logo if collection doesn't have one
+      if (!collection.logoUrl && nft.imageUrl) {
+        collection.logoUrl = nft.imageUrl
       }
     }
     nftMap.set(nftId, nft)

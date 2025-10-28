@@ -6,6 +6,7 @@ import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
+import { getIpfsGateways, truncateTokenId } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface NFTDetailProps {
@@ -19,8 +20,31 @@ interface NFTDetailProps {
 
 export function NFTDetail({ nft, isOwner, activeListing, onBuy, onCreateListing, onCreateAuction }: NFTDetailProps) {
   const [quantity, setQuantity] = useState(1);
+  const [imageError, setImageError] = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+
+  console.log('NFTDetail render:', {
+    nftId: nft.id,
+    name: nft.name,
+    hasTraits: !!nft.traits,
+    traitsLength: nft.traits?.length || 0,
+    traits: nft.traits
+  });
+
   const isERC721 = nft.collection.collectionType === 'ERC721';
   const maxQuantity = activeListing ? parseFloat(activeListing.quantity) : 1;
+
+  // Get all IPFS gateways for fallback with larger size for detail view (800px)
+  const imageGateways = getIpfsGateways(nft.imageUrl, 800);
+  const imageUrl = imageGateways.length > 0 ? imageGateways[fallbackIndex] : nft.imageUrl;
+
+  const handleImageError = () => {
+    if (imageGateways.length > 0 && fallbackIndex < imageGateways.length - 1) {
+      setFallbackIndex(prev => prev + 1);
+    } else {
+      setImageError(true);
+    }
+  };
 
   const handleIncrement = () => {
     if (!isERC721 && quantity < maxQuantity) {
@@ -87,14 +111,16 @@ export function NFTDetail({ nft, isOwner, activeListing, onBuy, onCreateListing,
     <div className="grid grid-cols-1 lg:grid-cols-[0.7fr_1fr] gap-8">
       <div className="max-w-md">
         <div className="aspect-square relative overflow-hidden rounded-2xl bg-dark-border border border-dark-border">
-          {nft.imageUrl ? (
+          {imageUrl && !imageError ? (
             <Image
-              src={nft.imageUrl}
+              src={imageUrl}
               alt={nft.name}
               fill
               sizes="(max-width: 1024px) 100vw, 40vw"
               className="object-cover"
               priority
+              unoptimized
+              onError={handleImageError}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -163,7 +189,7 @@ export function NFTDetail({ nft, isOwner, activeListing, onBuy, onCreateListing,
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-400">Token ID</span>
-              <span className="font-mono text-white">{nft.tokenId}</span>
+              <span className="font-mono text-white">{truncateTokenId(nft.tokenId)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Contract</span>

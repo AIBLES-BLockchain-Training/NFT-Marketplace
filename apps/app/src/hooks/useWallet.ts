@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useWalletStore } from '../store/walletStore';
 import { useAuthStore } from '../store/authStore';
-import { getBrowserProvider, getSigner } from '../lib/web3/provider';
+import { getBrowserProvider, getSigner, getEthereumProvider } from '../lib/web3/provider';
 import { CHAIN_CONFIG } from '../lib/contracts/addresses';
 import { switchToCorrectNetwork, isCorrectNetwork } from '../lib/web3/network';
 import { Address } from '../types';
@@ -37,8 +37,9 @@ export function useWallet() {
   }, [setBalance]);
 
   const connect = useCallback(async () => {
-    if (!window.ethereum) {
-      alert('Please install MetaMask to use this application');
+    const ethereum = getEthereumProvider();
+    if (!ethereum) {
+      alert('Please install MetaMask or another Web3 wallet to use this application');
       return;
     }
 
@@ -157,7 +158,8 @@ export function useWallet() {
   }, [address, clearAuth, reset]);
 
   useEffect(() => {
-    if (!window.ethereum) return;
+    const ethereum = getEthereumProvider();
+    if (!ethereum) return;
 
     const handleAccountsChanged = async (accounts: string[]) => {
       if (accounts.length === 0) {
@@ -223,18 +225,19 @@ export function useWallet() {
       window.location.reload();
     };
 
-    window.ethereum.on('accountsChanged', handleAccountsChanged);
-    window.ethereum.on('chainChanged', handleChainChanged);
+    ethereum.on('accountsChanged', handleAccountsChanged);
+    ethereum.on('chainChanged', handleChainChanged);
 
     return () => {
-      window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
-      window.ethereum?.removeListener('chainChanged', handleChainChanged);
+      ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener?.('chainChanged', handleChainChanged);
     };
   }, [disconnect, setAddress, setChainId, updateBalance, setAuth, clearAuth, reset]);
 
   useEffect(() => {
     const checkConnection = async () => {
-      if (!window.ethereum) return;
+      const ethereum = getEthereumProvider();
+      if (!ethereum) return;
 
       // Don't auto-reconnect if user manually disconnected
       const wasDisconnected = localStorage.getItem('wallet-disconnected');

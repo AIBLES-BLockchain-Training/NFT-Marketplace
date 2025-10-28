@@ -8,6 +8,7 @@ import { GET_ROLE_REQUESTS_QUERY, GET_NFT_ROLE_REQUESTS_QUERY } from '../../lib/
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeGrantRole } from '../../lib/web3/encoding';
 import { Address } from '../../types';
+import { truncateTokenId } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface RoleRequest {
@@ -182,7 +183,7 @@ export function RoleRequests() {
                     <div className="flex-1">
                       <div className="mb-2">
                         <p className="text-sm text-white mb-1">
-                          NFT: {request.nftAddress.slice(0, 6)}...{request.nftAddress.slice(-4)} #{request.tokenId}
+                          NFT: {request.nftAddress.slice(0, 6)}...{request.nftAddress.slice(-4)} #{truncateTokenId(request.tokenId)}
                         </p>
                         <p className="text-xs text-gray-400">
                           Requested by: {request.requester.name}

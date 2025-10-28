@@ -22,6 +22,7 @@ export interface MoralisNFTResponse {
   data: MoralisNFT[];
   cursor: string | null;
   hasMore: boolean;
+  total?: number | null;
   warning?: string;
 }
 
@@ -66,6 +67,7 @@ export async function getNFTsByAddress(
       data: data.data as MoralisNFT[],
       cursor: data.cursor,
       hasMore: data.hasMore,
+      total: data.total,
       warning: data.warning,
     };
   } catch (error) {

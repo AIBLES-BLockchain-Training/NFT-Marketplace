@@ -55,6 +55,7 @@ export async function GET(
       data: response.raw.result,
       cursor: response.raw.cursor, // Next page cursor
       hasMore: response.raw.cursor !== null && response.raw.cursor !== '',
+      total: response.raw.total || null, // Total count if available
     });
   } catch (error: any) {
     console.error('Error fetching NFTs from Moralis:', error);
