@@ -5,7 +5,7 @@ interface IPermission {
     // -------------------- CURRENCY --------------------
     function addCurrency(address[] calldata _currencies) external;
     function removeCurrency(address[] calldata _currencies) external;
-    
+
     function supportedCurrencies(address currency) external view returns (bool);
 
     // -------------------- NFT ROLE MANAGEMENT --------------------

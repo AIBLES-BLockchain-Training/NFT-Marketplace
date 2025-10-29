@@ -309,6 +309,7 @@ contract NFTOffer is ReentrancyGuard {
     // Admin functions
     function setFeeRecipient(address _feeRecipient) external {
         if (!permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
+
         if (_feeRecipient == address(0)) revert ZeroAddress();
         feeRecipient = _feeRecipient;
     }
@@ -319,3 +320,4 @@ contract NFTOffer is ReentrancyGuard {
         feePercentage = _feePercentage;
     }
 }
+

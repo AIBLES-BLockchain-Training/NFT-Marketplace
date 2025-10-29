@@ -19,19 +19,19 @@ import {
 } from './model'
 
 import {
+  processPermissionsEvents,
+  getPermissionsTopics
+} from './processors/permissions.processor'
+
+import {
+  processListingEvents,
+  getListingTopics
+} from './processors/listing.processor'
+
+import {
   getAuctionTopics,
   processAuctionEvents,
 } from './processors/auction.processor' 
-import {
-  getListingTopics,
-  processListingEvents,
-  type ListingABI
-} from './processors/listing.processor'
-import {
-  getPermissionsTopics,
-  processPermissionsEvents,
-  type PermissionsABI
-} from './processors/permissions.processor'
 
 import * as listingAbi from './abi/Listing'
 import { events as auctionEvents } from './abi/NFTAuction'
@@ -82,7 +82,7 @@ class CombinedIndexer {
     })
 
     // Add logs for permissions contract
-    const permissionsTopics = getPermissionsTopics(permissionsAbi as PermissionsABI)
+    const permissionsTopics = getPermissionsTopics()
     if (permissionsTopics.length > 0) {
       this.processor.addLog({
         address: [CONTRACT_ADDRESSES.permissions.toLowerCase()],
@@ -91,7 +91,7 @@ class CombinedIndexer {
     }
 
     // Add logs for listing contract
-    const listingTopics = getListingTopics(listingAbi as ListingABI)
+    const listingTopics = getListingTopics()
     if (listingTopics.length > 0) {
       this.processor.addLog({
         address: [CONTRACT_ADDRESSES.router.toLowerCase()],
@@ -137,7 +137,7 @@ class CombinedIndexer {
       const listingLogs: any[] = []
       const auctionLogs: any[] = []
 
-      const listingTopics = getListingTopics(listingAbi as ListingABI)
+      const listingTopics = getListingTopics();
       const auctionTopics = getAuctionTopics();
 
       for (let block of ctx.blocks) {
@@ -162,7 +162,6 @@ class CombinedIndexer {
         await processPermissionsEvents(
           permissionsLogs,
           ctx,
-          permissionsAbi as PermissionsABI,
           CONTRACT_ADDRESSES.permissions.toLowerCase(),
           roleMap,
           subjectMap,
@@ -178,7 +177,6 @@ class CombinedIndexer {
         await processListingEvents(
           listingLogs,
           ctx,
-          listingAbi as ListingABI,
           CONTRACT_ADDRESSES.router.toLowerCase(),
           listingMap,
           subjectMap,
@@ -216,14 +214,28 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(nftMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
-      await ctx.store.save(Array.from(auctionMap.values()))
-      await ctx.store.save(Array.from(bidMap.values()))
-      await ctx.store.save(updatedOwnerships)
-      await ctx.store.save(roleAssignments)
+
+      const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
+      const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
+
+      if (assignmentsToRemove.length > 0) {
+        console.log(`Removing ${assignmentsToRemove.length} role assignments`)
+        await ctx.store.remove(assignmentsToRemove)
+      }
+
+      if (assignmentsToSave.length > 0) {
+        await ctx.store.save(assignmentsToSave)
+      }
+
       await ctx.store.save(permissionEvents)
       await ctx.store.save(currencyApprovals)
       await ctx.store.save(buyerApprovals)
       await ctx.store.save(purchaseHistories)
+
+      await ctx.store.save(Array.from(auctionMap.values()))
+      await ctx.store.save(Array.from(bidMap.values()))
+      await ctx.store.save(updatedOwnerships)
+      await ctx.store.save(roleAssignments)
 
       console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
     })
