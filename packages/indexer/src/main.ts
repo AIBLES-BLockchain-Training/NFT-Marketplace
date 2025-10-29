@@ -21,8 +21,7 @@ import {
 import {
   getAuctionTopics,
   processAuctionEvents,
-  type AuctionABI
-} from './processors/auction.processor'
+} from './processors/auction.processor' 
 import {
   getListingTopics,
   processListingEvents,
@@ -35,7 +34,7 @@ import {
 } from './processors/permissions.processor'
 
 import * as listingAbi from './abi/Listing'
-import * as auctionAbi from './abi/NFTAuction'
+import { events as auctionEvents } from './abi/NFTAuction'
 import * as permissionsAbi from './abi/Permissions'
 
 const NETWORK_CONFIG = {
@@ -99,7 +98,7 @@ class CombinedIndexer {
         topic0: listingTopics
       })
     }
-    const auctionTopics = getAuctionTopics(auctionAbi as AuctionABI)
+    const auctionTopics = getAuctionTopics();
     if (auctionTopics.length > 0) {
       this.processor.addLog({
         address: [CONTRACT_ADDRESSES.router.toLowerCase()],
@@ -138,19 +137,22 @@ class CombinedIndexer {
       const listingLogs: any[] = []
       const auctionLogs: any[] = []
 
-
+      const listingTopics = getListingTopics(listingAbi as ListingABI)
+      const auctionTopics = getAuctionTopics();
 
       for (let block of ctx.blocks) {
         for (let log of block.logs) {
           const logAddress = log.address.toLowerCase()
-
+          const logTopic0 = log.topics[0]?.toLowerCase()
           if (logAddress === CONTRACT_ADDRESSES.permissions.toLowerCase()) {
             permissionsLogs.push({ ...log, block })
           } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
-            listingLogs.push({ ...log, block })
-          } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
-            auctionLogs.push({ ...log, block })
-          }
+            if(listingTopics.includes(logTopic0)) {
+              listingLogs.push({ ...log, block })
+            } else if(auctionTopics.includes(logTopic0)) {
+              auctionLogs.push({ ...log, block })
+            }
+          } 
         }
       }
 
@@ -195,13 +197,13 @@ class CombinedIndexer {
         await processAuctionEvents(
           auctionLogs,
           ctx,
-          auctionAbi as AuctionABI,
           CONTRACT_ADDRESSES.router.toLowerCase(),
           auctionMap,
           nftMap,
           subjectMap,
           collectionMap,
           bidMap,
+          currencyMap,
           purchaseHistories,
           updatedOwnerships
         )
