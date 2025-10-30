@@ -322,6 +322,7 @@ export const GET_COLLECTIONS_TABLE_QUERY = `
       id
       name
       logoUrl
+      collectionType
       floorPrice
       nfts(limit: 1000) {
         id
@@ -372,6 +373,7 @@ export const GET_COLLECTION_LISTED_NFTS_QUERY = `
       quantity
       startTimestamp
       endTimestamp
+      status
       owner {
         id
       }
@@ -479,6 +481,7 @@ export const GET_COLLECTION_USER_LISTINGS_QUERY = `
       quantity
       startTimestamp
       endTimestamp
+      status
       owner {
         id
       }
@@ -792,6 +795,7 @@ export const GET_USER_ACTIVE_LISTINGS_QUERY = `
   query GetUserActiveListings($address: String!) {
     listings(where: { owner: { id_eq: $address }, status_eq: CREATED }) {
       id
+      quantity
       nft {
         id
       }

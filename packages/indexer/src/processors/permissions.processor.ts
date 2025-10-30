@@ -246,15 +246,12 @@ export async function processPermissionsEvents(
 
       else if (topic0 === PermissionsABI.events.RoleAdminChanged?.topic) {
         const { role: roleHash, previousAdminRole, newAdminRole } = PermissionsABI.events.RoleAdminChanged.decode(log)
-
-        console.log(`Role admin changed for role ${roleHash}: ${previousAdminRole} -> ${newAdminRole} at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.RoleRegistered?.topic) {
         const { role: roleHash, adminRole } = PermissionsABI.events.RoleRegistered.decode(log)
 
         await getOrCreateRole(roleHash)
-        console.log(`Role registered: ${roleHash} with admin role ${adminRole} at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.UserRoleAssigned?.topic) {
@@ -303,10 +300,6 @@ export async function processPermissionsEvents(
           request.processedAt = timestamp
           request.processedBy = contractAddress
           roleRequests.push(request)
-        }
-
-        if (pendingRequests.length > 0) {
-          console.log(`Updated ${pendingRequests.length} pending role request(s) to APPROVED for ${account} with role ${roleHash}`)
         }
       }
 
@@ -394,11 +387,6 @@ export async function processPermissionsEvents(
           nftRoleRequests.push(request)
         }
 
-        if (pendingRequests.length > 0) {
-          console.log(`NFT role assigned to ${nft} (whitelisted for marketplace) - Updated ${pendingRequests.length} pending NFT role request(s) to APPROVED at block ${blockNumber}`)
-        } else {
-          console.log(`NFT role assigned to ${nft} (whitelisted for marketplace) at block ${blockNumber}`)
-        }
       }
 
       else if (topic0 === PermissionsABI.events.NFTRoleRevoked?.topic) {
@@ -431,8 +419,6 @@ export async function processPermissionsEvents(
           (existingAssignment as any)._toRemove = true
           roleAssignments.push(existingAssignment)
         }
-
-        console.log(`NFT role revoked from ${nft} at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.RoleRequested?.topic) {
@@ -454,8 +440,6 @@ export async function processPermissionsEvents(
           blockNumber: blockNumber
         })
         roleRequests.push(roleRequest)
-
-        console.log(`Role ${roleHash} requested by ${requester} at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.NFTRoleRequested?.topic) {
@@ -477,8 +461,6 @@ export async function processPermissionsEvents(
           blockNumber: blockNumber
         })
         nftRoleRequests.push(nftRoleRequest)
-
-        console.log(`NFT role requested for ${nft}#${tokenId} by ${requester} at block ${blockNumber}`)
       }
 
     } catch (error) {

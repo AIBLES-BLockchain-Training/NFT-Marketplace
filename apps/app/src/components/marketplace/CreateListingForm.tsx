@@ -74,6 +74,7 @@ export function CreateListingForm({ nft, onSuccess, onCancel }: CreateListingFor
               <li>• Make sure you own this NFT</li>
               <li>• You may need to approve the marketplace contract to manage your NFT</li>
               <li>• The NFT contract must be whitelisted by an admin</li>
+              <li>• Your listing will be immediately available for purchase after creation</li>
             </ul>
           </div>
         </div>

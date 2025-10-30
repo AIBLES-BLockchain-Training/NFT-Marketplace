@@ -7,6 +7,8 @@ import { MainLayout } from '../../../../../components/layout/MainLayout';
 import { NFTGrid } from '../../../../../components/nft/NFTGrid';
 import { Badge } from '../../../../../components/common/Badge';
 import { getNFTsByAddress, MoralisNFT } from '../../../../../lib/moralis/client';
+import { graphqlClient } from '../../../../../lib/graphql/client';
+import { GET_USER_ACTIVE_LISTINGS_QUERY } from '../../../../../lib/graphql/queries';
 import { NFT } from '../../../../../types';
 import toast from 'react-hot-toast';
 
@@ -26,6 +28,21 @@ export default function CollectionViewPage() {
   const loadCollectionNFTs = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Load active listings to calculate listed quantities
+      const listingsResult = await graphqlClient.query(GET_USER_ACTIVE_LISTINGS_QUERY, {
+        address: ownerAddress.toLowerCase(),
+      });
+
+      const listedQtyMap = new Map<string, string>();
+      if (listingsResult.listings) {
+        listingsResult.listings.forEach((listing: any) => {
+          const nftId = listing.nft.id;
+          const currentQty = BigInt(listedQtyMap.get(nftId) || '0');
+          const listingQty = BigInt(listing.quantity || '1');
+          listedQtyMap.set(nftId, (currentQty + listingQty).toString());
+        });
+      }
+
       // Fetch all NFTs from the owner
       const moralisResponse = await getNFTsByAddress(ownerAddress);
 
@@ -49,39 +66,53 @@ export default function CollectionViewPage() {
         collectionType: firstNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
       });
 
-      // Transform to app NFT format
-      const transformedNFTs: NFT[] = filteredNFTs.map((nft: MoralisNFT) => {
-        const metadata = nft.normalized_metadata || {};
+      // Transform to app NFT format and calculate available amounts
+      const transformedNFTs: NFT[] = filteredNFTs
+        .map((nft: MoralisNFT) => {
+          const metadata = nft.normalized_metadata || {};
+          const nftId = `${nft.token_address.toLowerCase()}-${nft.token_id}`;
+          const totalAmount = BigInt(nft.amount || '1');
+          const listedQty = BigInt(listedQtyMap.get(nftId) || '0');
+          const availableAmount = totalAmount - listedQty;
 
-        return {
-          id: `${nft.token_address.toLowerCase()}-${nft.token_id}`,
-          tokenId: nft.token_id,
-          name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
-          imageUrl: metadata.image || undefined,
-          description: metadata.description || undefined,
-          metadataUri: nft.token_uri || undefined,
-          collection: {
-            id: nft.token_address.toLowerCase(),
-            name: nft.name || 'Unknown Collection',
-            symbol: nft.symbol || 'NFT',
-            collectionType: nft.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
-            creator: {
+          // Only include NFTs with available amount > 0
+          if (availableAmount <= 0) {
+            return null;
+          }
+
+          return {
+            id: nftId,
+            tokenId: nft.token_id,
+            name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
+            imageUrl: metadata.image || undefined,
+            description: metadata.description || undefined,
+            metadataUri: nft.token_uri || undefined,
+            amount: nft.amount || '1',
+            availableAmount: availableAmount.toString(),
+            listedAmount: listedQty.toString(),
+            collection: {
               id: nft.token_address.toLowerCase(),
-              name: nft.name || 'Unknown',
-              subjectType: 'CONTRACT' as const,
+              name: nft.name || 'Unknown Collection',
+              symbol: nft.symbol || 'NFT',
+              collectionType: nft.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+              creator: {
+                id: nft.token_address.toLowerCase(),
+                name: nft.name || 'Unknown',
+                subjectType: 'CONTRACT' as const,
+                createdAt: new Date().toISOString(),
+              },
+              totalSupply: '0',
               createdAt: new Date().toISOString(),
             },
-            totalSupply: '0',
-            createdAt: new Date().toISOString(),
-          },
-          traits: metadata.attributes?.map((attr: any, idx: number) => ({
-            id: `${nft.token_address}_${nft.token_id}_${idx}`,
-            traitType: attr.trait_type,
-            value: String(attr.value),
-            displayType: undefined,
-          })) || [],
-        };
-      });
+            traits: metadata.attributes?.map((attr: any, idx: number) => ({
+              id: `${nft.token_address}_${nft.token_id}_${idx}`,
+              traitType: attr.trait_type,
+              value: String(attr.value),
+              displayType: undefined,
+            })) || [],
+          };
+        })
+        .filter((nft): nft is NFT => nft !== null);
 
       setNfts(transformedNFTs);
     } catch (error) {

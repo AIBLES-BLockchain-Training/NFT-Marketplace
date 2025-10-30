@@ -16,6 +16,7 @@ error InvalidTimestamps(uint128 start, uint128 end);
 error PricePerTokenMustBeGreaterThanZero();
 error StartTimeNotInFuture();
 error ERC721QuantityMustBeOne(uint256 quantity);
+error InsufficientAvailableBalance(uint256 available, uint256 required);
 
 error ListingDoesNotExist();
 error InvalidRange(uint256 start, uint256 end);
@@ -89,6 +90,7 @@ contract Listing is ReentrancyGuard {
         ListingData listings;
         ApprovalData approvals;
         FeeData fees;
+        mapping(address => mapping(address => mapping(uint256 => uint256))) listedQuantity;
     }
     
     // ============= UNSTRUCTURED STORAGE SLOT =============
@@ -363,14 +365,14 @@ contract Listing is ReentrancyGuard {
 
     // ============= LISTING FUNCTIONS =============
 
-    function createListing(ListingParameters memory params) 
-        external 
-        validParams(params) 
-        onlyAuthorizedSeller()  
-        onlyWhitelistedNFT(params.assetContract)  
-        onlySupportedCurrency(params.currency)  
+    function createListing(ListingParameters memory params)
+        external
+        validParams(params)
+        onlyAuthorizedSeller()
+        onlyWhitelistedNFT(params.assetContract)
+        onlySupportedCurrency(params.currency)
         nonReentrant
-        returns (uint256 listingId) 
+        returns (uint256 listingId)
     {
         TokenType tokenType = getTokenType(params.assetContract);
 
@@ -378,6 +380,19 @@ contract Listing is ReentrancyGuard {
         _checkSellerApproval(params.assetContract, tokenType, msg.sender, params.tokenId);
 
         ListingStorage storage s = _listingStorage();
+
+        if (tokenType == TokenType.ERC1155) {
+            uint256 currentlyListed = s.listedQuantity[msg.sender][params.assetContract][params.tokenId];
+            uint256 totalBalance = IERC1155(params.assetContract).balanceOf(msg.sender, params.tokenId);
+            uint256 availableBalance = totalBalance - currentlyListed;
+
+            if (availableBalance < params.quantity) {
+                revert InsufficientAvailableBalance(availableBalance, params.quantity);
+            }
+
+            s.listedQuantity[msg.sender][params.assetContract][params.tokenId] += params.quantity;
+        }
+
         listingId = s.core.listingCounter;
 
         s.listings.listings[listingId] = NFTListing({
@@ -397,6 +412,8 @@ contract Listing is ReentrancyGuard {
         s.listings.userOwnedListings[msg.sender].push(listingId);
         s.core.listingCounter++;
 
+        s.approvals.currencyApprovals[listingId][params.currency] = params.pricePerToken;
+
         emit ListingCreated(
             listingId,
             msg.sender,
@@ -409,6 +426,9 @@ contract Listing is ReentrancyGuard {
             params.endTimestamp,
             params.reserved
         );
+
+        emit CurrencyApproved(listingId, params.currency, params.pricePerToken);
+
         return listingId;
     }
 
@@ -438,6 +458,27 @@ contract Listing is ReentrancyGuard {
             _checkNFTPermission(params.assetContract);
         }
 
+        TokenType tokenType = getTokenType(params.assetContract);
+
+        if (tokenType == TokenType.ERC1155 && listing.quantity != params.quantity) {
+            uint256 oldQuantity = listing.quantity;
+            int256 quantityDelta = int256(params.quantity) - int256(oldQuantity);
+
+            if (quantityDelta > 0) {
+                uint256 currentlyListed = s.listedQuantity[msg.sender][params.assetContract][params.tokenId];
+                uint256 totalBalance = IERC1155(params.assetContract).balanceOf(msg.sender, params.tokenId);
+                uint256 availableBalance = totalBalance - currentlyListed;
+
+                if (availableBalance < uint256(quantityDelta)) {
+                    revert InsufficientAvailableBalance(availableBalance, uint256(quantityDelta));
+                }
+
+                s.listedQuantity[msg.sender][params.assetContract][params.tokenId] += uint256(quantityDelta);
+            } else {
+                s.listedQuantity[msg.sender][params.assetContract][params.tokenId] -= uint256(-quantityDelta);
+            }
+        }
+
         listing.assetContract = params.assetContract;
         listing.tokenId = params.tokenId;
         listing.quantity = params.quantity;
@@ -446,6 +487,8 @@ contract Listing is ReentrancyGuard {
         listing.startTimestamp = params.startTimestamp;
         listing.endTimestamp = params.endTimestamp;
         listing.reserved = params.reserved;
+
+        s.approvals.currencyApprovals[listingId][params.currency] = params.pricePerToken;
 
         emit ListingUpdated(
             listingId,
@@ -458,6 +501,8 @@ contract Listing is ReentrancyGuard {
             params.endTimestamp,
             params.reserved
         );
+
+        emit CurrencyApproved(listingId, params.currency, params.pricePerToken);
     }
 
     function cancelListing(uint256 listingId) external listingExists(listingId) nonReentrant {
@@ -465,6 +510,14 @@ contract Listing is ReentrancyGuard {
         NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
         if (listing.status != Status.CREATED) revert ListingNotInCreatedStatus();
+
+        // Only decrement listedQuantity if it was tracked (for backward compatibility with old listings)
+        if (listing.tokenType == TokenType.ERC1155) {
+            uint256 currentListed = s.listedQuantity[listing.owner][listing.assetContract][listing.tokenId];
+            if (currentListed >= listing.quantity) {
+                s.listedQuantity[listing.owner][listing.assetContract][listing.tokenId] -= listing.quantity;
+            }
+        }
 
         listing.status = Status.CANCELED;
         emit ListingCancelled(listingId);
@@ -541,6 +594,13 @@ contract Listing is ReentrancyGuard {
         _ensureCanReceiveToken(buyFor, listing.tokenId, quantity, listing.tokenType);
 
         listing.quantity -= quantity;
+
+        if (listing.tokenType == TokenType.ERC1155) {
+            uint256 currentListed = s.listedQuantity[listing.owner][listing.assetContract][listing.tokenId];
+            if (currentListed >= quantity) {
+                s.listedQuantity[listing.owner][listing.assetContract][listing.tokenId] -= quantity;
+            }
+        }
 
         uint256 fee = (totalPrice * getCurrencyFee(currency)) / s.core.decimal;
         uint256 sellerAmount = totalPrice - fee;

@@ -25,7 +25,7 @@ import { useWallet } from '../../../hooks/useWallet';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
 import { Collection, NFT, Listing } from '../../../types';
 import { formatEth } from '../../../lib/web3/utils';
-import { encodeCancelListing, encodeApproveCurrencyForListing } from '../../../lib/web3/encoding';
+import { encodeCancelListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { truncateTokenId } from '../../../lib/utils/format';
@@ -87,19 +87,54 @@ export default function CollectionDetailPage() {
             collectionId: id,
           });
           if (result.listings) {
-            // Deduplicate by NFT ID - keep only the latest listing for each NFT
-            const nftMap = new Map<string, any>();
-            result.listings.forEach((listing: any) => {
-              const nftId = listing.nft.id;
-              // Keep the first one (they are ordered by createdAt DESC)
-              if (!nftMap.has(nftId)) {
-                nftMap.set(nftId, {
-                  ...listing.nft,
-                  listing: listing,
-                });
-              }
-            });
-            setNfts(Array.from(nftMap.values()));
+            // Check collection type from first listing
+            const isERC1155 = result.listings.length > 0 &&
+                             result.listings[0].nft?.collection?.collectionType === 'ERC1155';
+
+            if (isERC1155) {
+              // For ERC-1155: Each listing is a separate card
+              const nftsArray = result.listings.map((listing: any) => ({
+                ...listing.nft,
+                // Create unique ID by combining nft.id and listing.id
+                id: `${listing.nft.id}-listing-${listing.id}`,
+                originalNftId: listing.nft.id,
+                listings: [listing], // Only this one listing
+                totalListedQuantity: listing.quantity,
+              }));
+              setNfts(nftsArray);
+            } else {
+              // For ERC-721: Group all listings by NFT (original behavior)
+              const nftMap = new Map<string, any>();
+              const nftListingsMap = new Map<string, any[]>();
+              const totalListedQty = new Map<string, bigint>();
+
+              result.listings.forEach((listing: any) => {
+                const nftId = listing.nft.id;
+                const currentQty = totalListedQty.get(nftId) || BigInt(0);
+                const listingQty = BigInt(listing.quantity || '1');
+                totalListedQty.set(nftId, currentQty + listingQty);
+
+                // Store NFT data (first occurrence)
+                if (!nftMap.has(nftId)) {
+                  nftMap.set(nftId, listing.nft);
+                }
+
+                // Collect all listings for this NFT
+                if (!nftListingsMap.has(nftId)) {
+                  nftListingsMap.set(nftId, []);
+                }
+                nftListingsMap.get(nftId).push(listing);
+              });
+
+              // Build final NFT array with all listings
+              const nftsArray = Array.from(nftMap.values()).map(nft => ({
+                ...nft,
+                listings: nftListingsMap.get(nft.id) || [],
+                totalListedQuantity: totalListedQty.get(nft.id)?.toString() || '1',
+              }));
+
+              setNfts(nftsArray);
+            }
           }
           break;
 
@@ -108,7 +143,10 @@ export default function CollectionDetailPage() {
             collectionId: id,
           });
           if (result.auctions) {
-            setNfts(result.auctions.map((auction: any) => auction.nftId));
+            setNfts(result.auctions.map((auction: any) => ({
+              ...auction.nftId,
+              auctionQuantity: auction.quantity,
+            })));
           }
           break;
 
@@ -120,7 +158,10 @@ export default function CollectionDetailPage() {
             const uniqueNFTs = new Map();
             result.offers.forEach((offer: any) => {
               if (!uniqueNFTs.has(offer.nftId.id)) {
-                uniqueNFTs.set(offer.nftId.id, offer.nftId);
+                uniqueNFTs.set(offer.nftId.id, {
+                  ...offer.nftId,
+                  offerQuantity: offer.quantity,
+                });
               }
             });
             setNfts(Array.from(uniqueNFTs.values()));
@@ -142,18 +183,37 @@ export default function CollectionDetailPage() {
                 ownerAddress: address.toLowerCase(),
               });
               if (result.listings) {
-                // Deduplicate by NFT ID - keep only the latest listing for each NFT
+                // Group all listings by NFT
                 const nftMap = new Map<string, any>();
+                const nftListingsMap = new Map<string, any[]>();
+                const totalListedQty = new Map<string, bigint>();
+
                 result.listings.forEach((listing: any) => {
                   const nftId = listing.nft.id;
+                  const currentQty = totalListedQty.get(nftId) || BigInt(0);
+                  const listingQty = BigInt(listing.quantity || '1');
+                  totalListedQty.set(nftId, currentQty + listingQty);
+
+                  // Store NFT data (first occurrence)
                   if (!nftMap.has(nftId)) {
-                    nftMap.set(nftId, {
-                      ...listing.nft,
-                      listing: listing,
-                    });
+                    nftMap.set(nftId, listing.nft);
                   }
+
+                  // Collect all listings for this NFT
+                  if (!nftListingsMap.has(nftId)) {
+                    nftListingsMap.set(nftId, []);
+                  }
+                  nftListingsMap.get(nftId).push(listing);
                 });
-                setNfts(Array.from(nftMap.values()));
+
+                // Build final NFT array with all listings
+                const nftsArray = Array.from(nftMap.values()).map(nft => ({
+                  ...nft,
+                  listings: nftListingsMap.get(nft.id) || [],
+                  totalListedQuantity: totalListedQty.get(nft.id)?.toString() || '1',
+                }));
+
+                setNfts(nftsArray);
               }
               break;
 
@@ -163,7 +223,10 @@ export default function CollectionDetailPage() {
                 ownerAddress: address.toLowerCase(),
               });
               if (result.auctions) {
-                setNfts(result.auctions.map((auction: any) => auction.nftId));
+                setNfts(result.auctions.map((auction: any) => ({
+                  ...auction.nftId,
+                  auctionQuantity: auction.quantity,
+                })));
               }
               break;
 
@@ -176,7 +239,10 @@ export default function CollectionDetailPage() {
                 const uniqueNFTs = new Map();
                 result.offers.forEach((offer: any) => {
                   if (!uniqueNFTs.has(offer.nftId.id)) {
-                    uniqueNFTs.set(offer.nftId.id, offer.nftId);
+                    uniqueNFTs.set(offer.nftId.id, {
+                      ...offer.nftId,
+                      offerQuantity: offer.quantity,
+                    });
                   }
                 });
                 setNfts(Array.from(uniqueNFTs.values()));
@@ -233,31 +299,6 @@ export default function CollectionDetailPage() {
       }
     } catch (error: unknown) {
       console.error('Cancel listing error:', error);
-    }
-  };
-
-  const handleApproveCurrency = async (listing: Listing) => {
-    if (!address) {
-      toast.error('Please connect your wallet');
-      return;
-    }
-
-    try {
-      // Use the listing's pricePerToken (which is already in Wei from contract)
-      const tx = encodeApproveCurrencyForListing(
-        BigInt(listing.id),
-        ZERO_ADDRESS, // Contract uses address(0) for native ETH
-        BigInt(listing.pricePerToken)
-      );
-
-      const receipt = await sendTransaction(tx, 'Currency approved! Your listing is now live and ready for purchase.');
-
-      if (receipt?.status === 1) {
-        // Reload NFTs to show updated state
-        loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
-      }
-    } catch (error: unknown) {
-      console.error('Approve currency error:', error);
     }
   };
 
@@ -461,12 +502,13 @@ export default function CollectionDetailPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {nfts.map((nft, index) => {
-              const isOwner = nft.listing && address && nft.listing.owner.id.toLowerCase() === address.toLowerCase();
-              const price = nft.listing?.currencyApprovals?.[0];
-              const hasApprovedCurrencies = nft.listing?.currencyApprovals && nft.listing.currencyApprovals.length > 0;
+              // Get first listing (for cards that represent individual listings)
+              const listing = nft.listings && nft.listings.length > 0 ? nft.listings[0] : null;
+              const isOwner = listing && address && listing.owner.id.toLowerCase() === address.toLowerCase();
+              const price = listing?.currencyApprovals?.[0];
 
-              // If no currency approvals, use default pricePerToken with ETH
-              const displayPrice = price?.pricePerToken || nft.listing?.pricePerToken;
+              // Currency is now auto-approved on listing creation
+              const displayPrice = price?.pricePerToken || listing?.pricePerToken;
 
               // Normalize display symbol: Show 'ETH' for native tokens or UNKNOWN symbols
               let displayCurrency = 'ETH';
@@ -490,81 +532,65 @@ export default function CollectionDetailPage() {
                         width={300}
                       />
 
-                      {/* Warning Badge for listings without approved currencies */}
-                      {isOwner && nft.listing && !hasApprovedCurrencies && !isListingExpired(nft.listing.endTimestamp) && (
-                        <div className="absolute top-2 right-2 z-10">
-                          <div className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            Action Required
-                          </div>
-                        </div>
+                      {/* Quantity Badge for ERC1155 */}
+                      {nft.collection.collectionType === 'ERC1155' && (
+                        <>
+                          {/* Listed quantity */}
+                          {nft.totalListedQuantity && nft.totalListedQuantity !== '1' && (
+                            <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-yellow-500/50">
+                              <p className="text-xs font-bold text-yellow-400">x{nft.totalListedQuantity}</p>
+                            </div>
+                          )}
+                          {/* Auction quantity */}
+                          {nft.auctionQuantity && nft.auctionQuantity !== '1' && (
+                            <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-purple-500/50">
+                              <p className="text-xs font-bold text-purple-400">x{nft.auctionQuantity}</p>
+                            </div>
+                          )}
+                          {/* Offer quantity */}
+                          {nft.offerQuantity && nft.offerQuantity !== '1' && (
+                            <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-blue-500/50">
+                              <p className="text-xs font-bold text-blue-400">x{nft.offerQuantity}</p>
+                            </div>
+                          )}
+                        </>
                       )}
+
 
                       {/* Hover Overlay - Only show if listing is not expired */}
                       {(activeTab === 'listed' || (activeTab === 'yours' && yoursSubTab === 'your-listed')) &&
-                       nft.listing &&
-                       !isListingExpired(nft.listing.endTimestamp) && (
+                       listing &&
+                       !isListingExpired(listing.endTimestamp) && (
                         <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out">
                           <div className="bg-gradient-to-t from-black via-black/90 to-transparent p-4 pt-8">
                             {isOwner ? (
-                              !hasApprovedCurrencies ? (
-                                // Show Approve Currency button if no approved currencies
-                                <div className="space-y-2">
-                                  <p className="text-yellow-400 text-[10px] font-semibold text-center mb-1">
-                                    ⚠️ Approve currency to enable purchases
-                                  </p>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        handleCancelListing(nft.listing!);
-                                      }}
-                                      className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        handleApproveCurrency(nft.listing!);
-                                      }}
-                                      className="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors"
-                                    >
-                                      Approve ETH
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                // Normal owner controls if currency is approved
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      handleCancelListing(nft.listing!);
-                                    }}
-                                    className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      setSelectedListing(nft.listing!);
-                                      setShowUpdateModal(true);
-                                    }}
-                                    className="flex-1 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-lg transition-colors"
-                                  >
-                                    Update
-                                  </button>
-                                </div>
-                              )
+                              // Owner controls: Cancel and Update
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    handleCancelListing(listing);
+                                  }}
+                                  className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setSelectedListing(listing);
+                                    setShowUpdateModal(true);
+                                  }}
+                                  className="flex-1 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                                >
+                                  Update
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
-                                  handleBuyClick(nft.listing!);
+                                  handleBuyClick(listing);
                                 }}
                                 className="w-full text-center hover:bg-black/50 rounded-lg py-2 transition-colors"
                               >
@@ -582,8 +608,8 @@ export default function CollectionDetailPage() {
 
                       {/* Expired Badge */}
                       {(activeTab === 'listed' || (activeTab === 'yours' && yoursSubTab === 'your-listed')) &&
-                       nft.listing &&
-                       isListingExpired(nft.listing.endTimestamp) && (
+                       listing &&
+                       isListingExpired(listing.endTimestamp) && (
                         <div className="absolute inset-x-0 bottom-0">
                           <div className="bg-gradient-to-t from-black via-black/90 to-transparent p-4 pt-8">
                             <div className="text-center">
@@ -593,9 +619,19 @@ export default function CollectionDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div className="p-3">
+                    <div className="p-3 space-y-1">
                       <p className="text-sm font-semibold text-white truncate">{nft.name}</p>
                       <p className="text-xs text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
+
+                      {/* Show listing owner for individual listing cards */}
+                      {listing && (
+                        <div className="pt-1 border-t border-dark-border">
+                          <p className="text-[10px] text-gray-400">Listed by</p>
+                          <p className="text-xs font-mono text-gray-300 truncate">
+                            {listing.owner.id.slice(0, 6)}...{listing.owner.id.slice(-4)}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -638,12 +674,14 @@ export default function CollectionDetailPage() {
       {/* NFT Detail Modal */}
       {nfts.length > 0 && nfts[selectedNFTIndex] && (() => {
         const selectedNFT = nfts[selectedNFTIndex];
-        // Check if user is owner via NFT.owners OR listing.owner
+
+        // Check if user is owner via NFT.owners OR any listing.owner
         const isOwnerByNFT = address && selectedNFT.owners?.some(
           (o) => o.ownerAddress.toLowerCase() === address.toLowerCase()
         );
-        const isOwnerByListing = address && selectedNFT.listing &&
-          selectedNFT.listing.owner.id.toLowerCase() === address.toLowerCase();
+        const isOwnerByListing = address && selectedNFT.listings?.some(
+          (listing) => listing.owner.id.toLowerCase() === address.toLowerCase()
+        );
 
         const isActualOwner = isOwnerByNFT || isOwnerByListing;
 
@@ -656,7 +694,7 @@ export default function CollectionDetailPage() {
             currentIndex={selectedNFTIndex}
             onNavigate={handleNavigateNFT}
             isOwner={isActualOwner}
-            activeListing={selectedNFT.listing || null}
+            activeListings={selectedNFT.listings?.filter(l => l.status === 'CREATED') || []}
             onBuy={handleBuyClick}
             onCreateListing={() => setShowCreateListing(true)}
             onCreateAuction={() => setShowCreateAuction(true)}

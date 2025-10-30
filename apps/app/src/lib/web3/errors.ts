@@ -222,11 +222,10 @@ export function decodeContractError(error: unknown): string {
       try {
         const parsedError = contractInterface.parseError(errorData);
         if (parsedError) {
-          console.log('Decoded error:', parsedError.name, parsedError.args);
           return getErrorMessage(parsedError.name, parsedError.args);
         }
       } catch (parseError) {
-        console.warn('Failed to parse error with interface, trying manual mapping:', parseError);
+        // Failed to parse, continue to fallback
       }
 
       // Fallback to manual mapping

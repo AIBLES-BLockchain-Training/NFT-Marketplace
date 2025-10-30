@@ -29,6 +29,8 @@ export function TransactionResultModal({
       isOpen={isOpen}
       onClose={onClose}
       title={success ? 'Transaction Successful' : 'Transaction Failed'}
+      zIndex="z-[70]"
+      hideBackdrop={true}
     >
       <div className="space-y-6">
         {/* Status Icon */}

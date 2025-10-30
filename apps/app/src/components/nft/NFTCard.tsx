@@ -23,6 +23,9 @@ export function NFTCard({ nft }: NFTCardProps) {
       }, BigInt(activeListings[0].pricePerToken))
     : null;
 
+  // Get listing owner (for cards that represent individual listings)
+  const listingOwner = activeListings.length === 1 ? activeListings[0].owner : null;
+
   // Get all IPFS gateways for fallback with thumbnail size (300px)
   const imageGateways = getIpfsGateways(nft.imageUrl, 300);
   const imageUrl = imageGateways.length > 0 ? imageGateways[fallbackIndex] : nft.imageUrl;
@@ -70,6 +73,26 @@ export function NFTCard({ nft }: NFTCardProps) {
           <div className="absolute top-1.5 right-1.5">
             <Badge variant="primary" className="text-xs px-2 py-0.5">{nft.collection.collectionType}</Badge>
           </div>
+          {nft.collection.collectionType === 'ERC1155' && (
+            <>
+              {/* Show available amount if present, otherwise show total amount */}
+              {nft.availableAmount && nft.availableAmount !== '1' && (
+                <div className="absolute top-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-green-500/50">
+                  <p className="text-xs font-bold text-green-400">x{nft.availableAmount}</p>
+                </div>
+              )}
+              {!nft.availableAmount && nft.amount && nft.amount !== '1' && (
+                <div className="absolute top-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-primary-500/50">
+                  <p className="text-xs font-bold text-primary-400">x{nft.amount}</p>
+                </div>
+              )}
+              {nft.listedAmount && nft.listedAmount !== '0' && (
+                <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-yellow-500/50">
+                  <p className="text-xs font-bold text-yellow-400">Listed: {nft.listedAmount}</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="space-y-1">
@@ -77,6 +100,15 @@ export function NFTCard({ nft }: NFTCardProps) {
           <h3 className="text-sm font-semibold text-white truncate group-hover:text-primary-400 transition-colors">
             {nft.name}
           </h3>
+
+          {listingOwner && (
+            <div className="pt-1 border-t border-dark-border">
+              <span className="text-[10px] text-gray-400">Listed by</span>
+              <p className="text-xs font-mono text-gray-300 truncate">
+                {listingOwner.id.slice(0, 6)}...{listingOwner.id.slice(-4)}
+              </p>
+            </div>
+          )}
 
           {lowestPrice !== null && (
             <div className="flex items-center justify-between pt-1.5 border-t border-dark-border">

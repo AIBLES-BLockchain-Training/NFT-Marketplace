@@ -13,6 +13,7 @@ interface CollectionTableData {
   id: string;
   name: string;
   logoUrl?: string;
+  collectionType: string;
   floorPrice?: string;
   oneDayChange: number;
   topOffer: string;
@@ -94,6 +95,7 @@ export default function CollectionsPage() {
       id: rawCollection.id,
       name: rawCollection.name,
       logoUrl: rawCollection.logoUrl,
+      collectionType: rawCollection.collectionType || 'ERC721',
       floorPrice: rawCollection.floorPrice || '0',
       oneDayChange: Number(oneDayChange.toFixed(2)),
       topOffer: topOfferValue,
@@ -338,9 +340,14 @@ export default function CollectionsPage() {
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-white font-semibold truncate group-hover:text-primary-400 transition-colors">
-                          {collection.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-white font-semibold truncate group-hover:text-primary-400 transition-colors">
+                            {collection.name}
+                          </p>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-dark-bg border border-dark-border rounded text-gray-400 whitespace-nowrap">
+                            {collection.collectionType}
+                          </span>
+                        </div>
                       </div>
                     </div>
 

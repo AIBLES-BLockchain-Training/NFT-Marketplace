@@ -16,17 +16,17 @@ export function convertIpfsUrl(url: string | undefined): string | undefined {
     if (hash.startsWith('ipfs/')) {
       hash = hash.replace('ipfs/', '');
     }
-    return `https://cloudflare-ipfs.com/ipfs/${hash}`;
+    return `https://dweb.link/ipfs/${hash}`;
   }
 
   // Handle /ipfs/ path
   if (url.startsWith('/ipfs/')) {
-    return `https://cloudflare-ipfs.com${url}`;
+    return `https://dweb.link${url}`;
   }
 
   // Handle bare IPFS hash (no protocol)
   if (url.length === 46 && url.startsWith('Qm')) {
-    return `https://cloudflare-ipfs.com/ipfs/${url}`;
+    return `https://dweb.link/ipfs/${url}`;
   }
 
   return url;
@@ -64,10 +64,10 @@ export function getIpfsGateways(url: string | undefined, width?: number): string
 
   // Return multiple gateways for fallback with optimization
   return [
-    `https://cloudflare-ipfs.com/ipfs/${hash}${widthParam}`,
-    `https://ipfs.io/ipfs/${hash}`, // ipfs.io doesn't support width param
-    `https://gateway.pinata.cloud/ipfs/${hash}`,
     `https://dweb.link/ipfs/${hash}`,
+    `https://ipfs.io/ipfs/${hash}`,
+    `https://gateway.pinata.cloud/ipfs/${hash}`,
+    `https://4everland.io/ipfs/${hash}`,
   ];
 }
 

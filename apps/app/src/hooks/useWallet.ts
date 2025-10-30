@@ -87,7 +87,6 @@ export function useWallet() {
       } else {
         // Need signature first - check if already requesting to prevent duplicates
         if (isRequestingSignature) {
-          console.log('Signature request already in progress, skipping duplicate');
           return;
         }
 
@@ -96,7 +95,6 @@ export function useWallet() {
         // Safety timeout: reset flag after 30 seconds if still stuck
         const timeoutId = setTimeout(() => {
           if (isRequestingSignature) {
-            console.log('Signature request timeout, resetting flag');
             isRequestingSignature = false;
           }
         }, 30000);
@@ -179,7 +177,6 @@ export function useWallet() {
         } else {
           // New wallet needs to sign first - check if already requesting
           if (isRequestingSignature) {
-            console.log('Signature request already in progress, skipping duplicate');
             return;
           }
 
@@ -189,7 +186,6 @@ export function useWallet() {
           // Safety timeout: reset flag after 30 seconds if still stuck
           const timeoutId = setTimeout(() => {
             if (isRequestingSignature) {
-              console.log('Signature request timeout, resetting flag');
               isRequestingSignature = false;
             }
           }, 30000);

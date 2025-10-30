@@ -4,6 +4,7 @@ import { NFT, Collection } from '../../types';
 import { Card } from './Card';
 import { Badge } from './Badge';
 import { NFTImage } from './NFTImage';
+import { NFTDetailModal } from '../nft/NFTDetailModal';
 
 interface TrendingSectionProps {
   title: string;
@@ -15,6 +16,8 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
+  const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
+  const [showNFTDetail, setShowNFTDetail] = useState(false);
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
@@ -40,6 +43,15 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
     setShowRightArrow(
       container.scrollLeft < container.scrollWidth - container.clientWidth - 10
     );
+  };
+
+  const handleNFTClick = (nft: NFT) => {
+    setSelectedNFT(nft);
+    setShowNFTDetail(true);
+  };
+
+  const handleCloseNFTDetail = () => {
+    setShowNFTDetail(false);
   };
 
   return (
@@ -78,7 +90,11 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
       >
         {type === 'nfts'
           ? (items as NFT[]).map((nft) => (
-              <Link key={nft.id} href={`/asset/${nft.id}`} className="snap-start shrink-0">
+              <button
+                key={nft.id}
+                onClick={() => handleNFTClick(nft)}
+                className="snap-start shrink-0 text-left"
+              >
                 <Card hover className="w-64">
                   <div className="aspect-square bg-dark-bg rounded-lg overflow-hidden mb-4 relative">
                     {nft.imageUrl ? (
@@ -102,7 +118,7 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
                     <Badge variant="primary">{nft.collection.collectionType}</Badge>
                   </div>
                 </Card>
-              </Link>
+              </button>
             ))
           : (items as Collection[]).map((collection) => (
               <Link
@@ -155,6 +171,15 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
               </Link>
             ))}
       </div>
+
+      {/* NFT Detail Modal */}
+      {selectedNFT && (
+        <NFTDetailModal
+          isOpen={showNFTDetail}
+          onClose={handleCloseNFTDetail}
+          nft={selectedNFT}
+        />
+      )}
     </div>
   );
 }

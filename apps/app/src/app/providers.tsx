@@ -1,15 +1,31 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Provider as UrqlProvider } from 'urql';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { graphqlClient } from '../lib/graphql/client';
 
 export function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 5 * 60 * 1000,
+            gcTime: 30 * 60 * 1000,
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
+        },
+      })
+  );
+
   return (
-    <UrqlProvider value={graphqlClient}>
-      {children}
-      <Toaster
+    <QueryClientProvider client={queryClient}>
+      <UrqlProvider value={graphqlClient}>
+        {children}
+        <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
@@ -32,6 +48,7 @@ export function Providers({ children }: { children: ReactNode }) {
           },
         }}
       />
-    </UrqlProvider>
+      </UrqlProvider>
+    </QueryClientProvider>
   );
 }

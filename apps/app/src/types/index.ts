@@ -100,6 +100,9 @@ export interface NFT {
   imageUrl?: string;
   description?: string;
   metadataUri?: string;
+  amount?: string; // For ERC1155 - quantity owned (available + listed)
+  availableAmount?: string; // Amount available (not listed)
+  listedAmount?: string; // Amount currently listed
   traits?: Trait[];
   owners?: TokenOwnership[];
   listings?: Listing[];

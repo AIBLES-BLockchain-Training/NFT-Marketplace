@@ -9,16 +9,17 @@ import { NFTImage } from '../common/NFTImage';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { truncateTokenId } from '../../lib/utils/format';
+import { useWallet } from '../../hooks/useWallet';
 
 interface NFTDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   nft: NFT;
-  allNFTs: NFT[]; // All NFTs in collection for navigation
-  currentIndex: number;
-  onNavigate: (index: number) => void;
+  allNFTs?: NFT[]; // All NFTs in collection for navigation
+  currentIndex?: number;
+  onNavigate?: (index: number) => void;
   isOwner?: boolean;
-  activeListing?: Listing | null;
+  activeListings?: Listing[];
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
@@ -34,7 +35,7 @@ export function NFTDetailModal({
   currentIndex,
   onNavigate,
   isOwner,
-  activeListing,
+  activeListings = [],
   onBuy,
   onCreateListing,
   onCreateAuction,
@@ -42,11 +43,45 @@ export function NFTDetailModal({
   onUpdateListing,
 }: NFTDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity'>('details');
-  const [quantity, setQuantity] = useState(1);
+  const [listingQuantities, setListingQuantities] = useState<{[listingId: string]: number}>({});
+  const { address } = useWallet();
 
-  const isERC721 = nft.collection.collectionType === 'ERC721';
-  const maxQuantity = activeListing ? parseFloat(activeListing.quantity) : 1;
+  // Initialize quantities for each listing
+  useEffect(() => {
+    const initialQuantities: {[listingId: string]: number} = {};
+    activeListings.forEach(listing => {
+      initialQuantities[listing.id] = 1;
+    });
+    setListingQuantities(initialQuantities);
+  }, [activeListings]);
 
+  const isERC721 = nft?.collection?.collectionType === 'ERC721';
+
+  const handleQuantityChange = (listingId: string, value: string) => {
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue > 0) {
+      setListingQuantities(prev => ({
+        ...prev,
+        [listingId]: numValue
+      }));
+    }
+  };
+
+  const handleIncrement = (listingId: string, maxQty: number) => {
+    setListingQuantities(prev => ({
+      ...prev,
+      [listingId]: Math.min((prev[listingId] || 1) + 1, maxQty)
+    }));
+  };
+
+  const handleDecrement = (listingId: string) => {
+    setListingQuantities(prev => ({
+      ...prev,
+      [listingId]: Math.max((prev[listingId] || 1) - 1, 1)
+    }));
+  };
+
+  // Handle body scroll lock
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -61,7 +96,7 @@ export function NFTDetailModal({
   // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
+      if (!isOpen || !allNFTs || currentIndex === undefined || !onNavigate) return;
 
       if (e.key === 'Escape') {
         onClose();
@@ -74,37 +109,12 @@ export function NFTDetailModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentIndex, allNFTs.length, onClose, onNavigate]);
+  }, [isOpen, currentIndex, allNFTs, onClose, onNavigate]);
 
-  const handleIncrement = () => {
-    if (!isERC721 && quantity < maxQuantity) {
-      setQuantity(Math.min(quantity + 0.1, maxQuantity));
-    }
-  };
-
-  const handleDecrement = () => {
-    if (!isERC721 && quantity > 0.1) {
-      setQuantity(Math.max(quantity - 0.1, 0.1));
-    }
-  };
-
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isERC721) return;
-    const value = parseFloat(e.target.value);
-    if (isNaN(value) || value < 0.01) {
-      setQuantity(0.01);
-    } else if (value > maxQuantity) {
-      setQuantity(maxQuantity);
-    } else {
-      setQuantity(value);
-    }
-  };
-
-  const handleBuyNow = () => {
-    if (activeListing && onBuy) {
-      onBuy(activeListing);
-    }
-  };
+  // Early return if no nft data - AFTER all hooks
+  if (!nft || !nft.collection) {
+    return null;
+  }
 
   const getTimeRemaining = (endTimestamp: string) => {
     const end = new Date(endTimestamp).getTime();
@@ -130,10 +140,13 @@ export function NFTDetailModal({
 
   if (!isOpen) return null;
 
-  // Visible thumbnails range (show 5 at a time)
+  // Navigation only available when allNFTs and currentIndex are provided
+  const showNavigation = allNFTs && allNFTs.length > 0 && currentIndex !== undefined && onNavigate;
+
+  // Visible thumbnails range (show 7 at a time)
   const thumbnailsToShow = 7;
-  const startIndex = Math.max(0, Math.min(currentIndex - Math.floor(thumbnailsToShow / 2), allNFTs.length - thumbnailsToShow));
-  const visibleNFTs = allNFTs.slice(startIndex, startIndex + thumbnailsToShow);
+  const startIndex = showNavigation ? Math.max(0, Math.min(currentIndex - Math.floor(thumbnailsToShow / 2), allNFTs.length - thumbnailsToShow)) : 0;
+  const visibleNFTs = showNavigation ? allNFTs.slice(startIndex, startIndex + thumbnailsToShow) : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -149,54 +162,58 @@ export function NFTDetailModal({
 
           {/* Top Navigation Bar */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border bg-dark-card/50">
-            <div className="flex items-center gap-3 flex-1">
-              {/* Previous Button */}
-              <button
-                onClick={() => currentIndex > 0 && onNavigate(currentIndex - 1)}
-                disabled={currentIndex === 0}
-                className="p-2 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
+            {showNavigation ? (
+              <div className="flex items-center gap-3 flex-1">
+                {/* Previous Button */}
+                <button
+                  onClick={() => currentIndex! > 0 && onNavigate!(currentIndex! - 1)}
+                  disabled={currentIndex === 0}
+                  className="p-2 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
 
-              {/* Thumbnails */}
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                {visibleNFTs.map((item, idx) => {
-                  const actualIndex = startIndex + idx;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => onNavigate(actualIndex)}
-                      className={`relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${
-                        actualIndex === currentIndex
-                          ? 'border-primary-500 scale-110'
-                          : 'border-transparent hover:border-dark-border'
-                      }`}
-                    >
-                      <NFTImage
-                        src={item.imageUrl}
-                        alt={item.name}
-                        width={48}
-                        className="object-cover"
-                      />
-                    </button>
-                  );
-                })}
+                {/* Thumbnails */}
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                  {visibleNFTs.map((item, idx) => {
+                    const actualIndex = startIndex + idx;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => onNavigate!(actualIndex)}
+                        className={`relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${
+                          actualIndex === currentIndex
+                            ? 'border-primary-500 scale-110'
+                            : 'border-transparent hover:border-dark-border'
+                        }`}
+                      >
+                        <NFTImage
+                          src={item.imageUrl}
+                          alt={item.name}
+                          width={48}
+                          className="object-cover"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Next Button */}
+                <button
+                  onClick={() => currentIndex! < allNFTs!.length - 1 && onNavigate!(currentIndex! + 1)}
+                  disabled={currentIndex === allNFTs!.length - 1}
+                  className="p-2 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-
-              {/* Next Button */}
-              <button
-                onClick={() => currentIndex < allNFTs.length - 1 && onNavigate(currentIndex + 1)}
-                disabled={currentIndex === allNFTs.length - 1}
-                className="p-2 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
+            ) : (
+              <div className="flex-1" />
+            )}
 
             {/* Close Button */}
             <button
@@ -247,7 +264,7 @@ export function NFTDetailModal({
                 </div>
 
                 {/* Stats Grid */}
-                {activeListing && (
+                {activeListings.length > 0 && (
                   <div className="grid grid-cols-4 gap-4 p-4 bg-dark-card rounded-xl border border-dark-border">
                     <div>
                       <p className="text-xs text-gray-400 mb-1">TOP OFFER</p>
@@ -271,7 +288,7 @@ export function NFTDetailModal({
                 )}
 
                 {/* Owner Actions - No Listing */}
-                {isOwner && !activeListing && (
+                {isOwner && activeListings.length === 0 && (
                   <Card>
                     <h3 className="text-sm font-semibold text-gray-400 mb-4">List for Sale</h3>
                     <div className="space-y-3">
@@ -292,156 +309,191 @@ export function NFTDetailModal({
                   </Card>
                 )}
 
-                {/* Owner Actions - Has Listing */}
-                {isOwner && activeListing && !isListingExpired(activeListing.endTimestamp) && (
+                {/* Listings Section */}
+                {activeListings.length > 0 && (
                   <Card>
-                    <h3 className="text-sm font-semibold text-gray-400 mb-4">Your Listing</h3>
-                    <div className="mb-4">
-                      <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-2xl font-bold text-white">
-                          {activeListing.currencyApprovals && activeListing.currencyApprovals.length > 0
-                            ? formatEth(activeListing.currencyApprovals[0].pricePerToken)
-                            : formatEth(activeListing.pricePerToken)}
-                        </span>
-                        <span className="text-lg text-gray-400">
-                          {(() => {
-                            if (activeListing.currencyApprovals && activeListing.currencyApprovals.length > 0) {
-                              const currency = activeListing.currencyApprovals[0].currency;
+                    <h3 className="text-sm font-semibold text-gray-400 mb-4">
+                      Available Listings ({activeListings.length})
+                    </h3>
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {activeListings
+                        .sort((a, b) => parseFloat(a.pricePerToken) - parseFloat(b.pricePerToken))
+                        .map((listing) => {
+                          const price = listing.currencyApprovals && listing.currencyApprovals.length > 0
+                            ? listing.currencyApprovals[0].pricePerToken
+                            : listing.pricePerToken;
+
+                          const currencySymbol = (() => {
+                            if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
+                              const currency = listing.currencyApprovals[0].currency;
                               const currencyId = currency.id.toLowerCase();
-                              const isNativeToken = currencyId === ZERO_ADDRESS.toLowerCase();
+                              const isNativeToken = currencyId === ZERO_ADDRESS.toLowerCase() ||
+                                                    currencyId === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
                               return (isNativeToken || currency.symbol === 'UNKNOWN') ? 'ETH' : currency.symbol;
                             }
                             return 'ETH';
-                          })()}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-400">
-                        Ending in {getTimeRemaining(activeListing.endTimestamp)}
-                      </p>
+                          })();
+
+                          const isExpired = isListingExpired(listing.endTimestamp);
+                          const isMyListing = address && listing.owner.id.toLowerCase() === address.toLowerCase();
+
+                          const currentQty = listingQuantities[listing.id] || 1;
+                          const maxQty = parseFloat(listing.quantity);
+
+                          return (
+                            <div
+                              key={listing.id}
+                              className="p-4 bg-dark-bg border border-dark-border rounded-lg space-y-3"
+                            >
+                              {isMyListing ? (
+                                // Owner's listing layout
+                                <>
+                                  {/* Info Grid */}
+                                  <div className={`grid ${isERC721 ? 'grid-cols-3' : 'grid-cols-4'} gap-4`}>
+                                    {/* Seller */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 mb-1">Seller</p>
+                                      <p className="text-sm text-white font-mono truncate">You</p>
+                                    </div>
+
+                                    {/* Price */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 mb-1">Price</p>
+                                      <p className="text-base text-white font-bold">
+                                        {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                                      </p>
+                                    </div>
+
+                                    {/* Quantity */}
+                                    {!isERC721 && (
+                                      <div>
+                                        <p className="text-xs text-gray-500 mb-1">Quantity</p>
+                                        <p className="text-sm text-white">{listing.quantity}</p>
+                                      </div>
+                                    )}
+
+                                    {/* Expiry */}
+                                    <div>
+                                      <p className="text-xs text-gray-500 mb-1">Expires</p>
+                                      <p className={`text-sm font-semibold ${isExpired ? 'text-red-400' : 'text-primary-400'}`}>
+                                        {getTimeRemaining(listing.endTimestamp)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Action Buttons */}
+                                  <div className="pt-2 border-t border-dark-border">
+                                    <div className="flex gap-2">
+                                      {!isExpired && onCancelListing && (
+                                        <Button
+                                          variant="secondary"
+                                          onClick={() => onCancelListing(listing)}
+                                          className="flex-1"
+                                        >
+                                          Cancel Listing
+                                        </Button>
+                                      )}
+                                      {!isExpired && onUpdateListing && (
+                                        <Button
+                                          variant="primary"
+                                          onClick={() => onUpdateListing(listing)}
+                                          className="flex-1"
+                                        >
+                                          Update Listing
+                                        </Button>
+                                      )}
+                                      {isExpired && (
+                                        <div className="text-center py-2">
+                                          <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                // Buyer's listing layout
+                                <>
+                                  {/* Seller - Row 1 */}
+                                  <div>
+                                    <p className="text-xs text-gray-500 mb-1">Seller</p>
+                                    <p className="text-sm text-white font-mono truncate">
+                                      {listing.owner.id.slice(0, 6)}...{listing.owner.id.slice(-4)}
+                                    </p>
+                                  </div>
+
+                                  {/* Price & Expires - Row 2 */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xs text-gray-500">Price:</p>
+                                      <p className="text-base text-white font-bold">
+                                        {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xs text-gray-500">Expires:</p>
+                                      <p className={`text-sm font-semibold ${isExpired ? 'text-red-400' : 'text-primary-400'}`}>
+                                        {getTimeRemaining(listing.endTimestamp)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Quantity Controls & Buy/Offer Buttons - Row 3 */}
+                                  {!isExpired ? (
+                                    <div className="flex items-center gap-3 pt-2 border-t border-dark-border">
+                                      {/* Quantity Controls */}
+                                      {!isERC721 && (
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => handleDecrement(listing.id)}
+                                            disabled={currentQty <= 1}
+                                            className="w-8 h-8 flex items-center justify-center bg-dark-card border border-dark-border rounded hover:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            <span className="text-white text-lg font-bold">−</span>
+                                          </button>
+                                          <input
+                                            type="number"
+                                            value={currentQty}
+                                            onChange={(e) => handleQuantityChange(listing.id, e.target.value)}
+                                            min={1}
+                                            max={maxQty}
+                                            className="w-16 px-2 py-1 text-center bg-dark-card border border-dark-border rounded text-white focus:border-primary-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <button
+                                            onClick={() => handleIncrement(listing.id, maxQty)}
+                                            disabled={currentQty >= maxQty}
+                                            className="w-8 h-8 flex items-center justify-center bg-dark-card border border-dark-border rounded hover:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            <span className="text-white text-lg font-bold">+</span>
+                                          </button>
+                                        </div>
+                                      )}
+                                      {/* Buy Button */}
+                                      <Button
+                                        variant="primary"
+                                        onClick={() => onBuy && onBuy(listing)}
+                                        className="flex-1"
+                                      >
+                                        Buy Now
+                                      </Button>
+                                      {/* Make Offer Button */}
+                                      <Button
+                                        variant="secondary"
+                                        className="flex-1"
+                                      >
+                                        Make Offer
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-2 border-t border-dark-border">
+                                      <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                     </div>
-                    <div className="space-y-3">
-                      {onUpdateListing && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => onUpdateListing(activeListing)}
-                          className="w-full"
-                        >
-                          Update Listing
-                        </Button>
-                      )}
-                      {onCancelListing && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => onCancelListing(activeListing)}
-                          className="w-full"
-                        >
-                          Cancel Listing
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                )}
-
-                {/* Buy Section - Only show for non-owners */}
-                {!isOwner && activeListing && !isListingExpired(activeListing.endTimestamp) && (
-                  <Card>
-                    <div className="mb-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-gray-400">Buy For</h3>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500">Ending in</p>
-                          <p className="text-sm font-semibold text-primary-400">
-                            {getTimeRemaining(activeListing.endTimestamp)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-baseline gap-2 mb-4">
-                        <span className="text-3xl font-bold text-white">
-                          {activeListing.currencyApprovals && activeListing.currencyApprovals.length > 0
-                            ? formatEth(activeListing.currencyApprovals[0].pricePerToken)
-                            : formatEth(activeListing.pricePerToken)}
-                        </span>
-                        <span className="text-lg text-gray-400">
-                          {(() => {
-                            if (activeListing.currencyApprovals && activeListing.currencyApprovals.length > 0) {
-                              const currency = activeListing.currencyApprovals[0].currency;
-                              const currencyId = currency.id.toLowerCase();
-                              const isNativeToken = currencyId === ZERO_ADDRESS.toLowerCase();
-                              return (isNativeToken || currency.symbol === 'UNKNOWN') ? 'ETH' : currency.symbol;
-                            }
-                            return 'ETH';
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      {/* Quantity Input */}
-                      <div className="flex flex-col items-center bg-dark-bg border border-dark-border rounded-lg overflow-hidden p-2">
-                        <div className="flex items-center w-full">
-                          <button
-                            onClick={handleDecrement}
-                            disabled={isERC721 || quantity <= 0.1}
-                            className="px-2 py-1 text-white hover:bg-dark-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            value={quantity}
-                            onChange={handleQuantityChange}
-                            disabled={isERC721}
-                            className="flex-1 bg-transparent text-center text-white outline-none disabled:cursor-not-allowed text-sm"
-                            min="0.01"
-                            step="0.1"
-                            max={maxQuantity}
-                          />
-                          <button
-                            onClick={handleIncrement}
-                            disabled={isERC721 || quantity >= maxQuantity}
-                            className="px-2 py-1 text-white hover:bg-dark-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                          >
-                            +
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-1">
-                          Buy: {Math.floor(quantity)}
-                        </p>
-                      </div>
-
-                      {/* Buy Now Button */}
-                      <Button
-                        variant="primary"
-                        onClick={handleBuyNow}
-                        className="col-span-1"
-                      >
-                        Buy {Math.floor(quantity) > 1 ? Math.floor(quantity) : ''} now
-                      </Button>
-
-                      {/* Make Offer Button */}
-                      <Button
-                        variant="secondary"
-                        className="col-span-1"
-                      >
-                        Make Offer
-                      </Button>
-                    </div>
-
-                    {!isERC721 && (
-                      <p className="text-xs text-gray-500 mt-3">
-                        Available: {maxQuantity} items | Contract will buy: {Math.floor(quantity)} items
-                      </p>
-                    )}
-                  </Card>
-                )}
-
-                {/* Expired Listing - Show Make Offer */}
-                {!isOwner && activeListing && isListingExpired(activeListing.endTimestamp) && (
-                  <Card>
-                    <p className="text-sm text-gray-400 mb-4">This listing has expired</p>
-                    <Button variant="secondary" className="w-full">
-                      Make Offer
-                    </Button>
                   </Card>
                 )}
 

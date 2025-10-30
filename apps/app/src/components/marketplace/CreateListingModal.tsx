@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { ethers } from 'ethers';
 import { NFT } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -7,11 +6,10 @@ import { Input } from '../common/Input';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
-import { encodeCreateListing, encodeApproveCurrencyForListing } from '../../lib/web3/encoding';
+import { encodeCreateListing } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
 import { checkNFTApproval, approveNFT, isNFTCollectionWhitelisted } from '../../lib/web3/approve';
-import { ListingABI } from '../../lib/contracts/abis';
 import toast from 'react-hot-toast';
 
 interface CreateListingModalProps {
@@ -26,9 +24,8 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
   const { address } = useWallet();
   const [pricePerToken, setPricePerToken] = useState('');
   const [quantity, setQuantity] = useState('1');
-  const [duration, setDuration] = useState('7'); // days
+  const [duration, setDuration] = useState('7');
   const [isApproving, setIsApproving] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'idle' | 'creating' | 'approving'>('idle');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +36,6 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         return;
       }
 
-      // Check if wallet is connected
       if (!address) {
         toast.error('Please connect your wallet');
         return;
@@ -47,7 +43,6 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
 
       const isERC1155 = nft.collection.collectionType === 'ERC1155';
 
-      // First check if NFT collection is whitelisted
       toast.loading('Checking NFT collection whitelist...', { id: 'whitelist-check' });
       const isWhitelisted = await isNFTCollectionWhitelisted(nft.collection.id);
       toast.dismiss('whitelist-check');
@@ -69,7 +64,6 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
       );
       toast.dismiss('approval-check');
 
-      // If not approved, request approval first
       if (approvalStatus.needsApproval) {
         setIsApproving(true);
         toast.loading('Please approve NFT in your wallet...', { id: 'approval' });
@@ -93,8 +87,6 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         }
       }
 
-      // Step 1: Create listing
-      setCurrentStep('creating');
       const priceWei = BigInt(Math.floor(parseFloat(pricePerToken) * 1e18));
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
@@ -103,70 +95,16 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
+        currency: ZERO_ADDRESS,
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
         reserved: false,
       });
 
-      const createReceipt = await sendTransaction(createListingTx, 'Step 1/2: Listing created!');
-
-      if (createReceipt?.status !== 1) {
-        setCurrentStep('idle');
-        return;
-      }
-
-      // Extract listingId from event logs
-      let listingId: bigint | null = null;
-      try {
-        const listingInterface = new ethers.Interface(ListingABI);
-
-        for (const log of createReceipt.logs) {
-          try {
-            const parsedLog = listingInterface.parseLog({
-              topics: [...log.topics],
-              data: log.data,
-            });
-
-            if (parsedLog?.name === 'ListingCreated') {
-              listingId = parsedLog.args[0]; // First argument is listingId
-              break;
-            }
-          } catch {
-            // Skip logs that don't match
-            continue;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to extract listingId:', error);
-      }
-
-      if (!listingId) {
-        toast.error('Failed to extract listing ID. Please approve currency manually from your profile.');
-        setCurrentStep('idle');
-        onSuccess?.();
-        onClose();
-        return;
-      }
-
-      // Step 2: Approve currency for listing
-      setCurrentStep('approving');
-      const approveCurrencyTx = encodeApproveCurrencyForListing(
-        listingId,
-        ZERO_ADDRESS, // Contract uses address(0) for native ETH
-        priceWei
-      );
-
-      await sendTransaction(
-        approveCurrencyTx,
-        'Step 2/2: Currency approved! Listing is now live and ready for purchase.'
-      );
-
-      setCurrentStep('idle');
+      await sendTransaction(createListingTx, 'Listing created successfully! Your NFT is now live and ready for purchase.');
     } catch (error: unknown) {
-      console.error('Create listing error:', error);
-      setCurrentStep('idle');
+      // Error handling is done in useContract hook
     }
   };
 
@@ -251,13 +189,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
             Cancel
           </Button>
           <Button type="submit" variant="primary" fullWidth isLoading={isLoading || isApproving}>
-            {isApproving
-              ? 'Approving NFT...'
-              : currentStep === 'creating'
-                ? 'Step 1/2: Creating Listing...'
-                : currentStep === 'approving'
-                  ? 'Step 2/2: Approving Currency...'
-                  : 'Create Listing'}
+            {isApproving ? 'Approving NFT...' : isLoading ? 'Creating Listing...' : 'Create Listing'}
           </Button>
         </div>
       </form>

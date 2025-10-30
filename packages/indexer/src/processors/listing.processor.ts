@@ -15,7 +15,11 @@ import {
   Trait
 } from '../model'
 import * as ListingABI from '../abi/Listing'
-import { fetchCollectionMetadata, detectContractType, fetchNFTMetadata } from '../utils/metadata'
+import {
+  fetchCollectionMetadataUnified,
+  fetchNFTMetadataUnified,
+  detectContractType
+} from '../utils/metadata'
 import { ethers } from 'ethers'
 
 export function getListingTopics(): string[] {
@@ -85,10 +89,8 @@ export async function processListingEvents(
     }
     let collection = await ctx.store.get(Collection, collectionId)
     if (!collection) {
-      console.log(`Fetching metadata for new collection: ${contractAddress}`)
-
       const [metadata, contractType] = await Promise.all([
-        fetchCollectionMetadata(contractAddress, provider),
+        fetchCollectionMetadataUnified(contractAddress, provider),
         detectContractType(contractAddress, provider)
       ])
 
@@ -108,8 +110,14 @@ export async function processListingEvents(
         traits: [],
         traitStats: []
       })
-
-      console.log(`✓ Collection: ${metadata.name} (${metadata.symbol})`)
+    } else if (!collection.logoUrl || collection.logoUrl.startsWith('ipfs://')) {
+      // Update existing collection if logoUrl is missing or uses old IPFS workaround
+      const metadata = await fetchCollectionMetadataUnified(contractAddress, provider)
+      if (metadata.image) {
+        collection.logoUrl = metadata.image
+        collection.bannerUrl = metadata.banner_image
+        collection.description = metadata.description
+      }
     }
     collectionMap.set(collectionId, collection)
     return collection
@@ -122,13 +130,10 @@ export async function processListingEvents(
     }
     let nft = await ctx.store.get(NFT, nftId)
     if (!nft) {
-      // Create Subject for NFT contract with type CONTRACT
-      // This ensures NFT contract always has correct Subject type
       const contractSubject = await getOrCreateSubject(contractAddress, SubjectType.CONTRACT)
       const collection = await getOrCreateCollection(contractAddress, contractSubject)
 
-      // Fetch NFT metadata from blockchain
-      const metadata = await fetchNFTMetadata(contractAddress, tokenId.toString(), provider)
+      const metadata = await fetchNFTMetadataUnified(contractAddress, tokenId.toString(), provider)
 
       nft = new NFT({
         id: nftId,
@@ -137,7 +142,7 @@ export async function processListingEvents(
         name: metadata?.name || `${collection.name} #${tokenId}`,
         imageUrl: metadata?.image,
         description: metadata?.description,
-        metadataUri: undefined, // Can be populated if we store the tokenURI
+        metadataUri: undefined,
         listings: [],
         purchaseHistory: [],
         traits: [],
@@ -145,7 +150,6 @@ export async function processListingEvents(
         owners: []
       })
 
-      // Create traits from metadata attributes
       if (metadata?.attributes && Array.isArray(metadata.attributes)) {
         const traits: Trait[] = []
         for (const attr of metadata.attributes) {
@@ -162,14 +166,6 @@ export async function processListingEvents(
           }
         }
         nft.traits = traits
-        if (traits.length > 0) {
-          console.log(`✓ NFT: ${nft.name} (${traits.length} traits)`)
-        }
-      }
-
-      // Use NFT image as collection logo if collection doesn't have one
-      if (!collection.logoUrl && nft.imageUrl) {
-        collection.logoUrl = nft.imageUrl
       }
     }
     nftMap.set(nftId, nft)
@@ -382,22 +378,32 @@ export async function processListingEvents(
 
         if (listing) {
           const currencyEntity = await getOrCreateCurrency(currency)
+          const approvalId = `${listingIdStr}-${currencyEntity.id}`
 
-          const existingApproval = await ctx.store.findOne(CurrencyApproval, {
-            where: {
-              listing: { id: listingIdStr },
-              currency: { id: currencyEntity.id }
-            }
-          })
+          // Check in current batch first
+          let existingApproval = currencyApprovals.find(a => a.id === approvalId)
+
+          if (!existingApproval) {
+            // Check in database
+            existingApproval = await ctx.store.findOne(CurrencyApproval, {
+              where: {
+                listing: { id: listingIdStr },
+                currency: { id: currencyEntity.id }
+              }
+            })
+          }
 
           if (existingApproval) {
             existingApproval.pricePerToken = price
             existingApproval.updatedAt = timestamp
             existingApproval.transactionHash = transactionHash
-            currencyApprovals.push(existingApproval)
+            // Only push if not already in array
+            if (!currencyApprovals.includes(existingApproval)) {
+              currencyApprovals.push(existingApproval)
+            }
           } else {
             const approval = new CurrencyApproval({
-              id: `${listingIdStr}-${currencyEntity.id}`,
+              id: approvalId,
               listing: listing,
               currency: currencyEntity,
               pricePerToken: price,
@@ -433,7 +439,6 @@ export async function processListingEvents(
 
       else if (topic0 === ListingABI.events.PermissionContractUpdated?.topic) {
         const { oldPermission, newPermission } = ListingABI.events.PermissionContractUpdated.decode(log)
-        console.log(`Permission contract updated from ${oldPermission} to ${newPermission} at block ${blockNumber}`)
       }
 
       else if (topic0 === ListingABI.events.NFTPurchased?.topic) {

@@ -8,6 +8,7 @@ import { BuyModal } from '../../../components/marketplace/BuyModal';
 import { BidModal } from '../../../components/marketplace/BidModal';
 import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
 import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
+import { UpdateListingModal } from '../../../components/marketplace/UpdateListingModal';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { Spinner } from '../../../components/common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
@@ -37,6 +38,7 @@ export default function AssetPage() {
   const [showBidModal, setShowBidModal] = useState(false);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreateAuction, setShowCreateAuction] = useState(false);
+  const [showUpdateListing, setShowUpdateListing] = useState(false);
   const [isNFTOwner, setIsNFTOwner] = useState(false);
   const [isCheckingOwnership, setIsCheckingOwnership] = useState(false);
 
@@ -206,6 +208,15 @@ export default function AssetPage() {
     setShowBidModal(true);
   };
 
+  const handleUpdateListingClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowUpdateListing(true);
+  };
+
   const isOwner = (ownerId: string) => {
     return address?.toLowerCase() === ownerId.toLowerCase();
   };
@@ -313,10 +324,12 @@ export default function AssetPage() {
         <NFTDetail
           nft={nft}
           isOwner={isNFTOwner}
-          activeListing={activeListings[0] || null}
+          activeListings={activeListings}
           onBuy={handleBuyClick}
           onCreateListing={() => setShowCreateListing(true)}
           onCreateAuction={() => setShowCreateAuction(true)}
+          onCancelListing={handleCancelListing}
+          onUpdateListing={handleUpdateListingClick}
         />
 
         {/* Create Listing Modal */}
@@ -342,10 +355,28 @@ export default function AssetPage() {
             }}
           />
         )}
+
+        {/* Update Listing Modal */}
+        {selectedListing && (
+          <UpdateListingModal
+            nft={nft}
+            listing={selectedListing}
+            isOpen={showUpdateListing}
+            onClose={() => {
+              setShowUpdateListing(false);
+              setSelectedListing(null);
+            }}
+            onSuccess={() => {
+              loadNFT();
+              setShowUpdateListing(false);
+              setSelectedListing(null);
+            }}
+          />
+        )}
       </div>
 
       {/* Modals */}
-      {selectedListing && (
+      {selectedListing && showBuyModal && (
         <BuyModal
           isOpen={showBuyModal}
           onClose={() => {

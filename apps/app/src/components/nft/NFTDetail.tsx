@@ -7,32 +7,26 @@ import { Button } from '../common/Button';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { getIpfsGateways, truncateTokenId } from '../../lib/utils/format';
+import { useWallet } from '../../hooks/useWallet';
 import toast from 'react-hot-toast';
 
 interface NFTDetailProps {
   nft: NFT;
   isOwner?: boolean;
-  activeListing?: Listing | null;
+  activeListings?: Listing[];
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
+  onCancelListing?: (listing: Listing) => void;
+  onUpdateListing?: (listing: Listing) => void;
 }
 
-export function NFTDetail({ nft, isOwner, activeListing, onBuy, onCreateListing, onCreateAuction }: NFTDetailProps) {
-  const [quantity, setQuantity] = useState(1);
+export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateListing, onCreateAuction, onCancelListing, onUpdateListing }: NFTDetailProps) {
+  const { address } = useWallet();
   const [imageError, setImageError] = useState(false);
   const [fallbackIndex, setFallbackIndex] = useState(0);
 
-  console.log('NFTDetail render:', {
-    nftId: nft.id,
-    name: nft.name,
-    hasTraits: !!nft.traits,
-    traitsLength: nft.traits?.length || 0,
-    traits: nft.traits
-  });
-
   const isERC721 = nft.collection.collectionType === 'ERC721';
-  const maxQuantity = activeListing ? parseFloat(activeListing.quantity) : 1;
 
   // Get all IPFS gateways for fallback with larger size for detail view (800px)
   const imageGateways = getIpfsGateways(nft.imageUrl, 800);
@@ -43,37 +37,6 @@ export function NFTDetail({ nft, isOwner, activeListing, onBuy, onCreateListing,
       setFallbackIndex(prev => prev + 1);
     } else {
       setImageError(true);
-    }
-  };
-
-  const handleIncrement = () => {
-    if (!isERC721 && quantity < maxQuantity) {
-      setQuantity(Math.min(quantity + 0.1, maxQuantity));
-    }
-  };
-
-  const handleDecrement = () => {
-    if (!isERC721 && quantity > 0.1) {
-      setQuantity(Math.max(quantity - 0.1, 0.1));
-    }
-  };
-
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isERC721) return;
-
-    const value = parseFloat(e.target.value);
-    if (isNaN(value) || value < 0.01) {
-      setQuantity(0.01);
-    } else if (value > maxQuantity) {
-      setQuantity(maxQuantity);
-    } else {
-      setQuantity(value);
-    }
-  };
-
-  const handleBuyNow = () => {
-    if (activeListing && onBuy) {
-      onBuy(activeListing);
     }
   };
 
@@ -204,113 +167,134 @@ export function NFTDetail({ nft, isOwner, activeListing, onBuy, onCreateListing,
           </div>
         </Card>
 
-        {/* Buy/Offer Section */}
-        {!isOwner && activeListing && (
+        {/* Listings Section */}
+        {activeListings.length > 0 && (
           <Card>
-            <div className="mb-4">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-400">Buy For</h3>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">
-                    {isListingExpired(activeListing.endTimestamp) ? 'Listing' : 'Ending in'}
-                  </p>
-                  <p className={`text-sm font-semibold ${
-                    isListingExpired(activeListing.endTimestamp) ? 'text-red-400' : 'text-primary-400'
-                  }`}>
-                    {getTimeRemaining(activeListing.endTimestamp)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">
-                  {activeListing.currencyApprovals && activeListing.currencyApprovals.length > 0
-                    ? formatEth(activeListing.currencyApprovals[0].pricePerToken)
-                    : formatEth(activeListing.pricePerToken)}
-                </span>
-                <span className="text-lg text-gray-400">
-                  {(() => {
-                    // Normalize display symbol: Show 'ETH' for native tokens or UNKNOWN symbols
-                    if (activeListing.currencyApprovals && activeListing.currencyApprovals.length > 0) {
-                      const currency = activeListing.currencyApprovals[0].currency;
+            <h3 className="text-sm font-semibold text-gray-400 mb-4">
+              Available Listings ({activeListings.length})
+            </h3>
+            <div className="space-y-3">
+              {activeListings
+                .sort((a, b) => parseFloat(a.pricePerToken) - parseFloat(b.pricePerToken))
+                .map((listing) => {
+                  const price = listing.currencyApprovals && listing.currencyApprovals.length > 0
+                    ? listing.currencyApprovals[0].pricePerToken
+                    : listing.pricePerToken;
+
+                  const currencySymbol = (() => {
+                    if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
+                      const currency = listing.currencyApprovals[0].currency;
                       const currencyId = currency.id.toLowerCase();
                       const isNativeToken = currencyId === ZERO_ADDRESS.toLowerCase() ||
                                             currencyId === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
                       return (isNativeToken || currency.symbol === 'UNKNOWN') ? 'ETH' : currency.symbol;
                     }
                     return 'ETH';
-                  })()}
-                </span>
-              </div>
+                  })();
+
+                  const isExpired = isListingExpired(listing.endTimestamp);
+                  const isMyListing = address && listing.owner.id.toLowerCase() === address.toLowerCase();
+
+                  return (
+                    <div
+                      key={listing.id}
+                      className="flex items-center gap-3 p-3 bg-dark-bg border border-dark-border rounded-lg"
+                    >
+                      {/* Seller */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-500">Seller</p>
+                        <p className="text-sm text-white font-mono truncate">
+                          {isMyListing ? 'You' : `${listing.owner.id.slice(0, 6)}...${listing.owner.id.slice(-4)}`}
+                        </p>
+                      </div>
+
+                      {/* Price */}
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Price</p>
+                        <p className="text-lg text-white font-bold">
+                          {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                        </p>
+                      </div>
+
+                      {/* Quantity */}
+                      {!isERC721 && (
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500">Quantity</p>
+                          <p className="text-sm text-white">{listing.quantity}</p>
+                        </div>
+                      )}
+
+                      {/* Expiry */}
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Expires</p>
+                        <p className={`text-sm font-semibold ${isExpired ? 'text-red-400' : 'text-primary-400'}`}>
+                          {getTimeRemaining(listing.endTimestamp)}
+                        </p>
+                      </div>
+
+                      {/* Action Buttons */}
+                      {isMyListing ? (
+                        // Owner's listing - show Update/Cancel
+                        <div className="flex gap-2">
+                          {!isExpired && onUpdateListing && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => onUpdateListing(listing)}
+                              className="whitespace-nowrap"
+                            >
+                              Update
+                            </Button>
+                          )}
+                          {!isExpired && onCancelListing && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => onCancelListing(listing)}
+                              className="whitespace-nowrap"
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                          {isExpired && (
+                            <span className="text-sm text-red-400 px-3">Expired</span>
+                          )}
+                        </div>
+                      ) : (
+                        // Other's listing - show Buy button
+                        !isExpired ? (
+                          <Button
+                            variant="primary"
+                            onClick={() => onBuy && onBuy(listing)}
+                            className="whitespace-nowrap"
+                          >
+                            Buy Now
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            onClick={handleMakeOffer}
+                            className="whitespace-nowrap"
+                            disabled
+                          >
+                            Expired
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
             </div>
 
-            {isListingExpired(activeListing.endTimestamp) ? (
-              // Only show Make Offer button if expired
-              <Button
-                variant="secondary"
-                onClick={handleMakeOffer}
-                className="w-full"
-              >
-                Make Offer
-              </Button>
-            ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {/* Quantity Input */}
-                <div className="flex flex-col items-center bg-dark-bg border border-dark-border rounded-lg overflow-hidden p-2">
-                  <div className="flex items-center w-full">
-                    <button
-                      onClick={handleDecrement}
-                      disabled={isERC721 || quantity <= 0.1}
-                      className="px-2 py-1 text-white hover:bg-dark-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      value={quantity}
-                      onChange={handleQuantityChange}
-                      disabled={isERC721}
-                      className="flex-1 bg-transparent text-center text-white outline-none disabled:cursor-not-allowed text-sm"
-                      min="0.01"
-                      step="0.1"
-                      max={maxQuantity}
-                    />
-                    <button
-                      onClick={handleIncrement}
-                      disabled={isERC721 || quantity >= maxQuantity}
-                      className="px-2 py-1 text-white hover:bg-dark-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-1">
-                    Buy: {Math.floor(quantity)}
-                  </p>
-                </div>
-
-                {/* Buy Now Button */}
-                <Button
-                  variant="primary"
-                  onClick={handleBuyNow}
-                  className="col-span-1"
-                >
-                  Buy {Math.floor(quantity) > 1 ? Math.floor(quantity) : ''} now
-                </Button>
-
-                {/* Make Offer Button */}
+            {/* Make Offer Button (always available for non-owners) */}
+            {!isOwner && (
+              <div className="mt-4 pt-4 border-t border-dark-border">
                 <Button
                   variant="secondary"
                   onClick={handleMakeOffer}
-                  className="col-span-1"
+                  className="w-full"
                 >
                   Make Offer
                 </Button>
               </div>
-            )}
-
-            {!isERC721 && !isListingExpired(activeListing.endTimestamp) && (
-              <p className="text-xs text-gray-500 mt-3">
-                Available: {maxQuantity} items | Contract will buy: {Math.floor(quantity)} items
-              </p>
             )}
           </Card>
         )}

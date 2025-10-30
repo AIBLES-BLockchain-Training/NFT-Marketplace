@@ -230,23 +230,23 @@ async function main() {
     // const routerAddress = await deployRouter(extensionManagerAddress, signer);
     // console.log("-".repeat(60));
     
-    // const listingAddress = await deployListing("0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
-    // console.log("-".repeat(60));
+    const listingAddress = await deployListing("0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
+    console.log("-".repeat(60));
     
     // const offerAddress = await deployOffer(FEE_RECIPIENT, FEE_PERCENTAGE, "0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
     // console.log("-".repeat(60));
     
-    const nftAuctionAddress = await deployNFTAuction("0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
-    console.log("-".repeat(60));
+    // const nftAuctionAddress = await deployNFTAuction("0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
+    // console.log("-".repeat(60));
     
     console.log("ALL CONTRACTS DEPLOYED SUCCESSFULLY!");
     console.log("\nContract Addresses:");
     // console.log(`   Permissions:      ${permissionsAddress}`);
     // console.log(`   ExtensionManager: ${extensionManagerAddress}`);
     // console.log(`   Router:           ${routerAddress}`);
-    // console.log(`   Listing:          ${listingAddress}`);
+    console.log(`   Listing:          ${listingAddress}`);
     // console.log(`   Offer:            ${offerAddress}`);
-    console.log(`   NFTAuction:       ${nftAuctionAddress}`);
+    // console.log(`   NFTAuction:       ${nftAuctionAddress}`);
     
     console.log("\nSave these addresses for your frontend configuration!");
     

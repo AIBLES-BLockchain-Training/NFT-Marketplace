@@ -24,7 +24,7 @@ export default function ProfilePage() {
   const { address: connectedAddress } = useWallet();
 
   const [nfts, setNfts] = useState<NFT[]>([]);
-  const [listedNFTIds, setListedNFTIds] = useState<Set<string>>(new Set());
+  const [listedQuantities, setListedQuantities] = useState<Map<string, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'owned' | 'roles'>('owned');
   const [cursor, setCursor] = useState<string | null>(null);
@@ -40,24 +40,38 @@ export default function ProfilePage() {
 
   const isOwnProfile = connectedAddress?.toLowerCase() === profileAddress?.toLowerCase();
 
-  // Group NFTs by collection (filter out listed NFTs for owned tab)
+  // Group NFTs by collection (calculate available amounts)
   const groupedNFTs = useMemo(() => {
     const groups: Record<string, NFT[]> = {};
-    const filteredNFTs = nfts.filter(nft => !listedNFTIds.has(nft.id));
-    filteredNFTs.forEach(nft => {
-      const collectionId = nft.collection.id;
-      if (!groups[collectionId]) {
-        groups[collectionId] = [];
+
+    nfts.forEach(nft => {
+      const listedQty = listedQuantities.get(nft.id) || '0';
+      const totalAmount = BigInt(nft.amount || '1');
+      const listedAmount = BigInt(listedQty);
+      const availableAmount = totalAmount - listedAmount;
+
+      // Only show NFTs with available amount > 0
+      if (availableAmount > 0) {
+        const nftWithAmounts = {
+          ...nft,
+          availableAmount: availableAmount.toString(),
+          listedAmount: listedAmount.toString(),
+        };
+
+        const collectionId = nft.collection.id;
+        if (!groups[collectionId]) {
+          groups[collectionId] = [];
+        }
+        groups[collectionId].push(nftWithAmounts);
       }
-      groups[collectionId].push(nft);
     });
     return groups;
-  }, [nfts, listedNFTIds]);
+  }, [nfts, listedQuantities]);
 
   // Flatten NFTs for modal navigation
   const flatNFTs = useMemo(() => {
-    return nfts.filter(nft => !listedNFTIds.has(nft.id));
-  }, [nfts, listedNFTIds]);
+    return Object.values(groupedNFTs).flat();
+  }, [groupedNFTs]);
 
   const collectionsCount = Object.keys(groupedNFTs).length;
 
@@ -91,6 +105,20 @@ export default function ProfilePage() {
     setShowCreateListing(false);
   };
 
+  const handleListingSuccess = () => {
+    setNfts([]);
+    setCursor(null);
+    setHasMore(true);
+    loadUserNFTs(null, false);
+  };
+
+  const handleAuctionSuccess = () => {
+    setNfts([]);
+    setCursor(null);
+    setHasMore(true);
+    loadUserNFTs(null, false);
+  };
+
   const handleCloseCreateAuction = () => {
     setShowCreateAuction(false);
   };
@@ -101,19 +129,22 @@ export default function ProfilePage() {
     }
 
     try {
-      // Load active listings to filter out (only on first load)
+      // Load active listings to calculate listed quantities (only on first load)
       if (!append) {
         const listingsResult = await graphqlClient.query(GET_USER_ACTIVE_LISTINGS_QUERY, {
           address: profileAddress.toLowerCase(),
         });
 
-        const listedIds = new Set<string>();
+        const listedQtyMap = new Map<string, string>();
         if (listingsResult.listings) {
           listingsResult.listings.forEach((listing: any) => {
-            listedIds.add(listing.nft.id);
+            const nftId = listing.nft.id;
+            const currentQty = BigInt(listedQtyMap.get(nftId) || '0');
+            const listingQty = BigInt(listing.quantity || '1');
+            listedQtyMap.set(nftId, (currentQty + listingQty).toString());
           });
         }
-        setListedNFTIds(listedIds);
+        setListedQuantities(listedQtyMap);
       }
 
       // Fetch NFTs from Moralis API with pagination
@@ -135,6 +166,7 @@ export default function ProfilePage() {
           imageUrl: metadata.image || undefined,
           description: metadata.description || undefined,
           metadataUri: nft.token_uri || undefined,
+          amount: nft.amount || '1', // For ERC1155, Moralis provides amount; default to 1 for ERC721
           collection: {
             id: nft.token_address.toLowerCase(),
             name: nft.name || 'Unknown Collection',
@@ -352,7 +384,7 @@ export default function ProfilePage() {
           currentIndex={selectedNFTIndex}
           onNavigate={handleNavigateNFT}
           isOwner={isOwnProfile}
-          activeListing={null}
+          activeListings={flatNFTs[selectedNFTIndex]?.listings?.filter(l => l.status === 'CREATED') || []}
           onCreateListing={handleCreateListingClick}
           onCreateAuction={handleCreateAuctionClick}
         />
@@ -363,6 +395,7 @@ export default function ProfilePage() {
         <CreateListingModal
           isOpen={showCreateListing}
           onClose={handleCloseCreateListing}
+          onSuccess={handleListingSuccess}
           nft={flatNFTs[selectedNFTIndex]}
         />
       )}
@@ -372,6 +405,7 @@ export default function ProfilePage() {
         <CreateAuctionModal
           isOpen={showCreateAuction}
           onClose={handleCloseCreateAuction}
+          onSuccess={handleAuctionSuccess}
           nft={flatNFTs[selectedNFTIndex]}
         />
       )}
@@ -424,7 +458,12 @@ function CollectionGroups({
             {/* Collection Header */}
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-bold text-white">{collection.name}</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-xl font-bold text-white">{collection.name}</h3>
+                  <span className="text-xs px-2 py-1 bg-dark-bg border border-dark-border rounded text-gray-400">
+                    {collection.collectionType}
+                  </span>
+                </div>
                 <p className="text-sm text-gray-400">
                   {nfts.length} {nfts.length === 1 ? 'item' : 'items'}
                 </p>
@@ -456,6 +495,20 @@ function CollectionGroups({
                       priority={false}
                       width={250}
                     />
+                    {nft.collection.collectionType === 'ERC1155' && (
+                      <>
+                        {nft.availableAmount && nft.availableAmount !== '1' && (
+                          <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-green-500/50">
+                            <p className="text-xs font-bold text-green-400">x{nft.availableAmount}</p>
+                          </div>
+                        )}
+                        {nft.listedAmount && nft.listedAmount !== '0' && (
+                          <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-yellow-500/50">
+                            <p className="text-xs font-bold text-yellow-400">Listed: {nft.listedAmount}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="p-2">
                     <p className="text-xs font-semibold text-white truncate">{nft.name}</p>

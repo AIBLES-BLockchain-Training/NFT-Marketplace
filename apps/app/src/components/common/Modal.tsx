@@ -11,9 +11,10 @@ interface ModalProps {
   title?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   zIndex?: string;
+  hideBackdrop?: boolean;
 }
 
-export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 'z-50' }: ModalProps) {
+export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 'z-50', hideBackdrop = false }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -49,10 +50,12 @@ export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 
 
   const modalContent = (
     <div className={clsx("fixed inset-0 flex items-center justify-center p-4 animate-fade-in", zIndex)}>
-      <div
-        className="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      {!hideBackdrop && (
+        <div
+          className="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
       <div
         className={clsx(
           'relative w-full bg-dark-card border border-dark-border rounded-2xl shadow-2xl animate-slide-up',
