@@ -4,7 +4,7 @@ async function main() {
   await run('compile');
   console.log('Compiled contract...');
 
-  const permissionsAddr = '0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a';
+  const permissionsAddr = process.env['ADDRESS_PERMISSIONS'];
 
   console.log('Deploying Auction contract...');
   const Auction = await ethers.getContractFactory('NFTAuction');
@@ -15,7 +15,7 @@ async function main() {
   console.log('Auction deployed to:', auctionAddr);
 
   console.log('Initializing contract...');
-  const tx = await auction.initializeAuction(permissionsAddr);
+  const tx = await auction['initializeAuction'](permissionsAddr);
   await tx.wait();
   console.log('Auction initialized with permissions address:', permissionsAddr);
 

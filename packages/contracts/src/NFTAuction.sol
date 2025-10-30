@@ -234,6 +234,10 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         }
     }
 
+    function getPermissionsContract() external view returns (address) {
+        return address(_auctionStorage().coreStorage.permissionsContract);
+    }
+
     function createAuction(
         AuctionParams memory _auctionParams
     )

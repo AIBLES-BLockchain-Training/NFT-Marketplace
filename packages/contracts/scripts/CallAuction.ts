@@ -1,5 +1,7 @@
 import { Signer } from 'ethers';
 import { ethers } from 'hardhat';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 type AuctionParams = {
   _assetContract: string;
@@ -21,7 +23,7 @@ class Auction {
     this.contract = contract;
   }
 
-  static async init(address: string, signer: Signer) {
+  static async init(address: any, signer: Signer) {
     console.log(`Initializing Auction contract at address: ${address}`);
     const contract = await ethers.getContractAt('NFTAuction', address, signer);
     return new Auction(contract);
@@ -87,9 +89,8 @@ class Auction {
     }
   }
 
-  async bidInAuction(auctionId: number, bidAmount: bigint, isNative: boolean) {
+  async bidInAuction(auctionId: number, bidAmount: bigint, signer: Signer, isNative: boolean) {
     console.log(`Bidding in auction ID: ${auctionId} with amount: ${bidAmount}`);
-    // console.log(`Bidder address: ${await bidder.getAddress()}`);
     try {
       let tx;
       if (isNative) {
@@ -157,18 +158,32 @@ class Auction {
       throw new Error(`Failed to check auction expiration for auction ID ${auctionId}`);
     }
   }
+
+  async getMin() {
+    return await this.contract.MIN_TIME_AUCTION();
+  }
+
+  async getAddressPermissionsContract() {
+    return await this.contract.getPermissionsContract();
+  }
 }
 
 async function main() {
-  const [signer, bidder] = await ethers.getSigners();
-  const auction = await Auction.init('0xb12cEB4FbD9B4A84DEB52BD00C44aFDa9fc58690', signer);
+  const [signer] = await ethers.getSigners();
+  const AUCTION_ADDRESS = process.env['ADDRESS_AUCTION'];
+  const auction = await Auction.init(AUCTION_ADDRESS, signer);
   // const auction = await Auction.init('0xD571fAD055557D1F1954454E1511973FF919bfe4', bidder);
 
   console.log('Signer address: ', await signer.getAddress());
   // console.log('Bidder address: ', await bidder.getAddress());
 
+  console.log('Permissions Contract Address:', await auction.getAddressPermissionsContract());
+
   const totalAuctions = await auction.getTotalAuction();
   console.log('Total Auctions:', totalAuctions.toString());
+
+
+  console.log(await auction.getMin());
 
   // const auctionDetails = await auction.getAuctionDetails(3);
   // console.log('Auction Details:', auctionDetails);
@@ -188,26 +203,26 @@ async function main() {
   // const cancelAuction = await auction.cancelAuction(2);
   // console.log('Cancel Auction:', cancelAuction);
 
-  const auctionParams: AuctionParams = {
-    _assetContract: '0xB0eB2df330E749516Ec7CA058359D2B05c452094',
-    _tokenId: 84,
-    _quantity: 1,
-    _currency: '0xB6321DCd16BC2e2C8Da380a0772707068c5Ad390',
-    _startPrice: ethers.parseEther('0.01'),
-    _ceilingPrice: ethers.parseEther('0.02'),
-    _stepAmount: 50,
-    _timeBufferInSeconds: 300,
-    _startTime: Math.floor(Date.now() / 1000),
-    _endTime: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-  };
+  // const auctionParams: AuctionParams = {
+  //   _assetContract: '0xB0eB2df330E749516Ec7CA058359D2B05c452094',
+  //   _tokenId: 84,
+  //   _quantity: 1,
+  //   _currency: '0xB6321DCd16BC2e2C8Da380a0772707068c5Ad390',
+  //   _startPrice: ethers.parseEther('0.01'),
+  //   _ceilingPrice: ethers.parseEther('0.02'),
+  //   _stepAmount: 50,
+  //   _timeBufferInSeconds: 300,
+  //   _startTime: Math.floor(Date.now() / 1000),
+  //   _endTime: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+  // };
 
-  await auction.createAuction(auctionParams);
+  // await auction.createAuction(auctionParams);
 
-  // const isNewWinningBid = await auction.checkIsNewWinningBid(3, ethers.parseEther('0.2'));
+  // const isNewWinningBid = await auction.checkIsNewWinningBid(0, ethers.parseEther('0.015'));
   // console.log('Is New Winning Bid:', isNewWinningBid);
 
-  // const bidAuction = await auction.bidInAuction(3, ethers.parseEther('0.101'), bidder, false);
-  // console.log('Bid Auction:', bidAuction);
+  const bidAuction = await auction.bidInAuction(0, ethers.parseEther('0.015'), signer, false);
+  console.log('Bid Auction:', bidAuction);
 
   // auction.checkAuctionExpired(3);
 
