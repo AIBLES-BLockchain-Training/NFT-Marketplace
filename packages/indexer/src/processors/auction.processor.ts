@@ -13,7 +13,8 @@ import {
   TradeType,
 } from '../model';
 import { events as auctionEvents } from '../abi/NFTAuction'
-
+import ethers from 'ethers';
+import * as erc721 from '../abi/MockERC721';
 
 export function getAuctionTopics(): string[] {
   return [
@@ -26,6 +27,44 @@ export function getAuctionTopics(): string[] {
     auctionEvents.NFTReceived?.topic,
     auctionEvents.UpdatePermissionsContract?.topic,
   ].filter(Boolean) as string[];
+}
+
+async function fetchNFTMetadata(ctx: any, contractAddress: string, tokenId: bigint) {
+  try {
+    const provider = new ethers.JsonRpcProvider(process.env.RPC_SEPOLIA_HTTP);
+    const contract = new ethers.Contract(contractAddress, erc721.abi, provider);
+    const tokenURI: string = await contract.tokenURI(tokenId);
+
+    if(!tokenURI) return null;
+
+    const metadataUrl = tokenURI.startsWith("ipfs://")
+      ? `https://ipfs.io/ipfs/${tokenURI.replace("ipfs://", "")}`
+      : tokenURI;
+    const response = await fetch(metadataUrl);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} fetching ${metadataUrl}`);
+    }
+
+    const metadata = await response.json();
+
+    const imageUrl = metadata.image ? 
+      metadata.image.startsWith("ipfs://")
+        ? `https://ipfs.io/ipfs/${metadata.image.replace("ipfs://", "")}`
+        : metadata.image
+      : null;
+
+    return {
+      metadataUrl: metadataUrl,
+      name: metadata.name || `Token #${tokenId.toString()}`,
+      description: metadata.description || null,
+      imageUrl: imageUrl || null,
+      attributes: metadata.attributes || [],
+    };
+  } catch(error) {
+    console.error(`Error fetching NFT metadata for ${contractAddress} tokenId ${tokenId}:`, error);
+    return null;
+  }
 }
 
 export async function processAuctionEvents(
@@ -115,6 +154,14 @@ export async function processAuctionEvents(
         extensions: [],
         owners: [],
       });
+
+      const metadata = await fetchNFTMetadata(ctx, contractAddress, tokenId);
+      if (metadata) {
+        nft.name = metadata.name;
+        nft.description = metadata.description;
+        nft.imageUrl = metadata.imageUrl;
+        nft.metadataUri = metadata.metadataUrl;
+      }
     }
     nftMap.set(nftId, nft);
     return nft;

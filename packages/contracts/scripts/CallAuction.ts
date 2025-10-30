@@ -161,10 +161,10 @@ class Auction {
 
 async function main() {
   const [signer, bidder] = await ethers.getSigners();
-  const auction = await Auction.init('0xD571fAD055557D1F1954454E1511973FF919bfe4', signer);
+  const auction = await Auction.init('0xb12cEB4FbD9B4A84DEB52BD00C44aFDa9fc58690', signer);
   // const auction = await Auction.init('0xD571fAD055557D1F1954454E1511973FF919bfe4', bidder);
 
-  // console.log('Signer address: ', await signer.getAddress());
+  console.log('Signer address: ', await signer.getAddress());
   // console.log('Bidder address: ', await bidder.getAddress());
 
   const totalAuctions = await auction.getTotalAuction();
@@ -188,20 +188,20 @@ async function main() {
   // const cancelAuction = await auction.cancelAuction(2);
   // console.log('Cancel Auction:', cancelAuction);
 
-  // const auctionParams: AuctionParams = {
-  //   _assetContract: '0x600883Fb6F707e0EE8efD2B88AD488f54f62cA32',
-  //   _tokenId: 3,
-  //   _quantity: 1,
-  //   _currency: '0xF43843516260b1b78BF77148F149cabD9240425A',
-  //   _startPrice: ethers.parseEther('0.1'),
-  //   _ceilingPrice: ethers.parseEther('1.0'),
-  //   _stepAmount: 50,
-  //   _timeBufferInSeconds: 300,
-  //   _startTime: Math.floor(Date.now() / 1000),
-  //   _endTime: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-  // };
+  const auctionParams: AuctionParams = {
+    _assetContract: '0xB0eB2df330E749516Ec7CA058359D2B05c452094',
+    _tokenId: 84,
+    _quantity: 1,
+    _currency: '0xB6321DCd16BC2e2C8Da380a0772707068c5Ad390',
+    _startPrice: ethers.parseEther('0.01'),
+    _ceilingPrice: ethers.parseEther('0.02'),
+    _stepAmount: 50,
+    _timeBufferInSeconds: 300,
+    _startTime: Math.floor(Date.now() / 1000),
+    _endTime: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+  };
 
-  // await auction.createAuction(auctionParams);
+  await auction.createAuction(auctionParams);
 
   // const isNewWinningBid = await auction.checkIsNewWinningBid(3, ethers.parseEther('0.2'));
   // console.log('Is New Winning Bid:', isNewWinningBid);

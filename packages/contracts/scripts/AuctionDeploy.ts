@@ -4,7 +4,7 @@ async function main() {
   await run('compile');
   console.log('Compiled contract...');
 
-  const permissionsAddr = '0x37034119b05f710acD1a7983105FEAEeB80851A6';
+  const permissionsAddr = '0xEcf58FE15b7606DA86D7CAa7B58aa878D206041a';
 
   console.log('Deploying Auction contract...');
   const Auction = await ethers.getContractFactory('NFTAuction');

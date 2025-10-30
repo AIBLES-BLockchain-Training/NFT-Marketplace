@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 type Subject @entity {
   id: ID! @index # address
   subjectType: SubjectType! @index

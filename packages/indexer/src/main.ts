@@ -46,7 +46,8 @@ const CONTRACT_ADDRESSES = {
   permissions: process.env.PERMISSIONS_CONTRACT || '0xbc07643c3300a45a8ACc8761EdE748403E9Df35f',
   // IMPORTANT: Use Router address, not Listing address!
   // Events are emitted from Router when using delegatecall
-  router: process.env.ROUTER_CONTRACT || '0x1279e1f267968eC70841dFa26Fbab60F65CdF717'
+  router: process.env.ROUTER_CONTRACT || '0x1279e1f267968eC70841dFa26Fbab60F65CdF717',
+  auction: process.env.AUCTION_CONTRACT || '0x440fB8AF45d62E830EFE7D794F51eFC2aF7cC1d6'
 }
 
 class CombinedIndexer {
@@ -101,7 +102,7 @@ class CombinedIndexer {
     const auctionTopics = getAuctionTopics();
     if (auctionTopics.length > 0) {
       this.processor.addLog({
-        address: [CONTRACT_ADDRESSES.router.toLowerCase()],
+        address: [CONTRACT_ADDRESSES.auction.toLowerCase()],
         topic0: auctionTopics
       })
     }
@@ -147,12 +148,14 @@ class CombinedIndexer {
           if (logAddress === CONTRACT_ADDRESSES.permissions.toLowerCase()) {
             permissionsLogs.push({ ...log, block })
           } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
-            if(listingTopics.includes(logTopic0)) {
+            if (listingTopics.includes(logTopic0)) {
               listingLogs.push({ ...log, block })
-            } else if(auctionTopics.includes(logTopic0)) {
+            }
+          } else if (logAddress === CONTRACT_ADDRESSES.auction.toLowerCase()) {
+            if (auctionTopics.includes(logTopic0)) {
               auctionLogs.push({ ...log, block })
             }
-          } 
+          }
         }
       }
 
@@ -195,7 +198,7 @@ class CombinedIndexer {
         await processAuctionEvents(
           auctionLogs,
           ctx,
-          CONTRACT_ADDRESSES.router.toLowerCase(),
+          CONTRACT_ADDRESSES.auction.toLowerCase(),
           auctionMap,
           nftMap,
           subjectMap,

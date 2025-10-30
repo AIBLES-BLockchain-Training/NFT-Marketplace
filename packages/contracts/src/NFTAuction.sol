@@ -26,7 +26,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     }
 
     // ============= UNSTRUCTURED STORAGE SLOT =============
-    uint256 private constant AUCTION_STORAGE_SLOT = uint256(keccak256("eip1967.listing.storage")) - 1;
+    uint256 private constant AUCTION_STORAGE_SLOT = uint256(keccak256("eip1967.auction.storage")) - 1;
 
     function _auctionStorage() internal pure returns (AuctionStorage storage s) {
         uint256 slot = AUCTION_STORAGE_SLOT;
@@ -48,8 +48,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     function NFT_ROLE() public pure returns (bytes32) {
         return keccak256("NFT_ROLE");
     }
-
-    uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
     uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
@@ -148,7 +146,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     // ============= PERMISSION FUNCTIONS =============
     function hasAuctionRole(address _account) internal view {
         AuctionStorage storage s = _auctionStorage();
-        if (address(s.coreStorage.permissionsContract) == address(0)) revert("Caller does not have the auction role");
+        if (address(s.coreStorage.permissionsContract) == address(0)) revert("Permission contract not initialized");
         if (!s.coreStorage.permissionsContract.hasRole(AUCTION_ROLE(), _account)) {
             revert("Caller does not have the auction role");
         }
