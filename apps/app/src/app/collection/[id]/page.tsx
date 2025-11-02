@@ -29,6 +29,7 @@ import { encodeCancelListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { truncateTokenId } from '../../../lib/utils/format';
+import { EditCollectionBanner } from '../../../components/collection/EditCollectionBanner';
 import toast from 'react-hot-toast';
 
 type TabType = 'listed' | 'auctioned' | 'offered' | 'yours';
@@ -59,6 +60,16 @@ export default function CollectionDetailPage() {
   const [selectedNFTIndex, setSelectedNFTIndex] = useState(0);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreateAuction, setShowCreateAuction] = useState(false);
+
+  // Collection Banner
+  const [showEditBanner, setShowEditBanner] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+
+  // Collection metadata from Rarible
+  const [collectionDescription, setCollectionDescription] = useState<string | null>(null);
+  const [collectionLogo, setCollectionLogo] = useState<string | null>(null);
 
   const loadCollection = useCallback(async () => {
     setIsLoading(true);
@@ -260,17 +271,95 @@ export default function CollectionDetailPage() {
     }
   }, [id, address, yoursSubTab]);
 
+  // Check if user is collection owner
+  const checkOwnership = useCallback(async () => {
+    if (!address || !id) {
+      setIsOwner(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/collection/owner?address=${id}&user=${address}`
+      );
+      const data = await response.json();
+      setIsOwner(data.isOwner || false);
+    } catch (error) {
+      console.error('Error checking ownership:', error);
+      setIsOwner(false);
+    }
+  }, [address, id]);
+
+  // Load collection banner from Firestore
+  const loadBanner = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const response = await fetch(`/api/collection/metadata?address=${id}`);
+      const data = await response.json();
+
+      if (data.exists && data.data?.bannerURI) {
+        setBannerUrl(data.data.bannerURI);
+      } else {
+        setBannerUrl(null);
+      }
+    } catch (error) {
+      console.error('Error loading banner:', error);
+      setBannerUrl(null);
+    }
+  }, [id]);
+
+  // Load collection metadata from Rarible (description + logo)
+  const loadRaribleMetadata = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const response = await fetch(`/api/collection/rarible?address=${id}`);
+      const data = await response.json();
+
+      if (data.exists && data.data) {
+        setCollectionDescription(data.data.description || null);
+        setCollectionLogo(data.data.image || null);
+      }
+    } catch (error) {
+      console.error('Error loading Rarible metadata:', error);
+    }
+  }, [id]);
+
   useEffect(() => {
     if (id) {
       loadCollection();
+      loadBanner();
+      loadRaribleMetadata();
     }
-  }, [id, loadCollection]);
+  }, [id, loadCollection, loadBanner, loadRaribleMetadata]);
+
+  useEffect(() => {
+    checkOwnership();
+  }, [checkOwnership]);
 
   useEffect(() => {
     if (id) {
       loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
     }
   }, [id, activeTab, yoursSubTab, loadNFTs]);
+
+  // Close options menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showOptionsMenu) {
+        setShowOptionsMenu(false);
+      }
+    };
+
+    if (showOptionsMenu) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showOptionsMenu]);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -354,43 +443,117 @@ export default function CollectionDetailPage() {
   return (
     <MainLayout>
       <div className="w-full px-4 py-8">
-        {/* Collection Header */}
-        <div className="bg-dark-card border border-dark-border rounded-2xl p-8 mb-8">
-          <div className="flex flex-col md:flex-row items-start gap-6">
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex-shrink-0 relative overflow-hidden">
-              {collection.logoUrl && (
-                <NFTImage src={collection.logoUrl} alt={collection.name} className="object-cover" width={96} />
-              )}
-            </div>
-
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <h1 className="text-4xl font-bold text-white">{collection.name}</h1>
-                <Badge variant="primary">{collection.collectionType}</Badge>
+        {/* Collection Header Card with Banner */}
+        <div className="bg-dark-card border border-dark-border rounded-2xl overflow-hidden mb-8 relative">
+          {/* Banner Background */}
+          <div className="w-full h-[28rem] bg-gradient-to-br from-primary-500/20 to-accent-500/20 relative">
+            {bannerUrl ? (
+              <>
+                <img
+                  src={bannerUrl}
+                  alt={`${collection.name} banner`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <svg className="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </div>
+            )}
 
-              <p className="text-sm text-gray-500 font-mono mb-4">{collection.id}</p>
+            {/* Collection Info Overlay - Bottom with blur background */}
+            <div className="absolute bottom-0 left-0 right-0 p-8">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/8 via-transparent to-transparent backdrop-blur-[2px]"></div>
+              <div className="relative z-10">
+                <div className="flex items-end justify-between gap-6">
+                  {/* Left Side - Collection Info */}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-2xl [text-shadow:_2px_2px_8px_rgb(0_0_0_/_80%)]">{collection.name}</h1>
+                      <Badge variant="primary">{collection.collectionType}</Badge>
+                    </div>
 
-              {collection.description && (
-                <p className="text-gray-400 mb-4">{collection.description}</p>
-              )}
+                    {/* Description - 2-3 lines max */}
+                    {collectionDescription && (
+                      <p className="text-sm md:text-base text-gray-100 font-medium mb-3 drop-shadow-lg [text-shadow:_1px_1px_6px_rgb(0_0_0_/_70%)] line-clamp-3 max-w-3xl">
+                        {collectionDescription}
+                      </p>
+                    )}
 
-              {collection.symbol && (
-                <p className="text-gray-400 mb-4">Symbol: {collection.symbol}</p>
-              )}
+                    {/* Contract & Stats */}
+                    <div className="flex items-center gap-4 text-sm flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-300 font-medium">Contract:</span>
+                        <span className="font-mono font-semibold text-gray-200 text-xs">{collection.id.slice(0, 6)}...{collection.id.slice(-4)}</span>
+                      </div>
+                      <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-300 font-medium">Total Supply:</span>
+                        <span className="font-bold text-white [text-shadow:_1px_1px_4px_rgb(0_0_0_/_60%)]">{collection.totalSupply || '∞'}</span>
+                      </div>
+                      <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-300 font-medium">Floor Price:</span>
+                        <span className="font-bold text-white [text-shadow:_1px_1px_4px_rgb(0_0_0_/_60%)]">{collection.floorPrice ? formatEth(collection.floorPrice) : 'N/A'}</span>
+                      </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                  <p className="text-sm text-gray-400 mb-1">Total Supply</p>
-                  <p className="text-2xl font-bold text-white">
-                    {collection.totalSupply || '∞'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400 mb-1">Floor Price</p>
-                  <p className="text-2xl font-bold text-white">
-                    {collection.floorPrice ? formatEth(collection.floorPrice) : 'N/A'}
-                  </p>
+                      {/* Options Menu - Only for Owner */}
+                      {isOwner && address && (
+                        <div className="relative ml-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowOptionsMenu(!showOptionsMenu);
+                            }}
+                            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                            </svg>
+                          </button>
+
+                          {/* Dropdown Menu */}
+                          {showOptionsMenu && (
+                            <div className="absolute right-0 bottom-full mb-2 bg-dark-card border border-dark-border rounded-lg shadow-2xl overflow-hidden z-50 min-w-[200px]">
+                              <button
+                                onClick={() => {
+                                  setShowEditBanner(true);
+                                  setShowOptionsMenu(false);
+                                }}
+                                className="w-full px-4 py-3 text-left hover:bg-primary-500/10 transition-colors flex items-center gap-3 text-white"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <span className="text-sm">Edit Cover Image</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Side - Logo */}
+                  <div className="flex items-end">
+                    {/* Collection Logo - Larger */}
+                    <div className="w-38 h-38 md:w-48 md:h-48 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex-shrink-0 relative overflow-hidden border-4 border-white/20 shadow-2xl">
+                      {collectionLogo ? (
+                        <img
+                          src={collectionLogo}
+                          alt={collection.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-5xl font-bold">
+                          {collection.name.charAt(0) || 'C'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -745,6 +908,20 @@ export default function CollectionDetailPage() {
           success={result.success}
           message={result.message}
           txHash={result.txHash}
+        />
+      )}
+
+      {/* Edit Collection Banner Modal */}
+      {collection && (
+        <EditCollectionBanner
+          isOpen={showEditBanner}
+          onClose={() => setShowEditBanner(false)}
+          collectionAddress={collection.id}
+          currentBannerUrl={bannerUrl || undefined}
+          onSuccess={() => {
+            loadBanner();
+            setShowEditBanner(false);
+          }}
         />
       )}
     </MainLayout>

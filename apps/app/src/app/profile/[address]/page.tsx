@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { Badge } from '../../../components/common/Badge';
@@ -20,13 +20,18 @@ import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const profileAddress = params?.address as string;
   const { address: connectedAddress } = useWallet();
+
+  // Read tab from URL search params
+  const urlTab = searchParams.get('tab') as 'nfts' | 'collections' | 'roles' | null;
+  const initialTab = urlTab && ['nfts', 'collections', 'roles'].includes(urlTab) ? urlTab : 'nfts';
 
   const [nfts, setNfts] = useState<NFT[]>([]);
   const [listedQuantities, setListedQuantities] = useState<Map<string, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'owned' | 'roles'>('owned');
+  const [activeTab, setActiveTab] = useState<'nfts' | 'collections' | 'roles'>(initialTab);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [totalNFTCount, setTotalNFTCount] = useState<number>(0);
@@ -40,7 +45,7 @@ export default function ProfilePage() {
 
   const isOwnProfile = connectedAddress?.toLowerCase() === profileAddress?.toLowerCase();
 
-  // Group NFTs by collection (calculate available amounts)
+  // Group NFTs by collection (calculate available amounts) - for My NFTs tab
   const groupedNFTs = useMemo(() => {
     const groups: Record<string, NFT[]> = {};
 
@@ -68,12 +73,47 @@ export default function ProfilePage() {
     return groups;
   }, [nfts, listedQuantities]);
 
+  // Group ALL NFTs by collection (for My Collections tab) - filter out fully listed collections
+  const allCollections = useMemo(() => {
+    const groups: Record<string, NFT[]> = {};
+
+    nfts.forEach(nft => {
+      const listedQty = listedQuantities.get(nft.id) || '0';
+      const totalAmount = BigInt(nft.amount || '1');
+      const listedAmount = BigInt(listedQty);
+      const availableAmount = totalAmount - listedAmount;
+
+      const nftWithAmounts = {
+        ...nft,
+        availableAmount: availableAmount.toString(),
+        listedAmount: listedAmount.toString(),
+      };
+
+      const collectionId = nft.collection.id;
+      if (!groups[collectionId]) {
+        groups[collectionId] = [];
+      }
+      groups[collectionId].push(nftWithAmounts);
+    });
+
+    // Filter out collections where ALL NFTs have availableAmount = 0
+    const filteredGroups: Record<string, NFT[]> = {};
+    Object.entries(groups).forEach(([collectionId, nfts]) => {
+      const hasAvailableNFT = nfts.some(nft => BigInt(nft.availableAmount || '0') > 0);
+      if (hasAvailableNFT) {
+        filteredGroups[collectionId] = nfts;
+      }
+    });
+
+    return filteredGroups;
+  }, [nfts, listedQuantities]);
+
   // Flatten NFTs for modal navigation
   const flatNFTs = useMemo(() => {
     return Object.values(groupedNFTs).flat();
   }, [groupedNFTs]);
 
-  const collectionsCount = Object.keys(groupedNFTs).length;
+  const collectionsCount = Object.keys(allCollections).length;
 
   const handleNFTClick = (nftId: string) => {
     const index = flatNFTs.findIndex(n => n.id === nftId);
@@ -211,6 +251,13 @@ export default function ProfilePage() {
     }
   }, [profileAddress]);
 
+  // Sync tab state with URL search params
+  useEffect(() => {
+    if (urlTab && ['nfts', 'collections', 'roles'].includes(urlTab)) {
+      setActiveTab(urlTab as 'nfts' | 'collections' | 'roles');
+    }
+  }, [urlTab]);
+
   // Redirect to new profile when user switches account
   useEffect(() => {
     if (connectedAddress && profileAddress) {
@@ -235,9 +282,9 @@ export default function ProfilePage() {
     }
   }, [profileAddress, loadUserNFTs]);
 
-  // Infinite scroll observer
+  // Infinite scroll observer (works on both NFTs and Collections tabs)
   useEffect(() => {
-    if (activeTab !== 'owned') return;
+    if (activeTab === 'roles') return;
 
     const observer = new IntersectionObserver(
       entries => {
@@ -328,15 +375,28 @@ export default function ProfilePage() {
         {/* Tabs */}
         <div className="flex gap-4 mb-8 border-b border-dark-border overflow-x-auto">
           <button
-            onClick={() => setActiveTab('owned')}
+            onClick={() => setActiveTab('nfts')}
             className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
-              activeTab === 'owned'
+              activeTab === 'nfts'
                 ? 'text-primary-400'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            Owned
-            {activeTab === 'owned' && (
+            My NFTs
+            {activeTab === 'nfts' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('collections')}
+            className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
+              activeTab === 'collections'
+                ? 'text-primary-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            My Collections
+            {activeTab === 'collections' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
             )}
           </button>
@@ -358,14 +418,23 @@ export default function ProfilePage() {
         </div>
 
         {/* Content */}
-        {activeTab === 'owned' && (
-          <CollectionGroups
-            groupedNFTs={groupedNFTs}
+        {activeTab === 'nfts' && (
+          <NFTsGrid
+            nfts={flatNFTs}
             isLoading={isLoading}
-            ownerAddress={profileAddress}
             observerTarget={observerTarget}
             hasMore={hasMore}
             onNFTClick={handleNFTClick}
+          />
+        )}
+
+        {activeTab === 'collections' && (
+          <CollectionsGrid
+            groupedNFTs={allCollections}
+            isLoading={isLoading}
+            profileAddress={profileAddress}
+            observerTarget={observerTarget}
+            hasMore={hasMore}
           />
         )}
 
@@ -413,22 +482,136 @@ export default function ProfilePage() {
   );
 }
 
-function CollectionGroups({
-  groupedNFTs,
+// My NFTs Tab - Flat grid showing all NFTs
+function NFTsGrid({
+  nfts,
   isLoading,
-  ownerAddress,
   observerTarget,
-  hasMore: hasMoreNFTs,
+  hasMore,
   onNFTClick,
 }: {
-  groupedNFTs: Record<string, NFT[]>;
+  nfts: NFT[];
   isLoading: boolean;
-  ownerAddress: string;
   observerTarget: React.RefObject<HTMLDivElement>;
   hasMore: boolean;
   onNFTClick: (nftId: string) => void;
 }) {
-  if (isLoading) {
+  if (isLoading && nfts.length === 0) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      </div>
+    );
+  }
+
+  if (nfts.length === 0) {
+    return (
+      <div className="text-center py-16 bg-dark-card border border-dark-border rounded-2xl">
+        <p className="text-gray-400">No NFTs found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* NFT Grid - 5 per row */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {nfts.map((nft) => (
+          <div
+            key={nft.id}
+            onClick={() => onNFTClick(nft.id)}
+            className="group rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card cursor-pointer"
+          >
+            <div className="aspect-square bg-dark-bg relative overflow-hidden">
+              <NFTImage
+                src={nft.imageUrl}
+                alt={nft.name}
+                className="object-cover group-hover:scale-105 transition-transform"
+                width={300}
+              />
+
+              {/* ERC-721 / ERC-1155 Badge */}
+              <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-500/50">
+                <p className="text-[10px] font-bold text-gray-300">
+                  {nft.collection.collectionType === 'ERC721' ? 'ERC-721' : 'ERC-1155'}
+                </p>
+              </div>
+
+              {/* Quantity Badge for ERC1155 */}
+              {nft.collection.collectionType === 'ERC1155' && nft.availableAmount && nft.availableAmount !== '1' && (
+                <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-green-500/50">
+                  <p className="text-xs font-bold text-green-400">x{nft.availableAmount}</p>
+                </div>
+              )}
+            </div>
+            <div className="p-3 space-y-1">
+              <p className="text-sm font-semibold text-white truncate">{nft.name}</p>
+              <p className="text-xs text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
+              <p className="text-[10px] text-gray-600 truncate">{nft.collection.name}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Infinite scroll trigger */}
+      {hasMore && (
+        <div ref={observerTarget} className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// My Collections Tab - Grid showing collections with banner
+function CollectionsGrid({
+  groupedNFTs,
+  isLoading,
+  profileAddress,
+  observerTarget,
+  hasMore,
+}: {
+  groupedNFTs: Record<string, NFT[]>;
+  isLoading: boolean;
+  profileAddress: string;
+  observerTarget: React.RefObject<HTMLDivElement>;
+  hasMore: boolean;
+}) {
+  const [collectionsMetadata, setCollectionsMetadata] = useState<Record<string, { bannerURI?: string }>>({});
+  const [loadingMetadata, setLoadingMetadata] = useState(true);
+
+  useEffect(() => {
+    const loadAllCollectionMetadata = async () => {
+      setLoadingMetadata(true);
+      const metadata: Record<string, { bannerURI?: string }> = {};
+
+      const collectionIds = Object.keys(groupedNFTs);
+      await Promise.all(
+        collectionIds.map(async (collectionId) => {
+          try {
+            const response = await fetch(`/api/collection/metadata?address=${collectionId}`);
+            const data = await response.json();
+            if (data.exists && data.data) {
+              metadata[collectionId] = data.data;
+            }
+          } catch (error) {
+            console.error(`Error loading metadata for ${collectionId}:`, error);
+          }
+        })
+      );
+
+      setCollectionsMetadata(metadata);
+      setLoadingMetadata(false);
+    };
+
+    if (Object.keys(groupedNFTs).length > 0) {
+      loadAllCollectionMetadata();
+    } else {
+      setLoadingMetadata(false);
+    }
+  }, [groupedNFTs]);
+
+  if (isLoading || loadingMetadata) {
     return (
       <div className="flex justify-center py-20">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
@@ -441,101 +624,69 @@ function CollectionGroups({
   if (collections.length === 0) {
     return (
       <div className="text-center py-16 bg-dark-card border border-dark-border rounded-2xl">
-        <p className="text-gray-400">No NFTs found</p>
+        <p className="text-gray-400">No Collections found</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {collections.map(([collectionId, nfts]) => {
-        const collection = nfts[0].collection;
-        const displayNFTs = nfts.slice(0, 4);
-        const hasMore = nfts.length > 4;
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {collections.map(([collectionId, nfts]) => {
+          const collection = nfts[0].collection;
+          const metadata = collectionsMetadata[collectionId];
+          const bannerUrl = metadata?.bannerURI;
 
-        return (
-          <div key={collectionId} className="space-y-4">
-            {/* Collection Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-xl font-bold text-white">{collection.name}</h3>
-                  <span className="text-xs px-2 py-1 bg-dark-bg border border-dark-border rounded text-gray-400">
-                    {collection.collectionType}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-400">
-                  {nfts.length} {nfts.length === 1 ? 'item' : 'items'}
-                </p>
+          return (
+            <Link
+              key={collectionId}
+              href={`/profile/${profileAddress}/collection/${collectionId}`}
+              className="group bg-dark-card border border-dark-border rounded-2xl overflow-hidden hover:border-primary-500 transition-all"
+            >
+              {/* Collection Banner */}
+              <div className="h-32 bg-gradient-to-br from-primary-500/20 to-accent-500/20 relative overflow-hidden">
+                {bannerUrl ? (
+                  <img
+                    src={bannerUrl}
+                    alt={collection.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <svg className="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                )}
               </div>
-              {hasMore && (
-                <Link
-                  href={`/profile/${ownerAddress}/collection/${collectionId}`}
-                  className="text-primary-400 hover:text-primary-300 text-sm font-medium"
-                >
-                  View All →
-                </Link>
-              )}
-            </div>
 
-            {/* NFT Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {displayNFTs.map((nft) => (
-                <div
-                  key={nft.id}
-                  onClick={() => onNFTClick(nft.id)}
-                  className="group rounded-lg overflow-hidden border border-dark-border hover:border-primary-500 transition-all bg-dark-card cursor-pointer"
-                >
-                  <div className="aspect-square bg-dark-bg relative overflow-hidden">
-                    <NFTImage
-                      src={nft.imageUrl}
-                      alt={nft.name}
-                      className="object-cover group-hover:scale-105 transition-transform"
-                      sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                      priority={false}
-                      width={250}
-                    />
-                    {nft.collection.collectionType === 'ERC1155' && (
-                      <>
-                        {nft.availableAmount && nft.availableAmount !== '1' && (
-                          <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-green-500/50">
-                            <p className="text-xs font-bold text-green-400">x{nft.availableAmount}</p>
-                          </div>
-                        )}
-                        {nft.listedAmount && nft.listedAmount !== '0' && (
-                          <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-yellow-500/50">
-                            <p className="text-xs font-bold text-yellow-400">Listed: {nft.listedAmount}</p>
-                          </div>
-                        )}
-                      </>
-                    )}
+              {/* Collection Info */}
+              <div className="p-4 space-y-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-bold text-white truncate">{collection.name}</h3>
+                    <Badge variant="secondary">{collection.collectionType}</Badge>
                   </div>
-                  <div className="p-2">
-                    <p className="text-xs font-semibold text-white truncate">{nft.name}</p>
-                    <p className="text-[10px] text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
+                  <p className="text-xs text-gray-500 font-mono truncate">{collectionId}</p>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="text-gray-400">Your NFTs</p>
+                    <p className="text-white font-bold">{nfts.length}</p>
+                  </div>
+                  <div className="text-primary-400 group-hover:text-primary-300 transition-colors">
+                    View →
                   </div>
                 </div>
-              ))}
-
-              {/* View All Card */}
-              {hasMore && (
-                <Link
-                  href={`/profile/${ownerAddress}/collection/${collectionId}`}
-                  className="rounded-lg overflow-hidden border-2 border-dashed border-dark-border hover:border-primary-500 transition-all bg-dark-card flex items-center justify-center aspect-square"
-                >
-                  <div className="text-center p-4">
-                    <div className="text-3xl font-bold text-primary-400 mb-1">+{nfts.length - 4}</div>
-                    <p className="text-xs text-gray-400">View All</p>
-                  </div>
-                </Link>
-              )}
-            </div>
-          </div>
-        );
-      })}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
 
       {/* Infinite scroll trigger */}
-      {hasMoreNFTs && (
+      {hasMore && (
         <div ref={observerTarget} className="flex justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
         </div>

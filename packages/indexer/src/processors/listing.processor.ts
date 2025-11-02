@@ -90,7 +90,7 @@ export async function processListingEvents(
     let collection = await ctx.store.get(Collection, collectionId)
     if (!collection) {
       const [metadata, contractType] = await Promise.all([
-        fetchCollectionMetadataUnified(contractAddress, provider),
+        fetchCollectionMetadata(contractAddress, provider),
         detectContractType(contractAddress, provider)
       ])
 
@@ -98,9 +98,6 @@ export async function processListingEvents(
         id: collectionId,
         name: metadata.name,
         symbol: metadata.symbol,
-        description: metadata.description,
-        logoUrl: metadata.image,
-        bannerUrl: metadata.banner_image,
         collectionType: contractType === 'ERC721' ? CollectionType.ERC721 : CollectionType.ERC1155,
         creator: creator,
         totalSupply: BigInt(0),
@@ -110,14 +107,6 @@ export async function processListingEvents(
         traits: [],
         traitStats: []
       })
-    } else if (!collection.logoUrl || collection.logoUrl.startsWith('ipfs://')) {
-      // Update existing collection if logoUrl is missing or uses old IPFS workaround
-      const metadata = await fetchCollectionMetadataUnified(contractAddress, provider)
-      if (metadata.image) {
-        collection.logoUrl = metadata.image
-        collection.bannerUrl = metadata.banner_image
-        collection.description = metadata.description
-      }
     }
     collectionMap.set(collectionId, collection)
     return collection

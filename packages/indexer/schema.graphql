@@ -40,9 +40,6 @@ type Collection @entity {
   id: ID! @index # contract address
   name: String!
   symbol: String! @index
-  description: String
-  logoUrl: String
-  bannerUrl: String
   collectionType: CollectionType!
   creator: Subject! @index
   totalSupply: BigInt!

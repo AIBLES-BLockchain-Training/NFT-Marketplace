@@ -41,8 +41,6 @@ export const GET_NFT_BY_ID_QUERY = `
         id
         name
         symbol
-        description
-        logoUrl
         collectionType
         creator {
           id
@@ -259,8 +257,6 @@ export const GET_LISTING_BY_ID_QUERY = `
           id
           name
           symbol
-          description
-          logoUrl
           collectionType
         }
         traits {
@@ -300,9 +296,6 @@ export const GET_COLLECTIONS_QUERY = `
       id
       name
       symbol
-      description
-      logoUrl
-      bannerUrl
       collectionType
       totalSupply
       floorPrice
@@ -321,7 +314,6 @@ export const GET_COLLECTIONS_TABLE_QUERY = `
     collections(limit: $limit, offset: $offset, orderBy: createdAt_DESC) {
       id
       name
-      logoUrl
       collectionType
       floorPrice
       nfts(limit: 1000) {
@@ -344,9 +336,6 @@ export const GET_COLLECTION_BY_ID_QUERY = `
       id
       name
       symbol
-      description
-      logoUrl
-      bannerUrl
       collectionType
       totalSupply
       floorPrice
@@ -952,9 +941,6 @@ export const GET_TRENDING_COLLECTIONS_QUERY = `
       id
       name
       symbol
-      description
-      logoUrl
-      bannerUrl
       collectionType
       totalSupply
       floorPrice

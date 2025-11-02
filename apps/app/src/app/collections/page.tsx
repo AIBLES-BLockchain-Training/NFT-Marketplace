@@ -13,6 +13,7 @@ interface CollectionTableData {
   id: string;
   name: string;
   logoUrl?: string;
+  description?: string;
   collectionType: string;
   floorPrice?: string;
   oneDayChange: number;
@@ -114,10 +115,31 @@ export default function CollectionsPage() {
       if (result.collections) {
         const processedCollections = result.collections.map(calculateMetrics);
 
+        // Enrich with Rarible metadata (logo + description)
+        const enrichedCollections = await Promise.all(
+          processedCollections.map(async (collection) => {
+            try {
+              const response = await fetch(`/api/collection/rarible?address=${collection.id}`);
+              const data = await response.json();
+
+              if (data.exists && data.data) {
+                return {
+                  ...collection,
+                  logoUrl: data.data.image || collection.logoUrl,
+                  description: data.data.description || undefined,
+                };
+              }
+            } catch (error) {
+              console.error(`Failed to load Rarible metadata for ${collection.id}:`, error);
+            }
+            return collection;
+          })
+        );
+
         if (append) {
-          setCollections(prev => [...prev, ...processedCollections]);
+          setCollections(prev => [...prev, ...enrichedCollections]);
         } else {
-          setCollections(processedCollections);
+          setCollections(enrichedCollections);
         }
 
         setHasMore(result.collections.length === LIMIT);

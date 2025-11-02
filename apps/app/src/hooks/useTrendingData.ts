@@ -14,6 +14,7 @@ export function useTrendingCollections(limit = 15) {
 
       if (!result.collections) return [];
 
+      // Calculate transaction counts
       const collections = result.collections.map((collection: any) => {
         let txCount = 0;
         if (collection.nfts && collection.nfts.length > 0) {
@@ -26,7 +27,25 @@ export function useTrendingCollections(limit = 15) {
         return { ...collection, txCount };
       });
 
-      return collections.sort((a: any, b: any) => b.txCount - a.txCount);
+      // Load banners from Firestore for each collection
+      const collectionsWithBanners = await Promise.all(
+        collections.map(async (collection: any) => {
+          try {
+            const response = await fetch(`/api/collection/metadata?address=${collection.id}`);
+            const data = await response.json();
+
+            return {
+              ...collection,
+              bannerUrl: data.exists && data.data?.bannerURI ? data.data.bannerURI : null,
+            };
+          } catch (error) {
+            console.error(`Error loading banner for ${collection.id}:`, error);
+            return { ...collection, bannerUrl: null };
+          }
+        })
+      );
+
+      return collectionsWithBanners.sort((a: any, b: any) => b.txCount - a.txCount);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
