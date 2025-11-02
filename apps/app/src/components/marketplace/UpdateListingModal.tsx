@@ -77,112 +77,115 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
   const isERC1155 = listing?.nft.collection.collectionType === 'ERC1155';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Update Listing" zIndex="z-[60]">
-      {/* Info Banner */}
-      <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-        <div className="text-sm">
-          <p className="text-blue-400 font-semibold mb-1">Update Your Listing</p>
-          <p className="text-gray-300 text-xs">
-            You can update price, quantity, and duration. Asset contract and token ID cannot be changed.
-          </p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* NFT Info - Read Only */}
-        <div className="p-4 bg-dark-bg rounded-lg border border-dark-border">
-          <h3 className="text-sm font-semibold text-gray-400 mb-2">NFT Information</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Collection:</span>
-              <span className="text-white">{listing?.nft.collection.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Token ID:</span>
-              <span className="text-white font-mono">{truncateTokenId(listing?.nft.tokenId)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Type:</span>
-              <span className="text-white">{listing?.nft.collection.collectionType}</span>
+    <>
+      {/* Update Listing Modal - hide when showing result, but don't unmount */}
+      <Modal isOpen={isOpen && !showResultModal} onClose={onClose} title="Update Listing" zIndex="z-[60]">
+          {/* Info Banner */}
+          <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+            <div className="text-sm">
+              <p className="text-blue-400 font-semibold mb-1">Update Your Listing</p>
+              <p className="text-gray-300 text-xs">
+                You can update price, quantity, and duration. Asset contract and token ID cannot be changed.
+              </p>
             </div>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Price per Token (ETH)
-          </label>
-          <Input
-            type="number"
-            step="any"
-            min="0"
-            placeholder="0.00"
-            value={pricePerToken}
-            onChange={(e) => setPricePerToken(e.target.value)}
-            required
-          />
-          <p className="mt-2 text-xs text-gray-500">
-            Current: {ethers.formatEther(listing?.pricePerToken || '0')} ETH
-          </p>
-        </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* NFT Info - Read Only */}
+            <div className="p-4 bg-dark-bg rounded-lg border border-dark-border">
+              <h3 className="text-sm font-semibold text-gray-400 mb-2">NFT Information</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Collection:</span>
+                  <span className="text-white">{listing?.nft.collection.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Token ID:</span>
+                  <span className="text-white font-mono">{truncateTokenId(listing?.nft.tokenId)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Type:</span>
+                  <span className="text-white">{listing?.nft.collection.collectionType}</span>
+                </div>
+              </div>
+            </div>
 
-        {isERC1155 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Quantity
-            </label>
-            <Input
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              required
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              Current: {listing?.quantity} items
-            </p>
-          </div>
-        )}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Price per Token (ETH)
+              </label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0.00"
+                value={pricePerToken}
+                onChange={(e) => setPricePerToken(e.target.value)}
+                required
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Current: {ethers.formatEther(listing?.pricePerToken || '0')} ETH
+              </p>
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Duration (Days)
-          </label>
-          <select
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
-          >
-            {DURATION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-xs text-gray-500">
-            New end date will be set from now
-          </p>
-        </div>
+            {isERC1155 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Quantity
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Current: {listing?.quantity} items
+                </p>
+              </div>
+            )}
 
-        <div className="pt-6 border-t border-dark-border flex gap-3">
-          <Button type="button" onClick={onClose} variant="secondary" fullWidth disabled={isLoading}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
-            Update Listing
-          </Button>
-        </div>
-      </form>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Duration (Days)
+              </label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
+              >
+                {DURATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-gray-500">
+                New end date will be set from now
+              </p>
+            </div>
 
-      {/* Transaction Result Modal */}
+            <div className="pt-6 border-t border-dark-border flex gap-3">
+              <Button type="button" onClick={onClose} variant="secondary" fullWidth disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
+                Update Listing
+              </Button>
+            </div>
+          </form>
+      </Modal>
+
+      {/* Transaction Result Modal - shown independently after closing update modal */}
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
           onClose={() => {
-            closeModal();
+            onClose(); // Close the update modal FIRST to prevent re-mount
+            closeModal(); // Then close result modal
             if (result.success) {
               onSuccess?.();
-              onClose();
             }
           }}
           success={result.success}
@@ -190,6 +193,6 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
           txHash={result.txHash}
         />
       )}
-    </Modal>
+    </>
   );
 }

@@ -52,6 +52,7 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
 
   const handleCloseNFTDetail = () => {
     setShowNFTDetail(false);
+    setSelectedNFT(null); // Reset selected NFT to avoid modal counter issues
   };
 
   return (

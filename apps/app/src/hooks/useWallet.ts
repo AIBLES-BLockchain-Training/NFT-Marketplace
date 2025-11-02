@@ -217,8 +217,18 @@ export function useWallet() {
 
     const handleChainChanged = (chainIdHex: string) => {
       const newChainId = parseInt(chainIdHex, 16);
-      setChainId(newChainId);
-      window.location.reload();
+      const currentChainId = getChainId();
+
+      // Only reload if chain ACTUALLY changed (not just a refresh event)
+      if (newChainId !== currentChainId) {
+        console.log(`[Wallet] Chain changed from ${currentChainId} to ${newChainId}, reloading...`);
+        setChainId(newChainId);
+        window.location.reload();
+      } else {
+        // Same chain, just update state without reload
+        console.log(`[Wallet] Chain event fired but no change (${newChainId}), skipping reload`);
+        setChainId(newChainId);
+      }
     };
 
     ethereum.on('accountsChanged', handleAccountsChanged);

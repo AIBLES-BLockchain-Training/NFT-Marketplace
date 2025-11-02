@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Provider as UrqlProvider } from 'urql';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
@@ -20,6 +20,15 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       })
   );
+
+  // Safety: Ensure body overflow is always restored on app mount/reload
+  useEffect(() => {
+    // Force restore scroll on initial mount (handles page reload scenarios)
+    if (typeof window !== 'undefined' && document.body.style.overflow === 'hidden') {
+      console.warn('[Providers] Found body with overflow:hidden on mount, restoring scroll');
+      document.body.style.overflow = 'unset';
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

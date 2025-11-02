@@ -14,18 +14,47 @@ interface ModalProps {
   hideBackdrop?: boolean;
 }
 
+// Global counter to track number of open modals
+let openModalsCount = 0;
+
 export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 'z-50', hideBackdrop = false }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
+      // Increment counter when modal opens
+      openModalsCount++;
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
 
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
+      // Return cleanup that will run when modal closes or unmounts
+      return () => {
+        // Always decrement counter when cleanup runs (modal closes/unmounts)
+        openModalsCount--;
+
+        // Safety: prevent negative counter
+        if (openModalsCount < 0) {
+          console.warn('[Modal] Counter went negative, resetting to 0');
+          openModalsCount = 0;
+        }
+
+        // Only restore scroll if NO modals are open
+        if (openModalsCount === 0) {
+          document.body.style.overflow = 'unset';
+        }
+      };
+    }
   }, [isOpen]);
+
+  // Safety cleanup on component unmount - force check if body should be scrollable
+  useEffect(() => {
+    return () => {
+      // Small delay to allow other modals to mount
+      setTimeout(() => {
+        if (openModalsCount === 0 && document.body.style.overflow === 'hidden') {
+          console.warn('[Modal] Force restoring scroll - counter was 0 but body still hidden');
+          document.body.style.overflow = 'unset';
+        }
+      }, 100);
+    };
+  }, []);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

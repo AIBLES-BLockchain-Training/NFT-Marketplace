@@ -125,135 +125,138 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create Auction" zIndex="z-[60]">
-      {/* Info Banner */}
-      <div className="mb-6 p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
-        <div className="flex gap-3">
-          <svg className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="text-sm">
-            <p className="text-primary-400 font-semibold mb-1">Before creating an auction:</p>
-            <ul className="text-gray-300 space-y-1 text-xs">
-              <li>• Make sure you own this NFT</li>
-              <li>• You will be asked to approve the marketplace contract first</li>
-              <li>• The NFT contract must be whitelisted by an admin</li>
-            </ul>
+    <>
+      {/* Create Auction Modal - hide when showing result, but don't unmount */}
+      <Modal isOpen={isOpen && !showResultModal} onClose={onClose} title="Create Auction" zIndex="z-[60]">
+          {/* Info Banner */}
+          <div className="mb-6 p-4 bg-primary-500/10 border border-primary-500/20 rounded-lg">
+            <div className="flex gap-3">
+              <svg className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm">
+                <p className="text-primary-400 font-semibold mb-1">Before creating an auction:</p>
+                <ul className="text-gray-300 space-y-1 text-xs">
+                  <li>• Make sure you own this NFT</li>
+                  <li>• You will be asked to approve the marketplace contract first</li>
+                  <li>• The NFT contract must be whitelisted by an admin</li>
+                </ul>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Minimum Bid (ETH) *
-          </label>
-          <Input
-            type="number"
-            step="any"
-            min="0"
-            placeholder="0.00"
-            value={minimumBid}
-            onChange={(e) => setMinimumBid(e.target.value)}
-            required
-          />
-          <p className="mt-2 text-xs text-gray-500">
-            Starting price for the auction
-          </p>
-        </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Minimum Bid (ETH) *
+              </label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0.00"
+                value={minimumBid}
+                onChange={(e) => setMinimumBid(e.target.value)}
+                required
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Starting price for the auction
+              </p>
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Buyout Price (ETH) <span className="text-gray-600">(Optional)</span>
-          </label>
-          <Input
-            type="number"
-            step="any"
-            min="0"
-            placeholder={`Auto: ${parseFloat(minimumBid || '0') * 3} ETH`}
-            value={buyoutBid}
-            onChange={(e) => setBuyoutBid(e.target.value)}
-          />
-          <p className="mt-2 text-xs text-gray-500">
-            Instant purchase price. Defaults to 3x minimum bid if not set
-          </p>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Buyout Price (ETH) <span className="text-gray-600">(Optional)</span>
+              </label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                placeholder={`Auto: ${parseFloat(minimumBid || '0') * 3} ETH`}
+                value={buyoutBid}
+                onChange={(e) => setBuyoutBid(e.target.value)}
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Instant purchase price. Defaults to 3x minimum bid if not set
+              </p>
+            </div>
 
-        {nft.collection.collectionType === 'ERC1155' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Quantity
-            </label>
-            <Input
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              required
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              Number of tokens to auction
-            </p>
-          </div>
-        )}
+            {nft.collection.collectionType === 'ERC1155' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Quantity
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Number of tokens to auction
+                </p>
+              </div>
+            )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Duration (Days)
-          </label>
-          <select
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
-          >
-            {DURATION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-xs text-gray-500">
-            How long the auction will run
-          </p>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Duration (Days)
+              </label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
+              >
+                {DURATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-gray-500">
+                How long the auction will run
+              </p>
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Bid Buffer
-          </label>
-          <select
-            value={bidBuffer}
-            onChange={(e) => setBidBuffer(parseInt(e.target.value))}
-            className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
-          >
-            <option value={BID_BUFFER_BPS.LOW}>Low (5% minimum increase)</option>
-            <option value={BID_BUFFER_BPS.MEDIUM}>Medium (10% minimum increase)</option>
-            <option value={BID_BUFFER_BPS.HIGH}>High (20% minimum increase)</option>
-          </select>
-          <p className="mt-2 text-xs text-gray-500">
-            Minimum percentage increase required for new bids
-          </p>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Bid Buffer
+              </label>
+              <select
+                value={bidBuffer}
+                onChange={(e) => setBidBuffer(parseInt(e.target.value))}
+                className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
+              >
+                <option value={BID_BUFFER_BPS.LOW}>Low (5% minimum increase)</option>
+                <option value={BID_BUFFER_BPS.MEDIUM}>Medium (10% minimum increase)</option>
+                <option value={BID_BUFFER_BPS.HIGH}>High (20% minimum increase)</option>
+              </select>
+              <p className="mt-2 text-xs text-gray-500">
+                Minimum percentage increase required for new bids
+              </p>
+            </div>
 
-        <div className="pt-6 border-t border-dark-border flex gap-3">
-          <Button type="button" onClick={onClose} variant="secondary" fullWidth>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" fullWidth isLoading={isLoading || isApproving}>
-            {isApproving ? 'Approving...' : 'Create Auction'}
-          </Button>
-        </div>
-      </form>
+            <div className="pt-6 border-t border-dark-border flex gap-3">
+              <Button type="button" onClick={onClose} variant="secondary" fullWidth>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" fullWidth isLoading={isLoading || isApproving}>
+                {isApproving ? 'Approving...' : 'Create Auction'}
+              </Button>
+            </div>
+          </form>
+      </Modal>
 
-      {/* Transaction Result Modal */}
+      {/* Transaction Result Modal - shown independently after closing create modal */}
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
           onClose={() => {
-            closeModal();
+            onClose(); // Close the create modal FIRST to prevent re-mount
+            closeModal(); // Then close result modal
             if (result.success) {
               onSuccess?.();
-              onClose();
             }
           }}
           success={result.success}
@@ -261,6 +264,6 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
           txHash={result.txHash}
         />
       )}
-    </Modal>
+    </>
   );
 }

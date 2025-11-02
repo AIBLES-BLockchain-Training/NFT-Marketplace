@@ -288,11 +288,25 @@ export default function ProfilePage() {
 
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !isLoading && cursor) {
+        const entry = entries[0];
+        console.log('[Infinite Scroll] Intersection:', {
+          isIntersecting: entry.isIntersecting,
+          hasMore,
+          isLoading,
+          cursor,
+          activeTab
+        });
+
+        // Check conditions inside callback to allow observer to stay active
+        if (entry.isIntersecting && hasMore && !isLoading && cursor) {
+          console.log('[Infinite Scroll] Loading more NFTs...');
           loadUserNFTs(cursor, true);
         }
       },
-      { threshold: 0.1 }
+      {
+        threshold: 0.1,
+        rootMargin: '100px' // Load earlier for better UX
+      }
     );
 
     const currentTarget = observerTarget.current;

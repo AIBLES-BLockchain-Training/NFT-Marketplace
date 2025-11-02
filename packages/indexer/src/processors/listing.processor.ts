@@ -90,7 +90,7 @@ export async function processListingEvents(
     let collection = await ctx.store.get(Collection, collectionId)
     if (!collection) {
       const [metadata, contractType] = await Promise.all([
-        fetchCollectionMetadata(contractAddress, provider),
+        fetchCollectionMetadataUnified(contractAddress, provider),
         detectContractType(contractAddress, provider)
       ])
 
@@ -299,6 +299,9 @@ export async function processListingEvents(
           listing.isReserved = reserved
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
@@ -310,6 +313,9 @@ export async function processListingEvents(
           listing.status = ListingStatus.COMPLETED
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
@@ -321,6 +327,9 @@ export async function processListingEvents(
           listing.status = ListingStatus.CANCELED
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
@@ -502,6 +511,9 @@ export async function processListingEvents(
           if (listing.quantity === BigInt(0)) {
             listing.status = ListingStatus.COMPLETED
           }
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
