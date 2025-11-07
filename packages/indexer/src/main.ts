@@ -33,10 +33,6 @@ import {
   processAuctionEvents,
 } from './processors/auction.processor' 
 
-import * as listingAbi from './abi/Listing'
-import { events as auctionEvents } from './abi/NFTAuction'
-import * as permissionsAbi from './abi/Permissions'
-
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
   rpcEndpoint: process.env.RPC_ENDPOINT || process.env.RPC_SEPOLIA_HTTP
@@ -47,7 +43,7 @@ const CONTRACT_ADDRESSES = {
   // IMPORTANT: Use Router address, not Listing address!
   // Events are emitted from Router when using delegatecall
   router: process.env.ROUTER_CONTRACT || '0x1279e1f267968eC70841dFa26Fbab60F65CdF717',
-  auction: process.env.AUCTION_CONTRACT || '0x440fB8AF45d62E830EFE7D794F51eFC2aF7cC1d6'
+  auction: process.env.AUCTION_CONTRACT || '0x611EB5A627D29F4e84816f617260b8c095984220'
 }
 
 class CombinedIndexer {
@@ -122,6 +118,7 @@ class CombinedIndexer {
       const nftMap: Map<string, NFT> = new Map()
       const currencyMap: Map<string, SupportedCurrency> = new Map()
       const roleMap: Map<string, Role> = new Map()
+      const tokenOwnershipMap: Map<string, TokenOwnership> = new Map()
 
       const roleAssignments: RoleAssignment[] = []
       const permissionEvents: PermissionEvent[] = []
@@ -132,7 +129,6 @@ class CombinedIndexer {
       // auction
       const auctionMap: Map<string, Auction> = new Map() 
       const bidMap: Map<string, Bid> = new Map() 
-      const updatedOwnerships: TokenOwnership[] = []
 
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
@@ -148,11 +144,10 @@ class CombinedIndexer {
           if (logAddress === CONTRACT_ADDRESSES.permissions.toLowerCase()) {
             permissionsLogs.push({ ...log, block })
           } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
-            if (listingTopics.includes(logTopic0)) {
-              listingLogs.push({ ...log, block })
-            }
+            listingLogs.push({ ...log, block })
           } else if (logAddress === CONTRACT_ADDRESSES.auction.toLowerCase()) {
             if (auctionTopics.includes(logTopic0)) {
+              // console.log('Found auction log with topic0:', logTopic0)
               auctionLogs.push({ ...log, block })
             }
           }
@@ -188,7 +183,8 @@ class CombinedIndexer {
           currencyMap,
           purchaseHistories,
           currencyApprovals,
-          buyerApprovals
+          buyerApprovals,
+          tokenOwnershipMap
         )
       }
 
@@ -206,7 +202,7 @@ class CombinedIndexer {
           bidMap,
           currencyMap,
           purchaseHistories,
-          updatedOwnerships
+          tokenOwnershipMap
         )
       }
 
@@ -215,8 +211,21 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(roleMap.values()))
       await ctx.store.save(Array.from(collectionMap.values()))
       await ctx.store.save(Array.from(nftMap.values()))
+
+      // Save traits from all NFTs
+      const allTraits = Array.from(nftMap.values())
+        .flatMap(nft => nft.traits || [])
+        .filter(trait => trait != null)
+      if (allTraits.length > 0) {
+        console.log(`Saving ${allTraits.length} traits...`)
+        await ctx.store.save(allTraits)
+      }
+      
+      await ctx.store.save(Array.from(tokenOwnershipMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
+      await ctx.store.save(Array.from(auctionMap.values()))
+      await ctx.store.save(Array.from(bidMap.values()))
 
       const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
       const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
@@ -233,12 +242,8 @@ class CombinedIndexer {
       await ctx.store.save(permissionEvents)
       await ctx.store.save(currencyApprovals)
       await ctx.store.save(buyerApprovals)
-      await ctx.store.save(purchaseHistories)
-
-      await ctx.store.save(Array.from(auctionMap.values()))
-      await ctx.store.save(Array.from(bidMap.values()))
-      await ctx.store.save(updatedOwnerships)
       await ctx.store.save(roleAssignments)
+      await ctx.store.save(purchaseHistories)
 
       console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
     })

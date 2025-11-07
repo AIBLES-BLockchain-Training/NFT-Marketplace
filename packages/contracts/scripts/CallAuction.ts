@@ -200,8 +200,8 @@ async function main() {
   // const auctionExpired = await auction.getAuctionExpired('0');
   // console.log('Auction Expired:', auctionExpired);
 
-  // const cancelAuction = await auction.cancelAuction(2);
-  // console.log('Cancel Auction:', cancelAuction);
+  const cancelAuction = await auction.cancelAuction(1);
+  console.log('Cancel Auction:', cancelAuction);
 
   // const auctionParams: AuctionParams = {
   //   _assetContract: '0xB0eB2df330E749516Ec7CA058359D2B05c452094',
@@ -221,15 +221,15 @@ async function main() {
   // const isNewWinningBid = await auction.checkIsNewWinningBid(0, ethers.parseEther('0.015'));
   // console.log('Is New Winning Bid:', isNewWinningBid);
 
-  const bidAuction = await auction.bidInAuction(0, ethers.parseEther('0.015'), signer, false);
-  console.log('Bid Auction:', bidAuction);
+  // const bidAuction = await auction.bidInAuction(0, ethers.parseEther('0.015'), signer, false);
+  // console.log('Bid Auction:', bidAuction);
 
   // auction.checkAuctionExpired(3);
 
-  // const payout = await auction.collectAuctionPayout(3);
-  // console.log('Auction Payout:', payout);\
+  // const payout = await auction.collectAuctionPayout(0);
+  // console.log('Auction Payout:', payout);
 
-  // const collectToken = await auction.collectAuctionToken(3);
+  // const collectToken = await auction.collectAuctionToken(0);
   // console.log('Auction Collect Token:', collectToken);
 }
 
