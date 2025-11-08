@@ -215,3 +215,107 @@ export function clearApprovalCache(nftContract?: Address, ownerAddress?: Address
     approvalCache.clear();
   }
 }
+
+// ============================================================================
+// ERC20 Token Approval Functions
+// ============================================================================
+
+const ERC20_ABI = [
+  'function allowance(address owner, address spender) external view returns (uint256)',
+  'function approve(address spender, uint256 amount) external returns (bool)',
+  'function decimals() external view returns (uint8)',
+];
+
+// Cache for ERC20 allowances
+const erc20AllowanceCache = new Map<string, bigint>();
+
+function getERC20CacheKey(tokenAddress: Address, ownerAddress: Address, spenderAddress: Address): string {
+  return `${tokenAddress.toLowerCase()}_${ownerAddress.toLowerCase()}_${spenderAddress.toLowerCase()}`;
+}
+
+/**
+ * Check ERC20 token allowance for a spender
+ */
+export async function checkERC20Allowance(
+  tokenAddress: Address,
+  ownerAddress: Address,
+  spenderAddress: Address,
+  requiredAmount: bigint
+): Promise<{ hasAllowance: boolean; currentAllowance: bigint }> {
+  try {
+    const provider = getBrowserProvider();
+    if (!provider) throw new Error('Provider not found');
+
+    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    const allowance = await contract.allowance(ownerAddress, spenderAddress);
+
+    const hasAllowance = BigInt(allowance) >= requiredAmount;
+
+    // Cache the allowance
+    const cacheKey = getERC20CacheKey(tokenAddress, ownerAddress, spenderAddress);
+    erc20AllowanceCache.set(cacheKey, BigInt(allowance));
+
+    return {
+      hasAllowance,
+      currentAllowance: BigInt(allowance),
+    };
+  } catch (error) {
+    console.error('Error checking ERC20 allowance:', error);
+    return {
+      hasAllowance: false,
+      currentAllowance: 0n,
+    };
+  }
+}
+
+/**
+ * Approve ERC20 token for a spender
+ * Uses max uint256 approval for convenience (common pattern)
+ */
+export async function approveERC20(
+  tokenAddress: Address,
+  spenderAddress: Address,
+  amount?: bigint
+): Promise<boolean> {
+  try {
+    const signer = await getSigner();
+    if (!signer) throw new Error('Signer not found');
+
+    const ownerAddress = await signer.getAddress();
+    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+
+    // Use max uint256 if no amount specified (infinite approval - common practice)
+    const approvalAmount = amount || ethers.MaxUint256;
+
+    const tx = await contract.approve(spenderAddress, approvalAmount);
+    const receipt = await tx.wait();
+
+    const success = receipt.status === 1;
+
+    // Update cache if successful
+    if (success) {
+      const cacheKey = getERC20CacheKey(tokenAddress, ownerAddress, spenderAddress);
+      erc20AllowanceCache.set(cacheKey, approvalAmount);
+    }
+
+    return success;
+  } catch (error: unknown) {
+    console.error('Error approving ERC20:', error);
+    if (error && typeof error === 'object' && 'code' in error && error.code === 4001) {
+      throw new Error('User rejected approval');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Clear ERC20 allowance cache
+ */
+export function clearERC20AllowanceCache(tokenAddress?: Address, ownerAddress?: Address, spenderAddress?: Address) {
+  if (tokenAddress && ownerAddress && spenderAddress) {
+    const cacheKey = getERC20CacheKey(tokenAddress, ownerAddress, spenderAddress);
+    erc20AllowanceCache.delete(cacheKey);
+  } else {
+    erc20AllowanceCache.clear();
+  }
+}

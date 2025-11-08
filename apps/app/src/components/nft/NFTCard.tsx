@@ -26,6 +26,10 @@ export function NFTCard({ nft }: NFTCardProps) {
   // Get listing owner (for cards that represent individual listings)
   const listingOwner = activeListings.length === 1 ? activeListings[0].owner : null;
 
+  // Check if listing is reserved
+  const firstListing = activeListings[0];
+  const isReservedListing = firstListing?.isReserved || false;
+
   // Get all IPFS gateways for fallback with thumbnail size (300px)
   const imageGateways = getIpfsGateways(nft.imageUrl, 300);
   const imageUrl = imageGateways.length > 0 ? imageGateways[fallbackIndex] : nft.imageUrl;
@@ -73,6 +77,14 @@ export function NFTCard({ nft }: NFTCardProps) {
           <div className="absolute top-1.5 right-1.5">
             <Badge variant="primary" className="text-xs px-2 py-0.5">{nft.collection.collectionType}</Badge>
           </div>
+
+          {/* Reserved Listing Badge - Top Right under collection type */}
+          {isReservedListing && (
+            <div className="absolute top-10 right-1.5 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-orange-500/50">
+              <p className="text-xs font-bold text-orange-400">RESERVED</p>
+            </div>
+          )}
+
           {nft.collection.collectionType === 'ERC1155' && (
             <>
               {/* Show available amount if present, otherwise show total amount */}

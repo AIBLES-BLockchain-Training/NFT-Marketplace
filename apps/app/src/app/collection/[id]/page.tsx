@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { Badge } from '../../../components/common/Badge';
 import { Spinner } from '../../../components/common/Spinner';
 import { NFTImage } from '../../../components/common/NFTImage';
 import { BuyModal } from '../../../components/marketplace/BuyModal';
 import { UpdateListingModal } from '../../../components/marketplace/UpdateListingModal';
+import { AddCurrencyModal } from '../../../components/marketplace/AddCurrencyModal';
+import { ApproveBuyerModal } from '../../../components/marketplace/ApproveBuyerModal';
 import { NFTDetailModal } from '../../../components/nft/NFTDetailModal';
 import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
 import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
@@ -25,7 +28,7 @@ import { useWallet } from '../../../hooks/useWallet';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
 import { Collection, NFT, Listing } from '../../../types';
 import { formatEth } from '../../../lib/web3/utils';
-import { encodeCancelListing } from '../../../lib/web3/encoding';
+import { encodeCancelListing, encodeApproveBuyerForListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { truncateTokenId } from '../../../lib/utils/format';
@@ -37,6 +40,25 @@ type YoursSubTab = 'your-listed' | 'your-auctioned' | 'your-offered';
 
 interface NFTWithListing extends NFT {
   listing?: Listing;
+}
+
+interface ListingQueryResult {
+  nft: NFT;
+  id: string;
+  quantity: string;
+  [key: string]: unknown;
+}
+
+interface AuctionQueryResult {
+  nftId: NFT;
+  quantity: string;
+  [key: string]: unknown;
+}
+
+interface OfferQueryResult {
+  nftId: NFT;
+  quantity: string;
+  [key: string]: unknown;
 }
 
 export default function CollectionDetailPage() {
@@ -54,6 +76,8 @@ export default function CollectionDetailPage() {
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showAddCurrency, setShowAddCurrency] = useState(false);
+  const [showApproveBuyer, setShowApproveBuyer] = useState(false);
 
   // NFT Detail Modal
   const [showNFTDetail, setShowNFTDetail] = useState(false);
@@ -90,7 +114,7 @@ export default function CollectionDetailPage() {
   const loadNFTs = useCallback(async (tab: TabType, subTab?: YoursSubTab) => {
     setIsLoadingNFTs(true);
     try {
-      let result: any;
+      let result: { listings?: ListingQueryResult[]; auctions?: AuctionQueryResult[]; offers?: OfferQueryResult[] };
 
       switch (tab) {
         case 'listed':
@@ -104,7 +128,7 @@ export default function CollectionDetailPage() {
 
             if (isERC1155) {
               // For ERC-1155: Each listing is a separate card
-              const nftsArray = result.listings.map((listing: any) => ({
+              const nftsArray = result.listings.map((listing: ListingQueryResult) => ({
                 ...listing.nft,
                 // Create unique ID by combining nft.id and listing.id
                 id: `${listing.nft.id}-listing-${listing.id}`,
@@ -115,11 +139,11 @@ export default function CollectionDetailPage() {
               setNfts(nftsArray);
             } else {
               // For ERC-721: Group all listings by NFT (original behavior)
-              const nftMap = new Map<string, any>();
-              const nftListingsMap = new Map<string, any[]>();
+              const nftMap = new Map<string, NFT>();
+              const nftListingsMap = new Map<string, ListingQueryResult[]>();
               const totalListedQty = new Map<string, bigint>();
 
-              result.listings.forEach((listing: any) => {
+              result.listings.forEach((listing: ListingQueryResult) => {
                 const nftId = listing.nft.id;
                 const currentQty = totalListedQty.get(nftId) || BigInt(0);
                 const listingQty = BigInt(listing.quantity || '1');
@@ -154,7 +178,7 @@ export default function CollectionDetailPage() {
             collectionId: id,
           });
           if (result.auctions) {
-            setNfts(result.auctions.map((auction: any) => ({
+            setNfts(result.auctions.map((auction: AuctionQueryResult) => ({
               ...auction.nftId,
               auctionQuantity: auction.quantity,
             })));
@@ -166,8 +190,8 @@ export default function CollectionDetailPage() {
             collectionId: id,
           });
           if (result.offers) {
-            const uniqueNFTs = new Map();
-            result.offers.forEach((offer: any) => {
+            const uniqueNFTs = new Map<string, NFTWithListing>();
+            result.offers.forEach((offer: OfferQueryResult) => {
               if (!uniqueNFTs.has(offer.nftId.id)) {
                 uniqueNFTs.set(offer.nftId.id, {
                   ...offer.nftId,
@@ -195,11 +219,11 @@ export default function CollectionDetailPage() {
               });
               if (result.listings) {
                 // Group all listings by NFT
-                const nftMap = new Map<string, any>();
-                const nftListingsMap = new Map<string, any[]>();
+                const nftMap = new Map<string, NFT>();
+                const nftListingsMap = new Map<string, ListingQueryResult[]>();
                 const totalListedQty = new Map<string, bigint>();
 
-                result.listings.forEach((listing: any) => {
+                result.listings.forEach((listing: ListingQueryResult) => {
                   const nftId = listing.nft.id;
                   const currentQty = totalListedQty.get(nftId) || BigInt(0);
                   const listingQty = BigInt(listing.quantity || '1');
@@ -234,7 +258,7 @@ export default function CollectionDetailPage() {
                 ownerAddress: address.toLowerCase(),
               });
               if (result.auctions) {
-                setNfts(result.auctions.map((auction: any) => ({
+                setNfts(result.auctions.map((auction: AuctionQueryResult) => ({
                   ...auction.nftId,
                   auctionQuantity: auction.quantity,
                 })));
@@ -247,8 +271,8 @@ export default function CollectionDetailPage() {
                 buyerAddress: address.toLowerCase(),
               });
               if (result.offers) {
-                const uniqueNFTs = new Map();
-                result.offers.forEach((offer: any) => {
+                const uniqueNFTs = new Map<string, NFTWithListing>();
+                result.offers.forEach((offer: OfferQueryResult) => {
                   if (!uniqueNFTs.has(offer.nftId.id)) {
                     uniqueNFTs.set(offer.nftId.id, {
                       ...offer.nftId,
@@ -419,6 +443,33 @@ export default function CollectionDetailPage() {
     setShowNFTDetail(false);
   };
 
+  const handleApproveBuyerSubmit = async (buyerAddress: string, approve: boolean) => {
+    if (!address || !selectedListing) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+
+    try {
+      const tx = encodeApproveBuyerForListing(
+        BigInt(selectedListing.id),
+        buyerAddress,
+        approve
+      );
+      const receipt = await sendTransaction(
+        tx,
+        approve ? 'Buyer approved successfully!' : 'Buyer approval revoked!'
+      );
+
+      if (receipt?.status === 1) {
+        // Reload NFTs to get updated buyer approvals
+        loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+      }
+    } catch (error: unknown) {
+      console.error('Approve buyer error:', error);
+      throw error;
+    }
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -449,10 +500,12 @@ export default function CollectionDetailPage() {
           <div className="w-full h-[28rem] bg-gradient-to-br from-primary-500/20 to-accent-500/20 relative">
             {bannerUrl ? (
               <>
-                <img
+                <Image
                   src={bannerUrl}
                   alt={`${collection.name} banner`}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  unoptimized
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
               </>
@@ -542,10 +595,12 @@ export default function CollectionDetailPage() {
                     {/* Collection Logo - Larger */}
                     <div className="w-38 h-38 md:w-48 md:h-48 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex-shrink-0 relative overflow-hidden border-4 border-white/20 shadow-2xl">
                       {collectionLogo ? (
-                        <img
+                        <Image
                           src={collectionLogo}
                           alt={collection.name}
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
+                          unoptimized
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-white text-5xl font-bold">
@@ -695,6 +750,13 @@ export default function CollectionDetailPage() {
                         width={300}
                       />
 
+                      {/* Reserved Listing Badge - Top Right */}
+                      {listing?.isReserved && (
+                        <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-orange-500/50">
+                          <p className="text-xs font-bold text-orange-400">RESERVED</p>
+                        </div>
+                      )}
+
                       {/* Quantity Badge for ERC1155 */}
                       {nft.collection.collectionType === 'ERC1155' && (
                         <>
@@ -750,20 +812,41 @@ export default function CollectionDetailPage() {
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleBuyClick(listing);
-                                }}
-                                className="w-full text-center hover:bg-black/50 rounded-lg py-2 transition-colors"
-                              >
-                                <p className="text-white font-bold text-lg mb-1">Buy Now</p>
-                                {displayPrice && (
-                                  <p className="text-primary-400 font-semibold">
-                                    {formatEth(displayPrice)} {displayCurrency}
-                                  </p>
-                                )}
-                              </button>
+                              // Buyer view - check if reserved and if approved
+                              (() => {
+                                const isReservedListing = listing.isReserved;
+                                const approvedBuyers = listing.buyerApprovals?.filter(b => b.isApproved) || [];
+                                const isUserApproved = address
+                                  ? approvedBuyers.some(b => b.buyerAddress.toLowerCase() === address.toLowerCase())
+                                  : false;
+
+                                // Only show "Buy Now" if not reserved OR user is approved
+                                if (!isReservedListing || isUserApproved) {
+                                  return (
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        handleBuyClick(listing);
+                                      }}
+                                      className="w-full text-center hover:bg-black/50 rounded-lg py-2 transition-colors"
+                                    >
+                                      <p className="text-white font-bold text-lg mb-1">Buy Now</p>
+                                      {displayPrice && (
+                                        <p className="text-primary-400 font-semibold">
+                                          {formatEth(displayPrice)} {displayCurrency}
+                                        </p>
+                                      )}
+                                    </button>
+                                  );
+                                } else {
+                                  return (
+                                    <div className="w-full text-center py-2">
+                                      <p className="text-gray-400 font-semibold text-sm mb-1">Reserved Listing</p>
+                                      <p className="text-xs text-gray-500">Only approved buyers can purchase</p>
+                                    </div>
+                                  );
+                                }
+                              })()
                             )}
                           </div>
                         </div>
@@ -786,7 +869,7 @@ export default function CollectionDetailPage() {
                       <p className="text-sm font-semibold text-white truncate">{nft.name}</p>
                       <p className="text-xs text-gray-500 truncate">#{truncateTokenId(nft.tokenId)}</p>
 
-                      {/* Show listing owner for individual listing cards */}
+                      {/* Show listing owner for all listings */}
                       {listing && (
                         <div className="pt-1 border-t border-dark-border">
                           <p className="text-[10px] text-gray-400">Listed by</p>
@@ -834,6 +917,34 @@ export default function CollectionDetailPage() {
         />
       )}
 
+      {/* Add Currency Modal */}
+      {selectedListing && (
+        <AddCurrencyModal
+          listingId={selectedListing.id}
+          isOpen={showAddCurrency}
+          onClose={() => {
+            setShowAddCurrency(false);
+            setSelectedListing(null);
+          }}
+          onSuccess={() => {
+            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+          }}
+        />
+      )}
+
+      {/* Approve Buyer Modal */}
+      {selectedListing && (
+        <ApproveBuyerModal
+          isOpen={showApproveBuyer}
+          onClose={() => {
+            setShowApproveBuyer(false);
+            setSelectedListing(null);
+          }}
+          listing={selectedListing}
+          onApprove={handleApproveBuyerSubmit}
+        />
+      )}
+
       {/* NFT Detail Modal */}
       {nfts.length > 0 && nfts[selectedNFTIndex] && (() => {
         const selectedNFT = nfts[selectedNFTIndex];
@@ -868,6 +979,16 @@ export default function CollectionDetailPage() {
             onUpdateListing={(listing) => {
               setSelectedListing(listing);
               setShowUpdateModal(true);
+              // Keep detail modal open in background
+            }}
+            onAddCurrency={(listing) => {
+              setSelectedListing(listing);
+              setShowAddCurrency(true);
+              // Keep detail modal open in background
+            }}
+            onApproveBuyer={(listing) => {
+              setSelectedListing(listing);
+              setShowApproveBuyer(true);
               // Keep detail modal open in background
             }}
           />

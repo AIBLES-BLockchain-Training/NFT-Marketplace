@@ -25,6 +25,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
   const [pricePerToken, setPricePerToken] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [duration, setDuration] = useState('7');
+  const [reserved, setReserved] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,7 +100,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
-        reserved: false,
+        reserved: reserved,
       });
 
       await sendTransaction(createListingTx, 'Listing created successfully! Your NFT is now live and ready for purchase.');
@@ -184,6 +185,26 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
               <p className="mt-2 text-xs text-gray-500">
                 How long your listing will be active
               </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-4 bg-dark-card border border-dark-border rounded-lg">
+                <input
+                  type="checkbox"
+                  id="reserved-checkbox"
+                  checked={reserved}
+                  onChange={(e) => setReserved(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-gray-600 bg-dark-bg text-primary-500 focus:ring-primary-500 focus:ring-offset-dark-bg"
+                />
+                <div className="flex-1">
+                  <label htmlFor="reserved-checkbox" className="block text-sm font-medium text-white cursor-pointer">
+                    Reserved Listing (Private Sale)
+                  </label>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Only buyers you specifically approve will be able to purchase this NFT. You can approve buyers after creating the listing.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="pt-6 border-t border-dark-border flex gap-3">

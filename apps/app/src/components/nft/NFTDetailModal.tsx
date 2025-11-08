@@ -25,6 +25,8 @@ interface NFTDetailModalProps {
   onCreateAuction?: () => void;
   onCancelListing?: (listing: Listing) => void;
   onUpdateListing?: (listing: Listing) => void;
+  onAddCurrency?: (listing: Listing) => void;
+  onApproveBuyer?: (listing: Listing) => void;
 }
 
 export function NFTDetailModal({
@@ -41,8 +43,11 @@ export function NFTDetailModal({
   onCreateAuction,
   onCancelListing,
   onUpdateListing,
+  onAddCurrency,
+  onApproveBuyer,
 }: NFTDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity' | 'approved'>('details');
+  const hasReservedListing = activeListings.some(l => l.isReserved);
   const [listingQuantities, setListingQuantities] = useState<{[listingId: string]: number}>({});
   const { address } = useWallet();
 
@@ -166,7 +171,7 @@ export function NFTDetailModal({
               <div className="flex items-center gap-3 flex-1">
                 {/* Previous Button */}
                 <button
-                  onClick={() => currentIndex! > 0 && onNavigate!(currentIndex! - 1)}
+                  onClick={() => currentIndex !== undefined && currentIndex > 0 && onNavigate && onNavigate(currentIndex - 1)}
                   disabled={currentIndex === 0}
                   className="p-2 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
@@ -182,7 +187,7 @@ export function NFTDetailModal({
                     return (
                       <button
                         key={item.id}
-                        onClick={() => onNavigate!(actualIndex)}
+                        onClick={() => onNavigate && onNavigate(actualIndex)}
                         className={`relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${
                           actualIndex === currentIndex
                             ? 'border-primary-500 scale-110'
@@ -202,8 +207,8 @@ export function NFTDetailModal({
 
                 {/* Next Button */}
                 <button
-                  onClick={() => currentIndex! < allNFTs!.length - 1 && onNavigate!(currentIndex! + 1)}
-                  disabled={currentIndex === allNFTs!.length - 1}
+                  onClick={() => currentIndex !== undefined && allNFTs && currentIndex < allNFTs.length - 1 && onNavigate && onNavigate(currentIndex + 1)}
+                  disabled={allNFTs && currentIndex === allNFTs.length - 1}
                   className="p-2 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -259,6 +264,11 @@ export function NFTDetailModal({
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant="primary">{nft.collection.collectionType}</Badge>
+                    {hasReservedListing && (
+                      <div className="bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-orange-500/50">
+                        <p className="text-xs font-bold text-orange-400">RESERVED</p>
+                      </div>
+                    )}
                     <span className="text-gray-400 text-sm">TOKEN #{truncateTokenId(nft.tokenId)}</span>
                   </div>
                 </div>
@@ -382,32 +392,56 @@ export function NFTDetailModal({
                                   </div>
 
                                   {/* Action Buttons */}
-                                  <div className="pt-2 border-t border-dark-border">
+                                  <div className="pt-2 border-t border-dark-border space-y-2">
+                                    {/* Row 1: Cancel & Update */}
                                     <div className="flex gap-2">
                                       {!isExpired && onCancelListing && (
                                         <Button
                                           variant="secondary"
                                           onClick={() => onCancelListing(listing)}
-                                          className="flex-1"
+                                          className="flex-1 text-xs"
                                         >
-                                          Cancel Listing
+                                          Cancel
                                         </Button>
                                       )}
                                       {!isExpired && onUpdateListing && (
                                         <Button
                                           variant="primary"
                                           onClick={() => onUpdateListing(listing)}
-                                          className="flex-1"
+                                          className="flex-1 text-xs"
                                         >
-                                          Update Listing
+                                          Update
                                         </Button>
                                       )}
                                       {isExpired && (
-                                        <div className="text-center py-2">
+                                        <div className="text-center py-2 w-full">
                                           <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
                                         </div>
                                       )}
                                     </div>
+                                    {/* Row 2: Approve Currency & Approve Buyer */}
+                                    {!isExpired && (
+                                      <div className="flex gap-2">
+                                        {onAddCurrency && (
+                                          <Button
+                                            variant="primary"
+                                            onClick={() => onAddCurrency(listing)}
+                                            className="flex-1 text-xs"
+                                          >
+                                            Approve Currency
+                                          </Button>
+                                        )}
+                                        {listing.isReserved && onApproveBuyer && (
+                                          <Button
+                                            variant="secondary"
+                                            onClick={() => onApproveBuyer(listing)}
+                                            className="flex-1 text-xs"
+                                          >
+                                            Approve Buyer
+                                          </Button>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </>
                               ) : (
@@ -514,6 +548,20 @@ export function NFTDetailModal({
                         )}
                       </button>
                     ))}
+                    {/* Approved Buyers Tab - Only show if has reserved listing */}
+                    {hasReservedListing && (
+                      <button
+                        onClick={() => setActiveTab('approved')}
+                        className={`pb-3 text-sm font-semibold capitalize transition-colors relative ${
+                          activeTab === 'approved' ? 'text-white' : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Approved Buyers
+                        {activeTab === 'approved' && (
+                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -549,19 +597,42 @@ export function NFTDetailModal({
                     <Card>
                       <h3 className="text-sm font-semibold text-gray-400 mb-4">Details</h3>
                       <div className="space-y-3">
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-gray-400">Token ID</span>
-                          <span className="font-mono text-white">{truncateTokenId(nft.tokenId)}</span>
+                          <a
+                            href={`https://sepolia.etherscan.io/nft/${nft.collection.id}/${nft.tokenId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-white hover:text-primary-400 transition-colors flex items-center gap-1 group"
+                          >
+                            {truncateTokenId(nft.tokenId)}
+                            <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-gray-400">Contract</span>
-                          <span className="font-mono text-sm text-primary-400">
+                          <a
+                            href={`https://sepolia.etherscan.io/address/${nft.collection.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-sm text-primary-400 hover:text-primary-300 transition-colors flex items-center gap-1 group"
+                          >
                             {nft.collection.id.slice(0, 6)}...{nft.collection.id.slice(-4)}
-                          </span>
+                            <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-gray-400">Token Standard</span>
-                          <span className="text-white">{nft.collection.collectionType}</span>
+                          <span className="text-white flex items-center gap-1">
+                            {nft.collection.collectionType}
+                            <svg className="w-3 h-3 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </span>
                         </div>
                       </div>
                     </Card>
@@ -577,6 +648,84 @@ export function NFTDetailModal({
                 {activeTab === 'activity' && (
                   <div className="text-center py-12 text-gray-400">
                     No activity yet
+                  </div>
+                )}
+
+                {activeTab === 'approved' && (
+                  <div className="space-y-4">
+                    {activeListings
+                      .filter(listing => listing.isReserved)
+                      .map(listing => {
+                        const approvedBuyers = listing.buyerApprovals?.filter(b => b.isApproved) || [];
+                        const isCurrentUserApproved = address
+                          ? approvedBuyers.some(b => b.buyerAddress.toLowerCase() === address.toLowerCase())
+                          : false;
+
+                        return (
+                          <Card key={listing.id}>
+                            <h3 className="text-sm font-semibold text-white mb-4">
+                              Listing #{listing.id}
+                            </h3>
+
+                            {isCurrentUserApproved && (
+                              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                                <p className="text-sm font-semibold text-green-400">
+                                  You are approved to purchase this NFT
+                                </p>
+                              </div>
+                            )}
+
+                            {approvedBuyers.length === 0 ? (
+                              <div className="text-center py-8 text-gray-400">
+                                <p className="text-sm">No approved buyers yet</p>
+                                <p className="text-xs mt-2">Owner hasn&apos;t approved any buyers for this listing</p>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-xs text-gray-400 mb-3">
+                                  Approved Buyers ({approvedBuyers.length}):
+                                </p>
+                                <div className="space-y-2">
+                                  {approvedBuyers.map((buyer) => (
+                                    <div
+                                      key={buyer.id}
+                                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                                        buyer.buyerAddress.toLowerCase() === address?.toLowerCase()
+                                          ? 'bg-green-500/10 border-green-500/30'
+                                          : 'bg-dark-bg border-dark-border'
+                                      }`}
+                                    >
+                                      <div>
+                                        <p className={`text-sm font-mono ${
+                                          buyer.buyerAddress.toLowerCase() === address?.toLowerCase()
+                                            ? 'text-green-400'
+                                            : 'text-white'
+                                        }`}>
+                                          {buyer.buyerAddress}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          Approved {new Date(buyer.createdAt).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                      {buyer.buyerAddress.toLowerCase() === address?.toLowerCase() && (
+                                        <div className="bg-green-500/20 text-green-400 text-xs font-semibold px-3 py-1 rounded-full">
+                                          You
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </Card>
+                        );
+                      })}
+
+                    {activeListings.filter(l => l.isReserved).length === 0 && (
+                      <div className="text-center py-12 text-gray-400">
+                        No reserved listings
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

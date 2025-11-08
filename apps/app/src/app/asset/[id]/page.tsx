@@ -5,22 +5,21 @@ import { useParams } from 'next/navigation';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { NFTDetail } from '../../../components/nft/NFTDetail';
 import { BuyModal } from '../../../components/marketplace/BuyModal';
-import { BidModal } from '../../../components/marketplace/BidModal';
 import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
 import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
 import { UpdateListingModal } from '../../../components/marketplace/UpdateListingModal';
+import { AddCurrencyModal } from '../../../components/marketplace/AddCurrencyModal';
+import { ApproveBuyerModal } from '../../../components/marketplace/ApproveBuyerModal';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { Spinner } from '../../../components/common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_NFT_BY_ID_QUERY } from '../../../lib/graphql/queries';
 import { useWallet } from '../../../hooks/useWallet';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
-import { NFT, Listing, Auction, Offer } from '../../../types';
+import { NFT, Listing } from '../../../types';
 import {
   encodeCancelListing,
-  encodeCancelAuction,
-  encodeAcceptOffer,
-  encodeCancelOffer,
+  encodeApproveBuyerForListing,
 } from '../../../lib/web3/encoding';
 import toast from 'react-hot-toast';
 
@@ -33,14 +32,13 @@ export default function AssetPage() {
   const [nft, setNft] = useState<NFT | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
-  const [showBidModal, setShowBidModal] = useState(false);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreateAuction, setShowCreateAuction] = useState(false);
   const [showUpdateListing, setShowUpdateListing] = useState(false);
+  const [showAddCurrency, setShowAddCurrency] = useState(false);
+  const [showApproveBuyer, setShowApproveBuyer] = useState(false);
   const [isNFTOwner, setIsNFTOwner] = useState(false);
-  const [isCheckingOwnership, setIsCheckingOwnership] = useState(false);
 
   const loadNFT = useCallback(async () => {
     if (!id) return;
@@ -104,7 +102,7 @@ export default function AssetPage() {
             totalSupply: '0',
             createdAt: new Date().toISOString(),
           },
-          traits: metadata.attributes?.map((attr: any, idx: number) => ({
+          traits: metadata.attributes?.map((attr: { trait_type: string; value: string | number }, idx: number) => ({
             id: `${id}-${idx}`,
             traitType: attr.trait_type,
             value: String(attr.value),
@@ -150,12 +148,10 @@ export default function AssetPage() {
       }
 
       // Otherwise verify via API (for NFTs not in indexer)
-      setIsCheckingOwnership(true);
       try {
         const parts = id.split('-');
         if (parts.length < 2) {
           setIsNFTOwner(false);
-          setIsCheckingOwnership(false);
           return;
         }
 
@@ -182,8 +178,6 @@ export default function AssetPage() {
       } catch (error) {
         console.error('Failed to verify ownership:', error);
         setIsNFTOwner(false);
-      } finally {
-        setIsCheckingOwnership(false);
       }
     };
 
@@ -199,15 +193,6 @@ export default function AssetPage() {
     setShowBuyModal(true);
   };
 
-  const handleBidClick = (auction: Auction) => {
-    if (!address) {
-      toast.error('Please connect your wallet');
-      return;
-    }
-    setSelectedAuction(auction);
-    setShowBidModal(true);
-  };
-
   const handleUpdateListingClick = (listing: Listing) => {
     if (!address) {
       toast.error('Please connect your wallet');
@@ -217,8 +202,49 @@ export default function AssetPage() {
     setShowUpdateListing(true);
   };
 
-  const isOwner = (ownerId: string) => {
-    return address?.toLowerCase() === ownerId.toLowerCase();
+  const handleAddCurrencyClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowAddCurrency(true);
+  };
+
+  const handleApproveBuyerClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowApproveBuyer(true);
+  };
+
+  const handleApproveBuyerSubmit = async (buyerAddress: string, approve: boolean) => {
+    if (!address || !selectedListing) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+
+    try {
+      const tx = encodeApproveBuyerForListing(
+        BigInt(selectedListing.id),
+        buyerAddress,
+        approve
+      );
+      const receipt = await sendTransaction(
+        tx,
+        approve ? 'Buyer approved successfully!' : 'Buyer approval revoked!'
+      );
+
+      if (receipt?.status === 1) {
+        // Reload NFT data to get updated buyer approvals
+        loadNFT();
+      }
+    } catch (error: unknown) {
+      console.error('Approve buyer error:', error);
+      throw error;
+    }
   };
 
   const handleCancelListing = async (listing: Listing) => {
@@ -236,60 +262,6 @@ export default function AssetPage() {
       }
     } catch (error: unknown) {
       console.error('Cancel listing error:', error);
-    }
-  };
-
-  const handleCancelAuction = async (auction: Auction) => {
-    if (!address) {
-      toast.error('Please connect your wallet');
-      return;
-    }
-
-    try {
-      const tx = encodeCancelAuction(BigInt(auction.auctionId));
-      const receipt = await sendTransaction(tx, 'Auction cancelled successfully!');
-
-      if (receipt?.status === 1) {
-        loadNFT();
-      }
-    } catch (error: unknown) {
-      console.error('Cancel auction error:', error);
-    }
-  };
-
-  const handleAcceptOffer = async (offer: Offer) => {
-    if (!address) {
-      toast.error('Please connect your wallet');
-      return;
-    }
-
-    try {
-      const tx = encodeAcceptOffer(BigInt(offer.offerId));
-      const receipt = await sendTransaction(tx, 'Offer accepted successfully!');
-
-      if (receipt?.status === 1) {
-        loadNFT();
-      }
-    } catch (error: unknown) {
-      console.error('Accept offer error:', error);
-    }
-  };
-
-  const handleCancelOffer = async (offer: Offer) => {
-    if (!address) {
-      toast.error('Please connect your wallet');
-      return;
-    }
-
-    try {
-      const tx = encodeCancelOffer(BigInt(offer.offerId));
-      const receipt = await sendTransaction(tx, 'Offer cancelled successfully!');
-
-      if (receipt?.status === 1) {
-        loadNFT();
-      }
-    } catch (error: unknown) {
-      console.error('Cancel offer error:', error);
     }
   };
 
@@ -315,8 +287,6 @@ export default function AssetPage() {
   }
 
   const activeListings = nft.listings?.filter((l) => l.status === 'CREATED') || [];
-  const activeAuctions = nft.auctions?.filter((a) => a.status === 'CREATED' || a.status === 'ACTIVE') || [];
-  const activeOffers = nft.offers?.filter((o) => o.status === 'CREATED') || [];
 
   return (
     <MainLayout>
@@ -330,6 +300,8 @@ export default function AssetPage() {
           onCreateAuction={() => setShowCreateAuction(true)}
           onCancelListing={handleCancelListing}
           onUpdateListing={handleUpdateListingClick}
+          onAddCurrency={handleAddCurrencyClick}
+          onApproveBuyer={handleApproveBuyerClick}
         />
 
         {/* Create Listing Modal */}
@@ -373,6 +345,36 @@ export default function AssetPage() {
             }}
           />
         )}
+
+        {/* Add Currency Modal */}
+        {selectedListing && (
+          <AddCurrencyModal
+            listingId={selectedListing.id}
+            isOpen={showAddCurrency}
+            onClose={() => {
+              setShowAddCurrency(false);
+              setSelectedListing(null);
+            }}
+            onSuccess={() => {
+              loadNFT();
+              setShowAddCurrency(false);
+              setSelectedListing(null);
+            }}
+          />
+        )}
+
+        {/* Approve Buyer Modal */}
+        {selectedListing && (
+          <ApproveBuyerModal
+            isOpen={showApproveBuyer}
+            onClose={() => {
+              setShowApproveBuyer(false);
+              setSelectedListing(null);
+            }}
+            listing={selectedListing}
+            onApprove={handleApproveBuyerSubmit}
+          />
+        )}
       </div>
 
       {/* Modals */}
@@ -384,18 +386,6 @@ export default function AssetPage() {
             setSelectedListing(null);
           }}
           listing={selectedListing}
-          onSuccess={loadNFT}
-        />
-      )}
-
-      {selectedAuction && (
-        <BidModal
-          isOpen={showBidModal}
-          onClose={() => {
-            setShowBidModal(false);
-            setSelectedAuction(null);
-          }}
-          auction={selectedAuction}
           onSuccess={loadNFT}
         />
       )}

@@ -89,6 +89,12 @@ export const GET_NFT_BY_ID_QUERY = `
             decimals
           }
         }
+        buyerApprovals {
+          id
+          buyerAddress
+          isApproved
+          createdAt
+        }
       }
       # TODO: Uncomment when Auction and Offer are added to schema
       # auctions(where: { status_in: [CREATED, ACTIVE] }) {
@@ -363,6 +369,7 @@ export const GET_COLLECTION_LISTED_NFTS_QUERY = `
       startTimestamp
       endTimestamp
       status
+      isReserved
       owner {
         id
       }
@@ -392,6 +399,12 @@ export const GET_COLLECTION_LISTED_NFTS_QUERY = `
           symbol
           decimals
         }
+      }
+      buyerApprovals {
+        id
+        buyerAddress
+        isApproved
+        createdAt
       }
     }
   }
@@ -471,6 +484,7 @@ export const GET_COLLECTION_USER_LISTINGS_QUERY = `
       startTimestamp
       endTimestamp
       status
+      isReserved
       owner {
         id
       }
@@ -500,6 +514,12 @@ export const GET_COLLECTION_USER_LISTINGS_QUERY = `
           symbol
           decimals
         }
+      }
+      buyerApprovals {
+        id
+        buyerAddress
+        isApproved
+        createdAt
       }
     }
   }
@@ -989,6 +1009,18 @@ export const GET_TRENDING_NFTS_QUERY = `
           }
         }
       }
+    }
+  }
+`;
+
+export const GET_SUPPORTED_CURRENCIES_QUERY = `
+  query GetSupportedCurrencies {
+    supportedCurrencies(where: { isActive_eq: true }) {
+      id
+      symbol
+      name
+      decimals
+      isActive
     }
   }
 `;

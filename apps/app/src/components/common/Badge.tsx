@@ -3,13 +3,14 @@ import clsx from 'clsx';
 
 interface BadgeProps {
   children: ReactNode;
-  variant?: 'primary' | 'success' | 'warning' | 'error';
+  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
   className?: string;
 }
 
 export function Badge({ children, variant = 'primary', className }: BadgeProps) {
   const variantStyles = {
     primary: 'badge-primary',
+    secondary: 'badge-secondary',
     success: 'badge-success',
     warning: 'badge-warning',
     error: 'badge-error',

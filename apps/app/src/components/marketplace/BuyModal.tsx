@@ -7,7 +7,9 @@ import { formatEth } from '../../lib/web3/utils';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
 import { encodeBuyFromListing } from '../../lib/web3/encoding';
-import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
+import { ZERO_ADDRESS, ROUTER_ADDRESS } from '../../lib/contracts/addresses';
+import { truncate } from '../../lib/utils/format';
+import { checkERC20Allowance, approveERC20 } from '../../lib/web3/approve';
 import toast from 'react-hot-toast';
 
 interface BuyModalProps {
@@ -21,6 +23,8 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const { address } = useWallet();
   const [quantity, setQuantity] = useState('1');
+  const [selectedCurrencyIndex, setSelectedCurrencyIndex] = useState(0);
+  const [isApprovingToken, setIsApprovingToken] = useState(false);
 
   // Check if listing has approved currencies
   const hasApprovedCurrencies = listing.currencyApprovals && listing.currencyApprovals.length > 0;
@@ -32,14 +36,14 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
   // For contract call, convert to integer
   const selectedQuantityForContract = BigInt(Math.floor(quantityNum));
 
-  // Get currency and price from currencyApprovals
+  // Get currency and price from selected currencyApproval
   let currencyAddress = ZERO_ADDRESS; // Contract uses address(0) for native ETH
   let pricePerToken = BigInt(listing.pricePerToken);
   let displaySymbol = 'ETH'; // Default display symbol
 
   if (hasApprovedCurrencies) {
-    // Use the first approved currency (buyer can later choose from multiple approved currencies)
-    const approvedCurrency = listing.currencyApprovals[0];
+    // Use the selected approved currency
+    const approvedCurrency = listing.currencyApprovals[selectedCurrencyIndex];
     const dbCurrencyAddress = approvedCurrency.currency.id.toLowerCase();
 
     // Normalize: Both 0x0000...0000 and 0xEeee...EEeE represent native ETH
@@ -77,6 +81,53 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
         return;
       }
 
+      // Check if currency is ERC20 (not native ETH)
+      const isNativeToken = currencyAddress === ZERO_ADDRESS;
+
+      // If ERC20, check and request approval if needed
+      if (!isNativeToken) {
+        console.log('ERC20 token detected, checking allowance...');
+        setIsApprovingToken(true);
+
+        try {
+          const { hasAllowance, currentAllowance } = await checkERC20Allowance(
+            currencyAddress,
+            address,
+            ROUTER_ADDRESS,
+            totalPrice
+          );
+
+          console.log(`Current allowance: ${currentAllowance}, Required: ${totalPrice}`);
+
+          if (!hasAllowance) {
+            toast.loading('Approving token...', { id: 'approval' });
+
+            // Request approval
+            const approved = await approveERC20(currencyAddress, ROUTER_ADDRESS);
+
+            if (!approved) {
+              toast.error('Token approval failed', { id: 'approval' });
+              setIsApprovingToken(false);
+              return;
+            }
+
+            toast.success('Token approved successfully!', { id: 'approval' });
+          }
+        } catch (error: unknown) {
+          console.error('Approval error:', error);
+          if (error instanceof Error && error.message === 'User rejected approval') {
+            toast.error('You rejected the token approval', { id: 'approval' });
+          } else {
+            toast.error('Failed to approve token', { id: 'approval' });
+          }
+          setIsApprovingToken(false);
+          return;
+        } finally {
+          setIsApprovingToken(false);
+        }
+      }
+
+      // Proceed with purchase
       const tx = encodeBuyFromListing(
         BigInt(listing.id), // listing.id is the listingId from contract
         address, // Buy for connected wallet (buyer), not seller!
@@ -119,7 +170,52 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
             </div>
           ) : (
             <div className="space-y-6">
+            {/* ERC20 Info Banner */}
+            {currencyAddress !== ZERO_ADDRESS && (
+              <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="flex gap-3">
+                  <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-sm">
+                    <p className="text-blue-400 font-semibold mb-1">ERC20 Token Payment</p>
+                    <p className="text-gray-300 text-xs">
+                      You&apos;ll need to approve the {displaySymbol} token before purchasing. This is a one-time approval that allows the marketplace to transfer tokens on your behalf.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-dark-bg rounded-lg p-4 border border-dark-border">
+              {/* Currency Selector - Only show if multiple currencies available */}
+              {listing.currencyApprovals && listing.currencyApprovals.length > 1 && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Payment Currency
+                  </label>
+                  <select
+                    value={selectedCurrencyIndex}
+                    onChange={(e) => setSelectedCurrencyIndex(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
+                  >
+                    {listing.currencyApprovals.map((approval, index) => {
+                      const isNative = approval.currency.id.toLowerCase() === ZERO_ADDRESS.toLowerCase() ||
+                                      approval.currency.id.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+                      const symbol = isNative ? 'ETH' : approval.currency.symbol;
+                      return (
+                        <option key={index} value={index}>
+                          {symbol} - {formatEth(BigInt(approval.pricePerToken))} per token
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Address: {truncate(listing.currencyApprovals[selectedCurrencyIndex].currency.id)}
+                  </p>
+                </div>
+              )}
+
               <div className="bg-dark-card rounded-lg p-3 mb-4 border border-dark-border">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-sm">Price per Token</span>
@@ -153,24 +249,33 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
               </div>
 
               <div className="pt-4 border-t border-dark-border">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-semibold text-gray-400">Total Price</span>
                   <span className="text-2xl font-bold text-primary-400">
                     {formatEth(totalPrice)} {displaySymbol}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-2 text-right">
-                  {Math.floor(quantityNum)} × {formatEth(pricePerToken)}
-                </p>
+                <div className="text-right space-y-1">
+                  <p className="text-xs text-gray-500">
+                    {Math.floor(quantityNum)} × {formatEth(pricePerToken)}
+                  </p>
+                  {hasApprovedCurrencies && (
+                    <p className="text-xs text-gray-400">
+                      Paying with: <span className="font-semibold">{displaySymbol}</span>
+                      <br />
+                      <span className="text-gray-600">{truncate(currencyAddress)}</span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="flex gap-3">
-              <Button onClick={onClose} variant="secondary" fullWidth disabled={isLoading}>
+              <Button onClick={onClose} variant="secondary" fullWidth disabled={isLoading || isApprovingToken}>
                 Cancel
               </Button>
-              <Button onClick={handleBuy} variant="primary" fullWidth isLoading={isLoading}>
-                Confirm Purchase
+              <Button onClick={handleBuy} variant="primary" fullWidth isLoading={isLoading || isApprovingToken}>
+                {isApprovingToken ? 'Approving Token...' : 'Confirm Purchase'}
               </Button>
             </div>
           </div>

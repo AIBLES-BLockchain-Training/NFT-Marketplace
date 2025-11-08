@@ -69,6 +69,10 @@
     @apply bg-primary-500 bg-opacity-20 text-primary-400 border border-primary-500 border-opacity-30;
   }
 
+  .badge-secondary {
+    @apply bg-gray-500 bg-opacity-20 text-gray-300 border border-gray-500 border-opacity-30;
+  }
+
   .badge-success {
     @apply bg-success bg-opacity-20 text-success border border-success border-opacity-30;
   }

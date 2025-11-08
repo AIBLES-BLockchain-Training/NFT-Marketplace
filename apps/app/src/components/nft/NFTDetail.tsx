@@ -19,9 +19,11 @@ interface NFTDetailProps {
   onCreateAuction?: () => void;
   onCancelListing?: (listing: Listing) => void;
   onUpdateListing?: (listing: Listing) => void;
+  onAddCurrency?: (listing: Listing) => void;
+  onApproveBuyer?: (listing: Listing) => void;
 }
 
-export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateListing, onCreateAuction, onCancelListing, onUpdateListing }: NFTDetailProps) {
+export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateListing, onCreateAuction, onCancelListing, onUpdateListing, onAddCurrency, onApproveBuyer }: NFTDetailProps) {
   const { address } = useWallet();
   const [imageError, setImageError] = useState(false);
   const [fallbackIndex, setFallbackIndex] = useState(0);
@@ -110,6 +112,11 @@ export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateLi
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm text-gray-400">{nft.collection.name}</span>
             <Badge variant="primary">{nft.collection.collectionType}</Badge>
+            {activeListings.some(l => l.isReserved) && (
+              <div className="bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-orange-500/50">
+                <p className="text-xs font-bold text-orange-400">RESERVED</p>
+              </div>
+            )}
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">{nft.name}</h1>
           {nft.description && (
@@ -150,19 +157,42 @@ export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateLi
         <Card>
           <h3 className="text-sm font-semibold text-gray-400 mb-4">Details</h3>
           <div className="space-y-3">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-gray-400">Token ID</span>
-              <span className="font-mono text-white">{truncateTokenId(nft.tokenId)}</span>
+              <a
+                href={`https://sepolia.etherscan.io/nft/${nft.collection.id}/${nft.tokenId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-white hover:text-primary-400 transition-colors flex items-center gap-1 group"
+              >
+                {truncateTokenId(nft.tokenId)}
+                <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-gray-400">Contract</span>
-              <span className="font-mono text-sm text-primary-400">
+              <a
+                href={`https://sepolia.etherscan.io/address/${nft.collection.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-sm text-primary-400 hover:text-primary-300 transition-colors flex items-center gap-1 group"
+              >
                 {nft.collection.id.slice(0, 6)}...{nft.collection.id.slice(-4)}
-              </span>
+                <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-gray-400">Token Standard</span>
-              <span className="text-white">{nft.collection.collectionType}</span>
+              <span className="text-white flex items-center gap-1">
+                {nft.collection.collectionType}
+                <svg className="w-3 h-3 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </span>
             </div>
           </div>
         </Card>
@@ -198,87 +228,117 @@ export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateLi
                   return (
                     <div
                       key={listing.id}
-                      className="flex items-center gap-3 p-3 bg-dark-bg border border-dark-border rounded-lg"
+                      className="p-3 bg-dark-bg border border-dark-border rounded-lg"
                     >
-                      {/* Seller */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-500">Seller</p>
-                        <p className="text-sm text-white font-mono truncate">
-                          {isMyListing ? 'You' : `${listing.owner.id.slice(0, 6)}...${listing.owner.id.slice(-4)}`}
-                        </p>
-                      </div>
-
-                      {/* Price */}
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Price</p>
-                        <p className="text-lg text-white font-bold">
-                          {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
-                        </p>
-                      </div>
-
-                      {/* Quantity */}
-                      {!isERC721 && (
-                        <div className="flex-1">
-                          <p className="text-xs text-gray-500">Quantity</p>
-                          <p className="text-sm text-white">{listing.quantity}</p>
+                      <div className="flex items-center gap-3">
+                        {/* Seller */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-500">Seller</p>
+                          <p className="text-sm text-white font-mono truncate">
+                            {isMyListing ? 'You' : `${listing.owner.id.slice(0, 6)}...${listing.owner.id.slice(-4)}`}
+                          </p>
                         </div>
-                      )}
 
-                      {/* Expiry */}
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Expires</p>
-                        <p className={`text-sm font-semibold ${isExpired ? 'text-red-400' : 'text-primary-400'}`}>
-                          {getTimeRemaining(listing.endTimestamp)}
-                        </p>
+                        {/* Price */}
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500">Price</p>
+                          <p className="text-lg text-white font-bold">
+                            {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                          </p>
+                        </div>
+
+                        {/* Quantity */}
+                        {!isERC721 && (
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-500">Quantity</p>
+                            <p className="text-sm text-white">{listing.quantity}</p>
+                          </div>
+                        )}
+
+                        {/* Expiry */}
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500">Expires</p>
+                          <p className={`text-sm font-semibold ${isExpired ? 'text-red-400' : 'text-primary-400'}`}>
+                            {getTimeRemaining(listing.endTimestamp)}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Action Buttons */}
-                      {isMyListing ? (
-                        // Owner's listing - show Update/Cancel
-                        <div className="flex gap-2">
-                          {!isExpired && onUpdateListing && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => onUpdateListing(listing)}
-                              className="whitespace-nowrap"
-                            >
-                              Update
-                            </Button>
-                          )}
-                          {!isExpired && onCancelListing && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => onCancelListing(listing)}
-                              className="whitespace-nowrap"
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                          {isExpired && (
-                            <span className="text-sm text-red-400 px-3">Expired</span>
-                          )}
-                        </div>
-                      ) : (
-                        // Other's listing - show Buy button
-                        !isExpired ? (
-                          <Button
-                            variant="primary"
-                            onClick={() => onBuy && onBuy(listing)}
-                            className="whitespace-nowrap"
-                          >
-                            Buy Now
-                          </Button>
+                      <div className="mt-3">
+                        {isMyListing ? (
+                          // Owner's listing - show Update/Cancel/Approve Currency/Approve Buyer
+                          <div className="space-y-2">
+                            {/* Row 1: Update & Cancel */}
+                            <div className="flex gap-2">
+                              {!isExpired && onUpdateListing && (
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => onUpdateListing(listing)}
+                                  className="whitespace-nowrap text-xs px-3 py-1.5"
+                                >
+                                  Update
+                                </Button>
+                              )}
+                              {!isExpired && onCancelListing && (
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => onCancelListing(listing)}
+                                  className="whitespace-nowrap text-xs px-3 py-1.5"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                              {isExpired && (
+                                <span className="text-sm text-red-400 px-3">Expired</span>
+                              )}
+                            </div>
+                            {/* Row 2: Approve Currency & Approve Buyer */}
+                            {!isExpired && (
+                              <div className="flex gap-2">
+                                {onAddCurrency && (
+                                  <Button
+                                    variant="primary"
+                                    onClick={() => onAddCurrency(listing)}
+                                    className="whitespace-nowrap text-xs px-3 py-1.5 flex-1"
+                                  >
+                                    Approve Currency
+                                  </Button>
+                                )}
+                                {listing.isReserved && onApproveBuyer && (
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => onApproveBuyer(listing)}
+                                    className="whitespace-nowrap text-xs px-3 py-1.5 flex-1"
+                                  >
+                                    Approve Buyer
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : (
-                          <Button
-                            variant="secondary"
-                            onClick={handleMakeOffer}
-                            className="whitespace-nowrap"
-                            disabled
-                          >
-                            Expired
-                          </Button>
-                        )
-                      )}
+                          // Other's listing - show Buy button
+                          !isExpired ? (
+                            <Button
+                              variant="primary"
+                              onClick={() => onBuy && onBuy(listing)}
+                              className="whitespace-nowrap"
+                            >
+                              Buy Now
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              onClick={handleMakeOffer}
+                              className="whitespace-nowrap"
+                              disabled
+                            >
+                              Expired
+                            </Button>
+                          )
+                        )}
+                      </div>
                     </div>
                   );
                 })}
