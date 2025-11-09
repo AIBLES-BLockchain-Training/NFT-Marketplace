@@ -262,10 +262,14 @@ async function main() {
       // Step 3: Assign LISTING_ROLE to signer
       // () => assignUserRoles(permissionsDirect, roles.LISTING_ROLE, [signer.address]),
 
+      // Step 4: Assign OFFER_ROLE to signer
+      () => assignUserRoles(permissionsDirect, roles.OFFER_ROLE, [signer.address]),
+
       // Verify setup
       () => checkCurrencySupport(permissionsDirect, ethers.ZeroAddress),
       () => checkRole(permissionsDirect, roles.LISTING_ROLE, signer.address),
-      () => checkRole(permissionsDirect, roles.NFT_ROLE, "0x01b398945A4a005c074e472aeefC04081485fBBC"),
+      () => checkRole(permissionsDirect, roles.OFFER_ROLE, signer.address),
+      () => checkRole(permissionsDirect, roles.NFT_ROLE, "0x7408EEF6F74E89ACE60729CC29CC4274ee81aaE2"),
     ];
 
     // Execute all functions

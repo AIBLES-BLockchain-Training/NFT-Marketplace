@@ -11,15 +11,17 @@ type OfferParams = {
 };
 
 class Offer {
-  private contract: any;
+  public contract: any;
 
   constructor(contract: any) {
     this.contract = contract;
   }
 
   static async init(address: string, signer: Signer) {
-    console.log(`Initializing Offer contract at address: ${address}`);
-    const contract = await ethers.getContractAt('NFTOffer', address, signer);
+    console.log(`Initializing Offer via Router at address: ${address}`);
+    // IMPORTANT: Use Router address with NFTOffer interface (delegatecall pattern)
+    const offerInterface = (await ethers.getContractFactory('NFTOffer')).interface;
+    const contract = new ethers.Contract(address, offerInterface, signer);
     return new Offer(contract);
   }
 
@@ -50,9 +52,15 @@ class Offer {
       await tx.wait();
       console.log('Offer created successfully:', tx);
       return tx;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating offer:', error);
-      throw new Error('Failed to create offer');
+      if (error.data) {
+        console.error('Error data:', error.data);
+      }
+      if (error.reason) {
+        console.error('Revert reason:', error.reason);
+      }
+      throw error;
     }
   }
 
@@ -120,22 +128,47 @@ class Offer {
 }
 
 async function main() {
-  const [signer, offerMaker, assetOwner] = await ethers.getSigners();
-  
-  // Replace with your deployed Offer contract address
-  const OFFER_CONTRACT_ADDRESS = '0x...'; // TODO: Add your deployed offer contract address here
-  
-  const offer = await Offer.init(OFFER_CONTRACT_ADDRESS, signer);
-  // const offer = await Offer.init(OFFER_CONTRACT_ADDRESS, offerMaker);
-  // const offer = await Offer.init(OFFER_CONTRACT_ADDRESS, assetOwner);
+  const [signer] = await ethers.getSigners();
+
+  // IMPORTANT: Use ROUTER address, not Offer contract address!
+  // Events are emitted from Router when using delegatecall
+  const ROUTER_ADDRESS = process.env['ADDRESS_ROUTER'] || '0x...'; // TODO: Set ADDRESS_ROUTER env variable
+
+  if (!ROUTER_ADDRESS || ROUTER_ADDRESS === '0x...') {
+    throw new Error('Please set ADDRESS_ROUTER environment variable');
+  }
+
+  const offer = await Offer.init(ROUTER_ADDRESS, signer);
 
   console.log('Signer address:', await signer.getAddress());
-  console.log('Offer maker address:', await offerMaker.getAddress());
-  console.log('Asset owner address:', await assetOwner.getAddress());
 
-  // Get total offers
-  const totalOffers = await offer.getTotalOffers();
-  console.log('Total Offers:', totalOffers.toString());
+  // Initialize Offer if needed
+  try {
+    console.log('\nInitializing Offer contract...');
+    const PERMISSIONS_ADDRESS = process.env['ADDRESS_PERMISSIONS'] || '';
+    const FEE_RECIPIENT = await signer.getAddress();
+    const FEE_PERCENTAGE = 250; // 2.5%
+
+    if (!PERMISSIONS_ADDRESS) {
+      console.error('ADDRESS_PERMISSIONS environment variable is required!');
+      process.exit(1);
+    }
+
+    const tx = await offer.contract.initializeOffer(PERMISSIONS_ADDRESS, FEE_RECIPIENT, FEE_PERCENTAGE);
+    console.log('Transaction hash:', tx.hash);
+    await tx.wait();
+    console.log('Offer initialized successfully!');
+  } catch (error: any) {
+    if (error.message.includes('Already initialized')) {
+      console.log('Offer already initialized');
+    } else {
+      console.log('Initialization error:', error.message);
+    }
+  }
+
+  // Get total offers (skip if causing issues)
+  // const totalOffers = await offer.getTotalOffers();
+  // console.log('\nTotal Offers:', totalOffers.toString());
 
   // Example: Get offer details
   // const offerDetails = await offer.getOfferDetails(1);
@@ -150,15 +183,32 @@ async function main() {
   // console.log('All Valid Offers:', allValidOffers);
 
   // Example: Create a new offer
-  // const offerParams: OfferParams = {
-  //   assetContract: '0x600883Fb6F707e0EE8efD2B88AD488f54f62cA32', // NFT contract address
-  //   tokenId: 1,
-  //   quantity: 1, // Must be 1 for ERC721
-  //   currency: '0xF43843516260b1b78BF77148F149cabD9240425A', // ERC20 token address
-  //   totalPrice: ethers.parseEther('0.5'),
-  //   expirationTimestamp: Math.floor(Date.now() / 1000) + 86400, // 24 hours from now
-  // };
-  // await offer.makeOffer(offerParams);
+  const MOCK_TOKEN_ADDRESS = process.env['ADDRESS_MOCK_TOKEN'] || '';
+  const NFT_CONTRACT_ADDRESS = process.env['ADDRESS_NFT'] || '';
+
+  if (!MOCK_TOKEN_ADDRESS || !NFT_CONTRACT_ADDRESS) {
+    console.error('ADDRESS_MOCK_TOKEN and ADDRESS_NFT environment variables are required!');
+    process.exit(1);
+  }
+
+  const offerAmount = ethers.parseEther('10'); // 10 MTK
+
+  // Approve MockToken for Router
+  console.log('\nApproving MockToken for Router...');
+  const mockToken = await ethers.getContractAt('MockToken', MOCK_TOKEN_ADDRESS);
+  const approveTx = await mockToken['approve'](ROUTER_ADDRESS, offerAmount);
+  await approveTx.wait();
+  console.log('MockToken approved');
+
+  const offerParams: OfferParams = {
+    assetContract: NFT_CONTRACT_ADDRESS,
+    tokenId: 1,
+    quantity: 1, // Must be 1 for ERC721
+    currency: MOCK_TOKEN_ADDRESS,
+    totalPrice: offerAmount,
+    expirationTimestamp: Math.floor(Date.now() / 1000) + 86400, // 24 hours from now
+  };
+  await offer.makeOffer(offerParams);
 
   // Example: Cancel an offer
   // await offer.cancelOffer(1);

@@ -3,6 +3,7 @@ import { EvmBatchProcessor } from '@subsquid/evm-processor'
 import { TypeormDatabase } from '@subsquid/typeorm-store'
 import {
   Listing,
+  Offer,
   Subject,
   Collection,
   NFT,
@@ -27,6 +28,10 @@ import {
   processListingEvents,
   getListingTopics
 } from './processors/listing.processor'
+import {
+  processOfferEvents,
+  getOfferTopics
+} from './processors/offer.processor'
 
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
@@ -89,6 +94,15 @@ class CombinedIndexer {
         topic0: listingTopics
       })
     }
+
+    // Add logs for offer contract
+    const offerTopics = getOfferTopics()
+    if (offerTopics.length > 0) {
+      this.processor.addLog({
+        address: [CONTRACT_ADDRESSES.router.toLowerCase()],
+        topic0: offerTopics
+      })
+    }
   }
 
   async run() {
@@ -100,6 +114,7 @@ class CombinedIndexer {
 
     await this.processor.run(db, async (ctx) => {
       const listingMap: Map<string, Listing> = new Map()
+      const offerMap: Map<string, Offer> = new Map()
       const subjectMap: Map<string, Subject> = new Map()
       const collectionMap: Map<string, Collection> = new Map()
       const nftMap: Map<string, NFT> = new Map()
@@ -118,6 +133,7 @@ class CombinedIndexer {
 
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
+      const offerLogs: any[] = []
 
       for (let block of ctx.blocks) {
         for (let log of block.logs) {
@@ -126,7 +142,9 @@ class CombinedIndexer {
           if (logAddress === CONTRACT_ADDRESSES.permissions.toLowerCase()) {
             permissionsLogs.push({ ...log, block })
           } else if (logAddress === CONTRACT_ADDRESSES.router.toLowerCase()) {
+            // Router emits both Listing and Offer events
             listingLogs.push({ ...log, block })
+            offerLogs.push({ ...log, block })
           }
         }
       }
@@ -168,6 +186,22 @@ class CombinedIndexer {
         )
       }
 
+      // Process offer events
+      if (offerLogs.length > 0) {
+        console.log(`Processing ${offerLogs.length} offer events`)
+        await processOfferEvents(
+          offerLogs,
+          ctx,
+          CONTRACT_ADDRESSES.router.toLowerCase(),
+          offerMap,
+          subjectMap,
+          collectionMap,
+          nftMap,
+          currencyMap,
+          purchaseHistories
+        )
+      }
+
       console.log('Saving entities to database...')
       await ctx.store.save(Array.from(subjectMap.values()))
       await ctx.store.save(Array.from(roleMap.values()))
@@ -186,6 +220,7 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(tokenOwnershipMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
+      await ctx.store.save(Array.from(offerMap.values()))
 
       const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
       const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
@@ -215,6 +250,7 @@ class CombinedIndexer {
       await ctx.store.save(nftRoleRequests)
       await ctx.store.save(feeWithdrawals)
 
+      console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length + offerLogs.length} events processed`)
       console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
       console.log(`Role requests: ${roleRequests.length}, NFT role requests: ${nftRoleRequests.length}`)
       console.log(`Fee withdrawals: ${feeWithdrawals.length}`)

@@ -8,6 +8,37 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./IPermissions.sol";
 
 contract NFTOffer is ReentrancyGuard {
+    // ============= STORAGE STRUCTS =============
+    struct CoreStorage {
+        uint256 offerIdCounter;
+        address feeRecipient;
+        uint256 feePercentage;
+        IPermission permissions;
+        bool initialized;
+    }
+
+    struct OfferData {
+        mapping(uint256 => Offer) offers;
+    }
+
+    struct OfferStorage {
+        CoreStorage coreStorage;
+        OfferData offerData;
+    }
+
+    // ============= UNSTRUCTURED STORAGE SLOT =============
+    uint256 private constant OFFER_STORAGE_SLOT = uint256(keccak256("eip1967.offer.storage")) - 1;
+
+    function _offerStorage() internal pure returns (OfferStorage storage s) {
+        uint256 slot = OFFER_STORAGE_SLOT;
+        assembly {
+            s.slot := slot
+        }
+    }
+
+    // ============= CONSTANTS & ENUMS =============
+    uint256 private constant BASIS_POINTS = 10000;
+
     // Use functions instead of constants to work with delegatecall
     function MANAGEMENT_ROLE() public pure returns (bytes32) {
         return keccak256("MANAGEMENT_ROLE");
@@ -55,17 +86,7 @@ contract NFTOffer is ReentrancyGuard {
         Status status;
     }
 
-    // Storage
-    mapping(uint256 => Offer) private _offers;
-    uint256 private _offerIdCounter;
-
-    address public feeRecipient;
-    uint256 public feePercentage;
-    uint256 private constant BASIS_POINTS = 10000;
-
-    IPermission public permissions;
-
-    // Errors
+    // ============= ERRORS =============
     error ZeroQuantity();
     error ZeroPrice();
     error InvalidExpirationTimestamp();
@@ -88,7 +109,7 @@ contract NFTOffer is ReentrancyGuard {
     error CurrencyNotSupported();
     error ZeroAddress();
 
-    // Events
+    // ============= EVENTS =============
     event OfferCreated(
         uint256 indexed offerId,
         address indexed offeror,
@@ -113,26 +134,48 @@ contract NFTOffer is ReentrancyGuard {
         uint256 totalPrice
     );
 
+    // ============= CONSTRUCTOR (for standalone deployment) =============
     constructor(address _feeRecipient, uint256 _feePercentage, address _permissions) {
         if (_feeRecipient == address(0)) revert ZeroAddress();
         if (_permissions == address(0)) revert ZeroAddress();
         require(_feePercentage <= 1000, "Fee too high");
 
-        feeRecipient = _feeRecipient;
-        feePercentage = _feePercentage;
-        permissions = IPermission(_permissions);
+        // Note: Constructor storage won't be used when called via Router (delegatecall)
+        // This is only for standalone deployment
+        OfferStorage storage s = _offerStorage();
+        s.coreStorage.feeRecipient = _feeRecipient;
+        s.coreStorage.feePercentage = _feePercentage;
+        s.coreStorage.permissions = IPermission(_permissions);
+        s.coreStorage.initialized = true;
     }
 
+    // ============= INITIALIZATION (for Router pattern) =============
+    function initializeOffer(address _permissions, address _feeRecipient, uint256 _feePercentage) external {
+        OfferStorage storage s = _offerStorage();
+        require(!s.coreStorage.initialized, "Already initialized");
+        if (_feeRecipient == address(0)) revert ZeroAddress();
+        if (_permissions == address(0)) revert ZeroAddress();
+        require(_feePercentage <= 1000, "Fee too high");
+
+        s.coreStorage.permissions = IPermission(_permissions);
+        s.coreStorage.feeRecipient = _feeRecipient;
+        s.coreStorage.feePercentage = _feePercentage;
+        s.coreStorage.initialized = true;
+    }
+
+    // ============= MODIFIERS =============
     modifier onlyOfferRole() {
-        if (!permissions.hasRole(OFFER_ROLE(), msg.sender)) revert CallerDoesNotHaveOfferRole();
+        OfferStorage storage s = _offerStorage();
+        if (!s.coreStorage.permissions.hasRole(OFFER_ROLE(), msg.sender)) revert CallerDoesNotHaveOfferRole();
         _;
     }
 
+    // ============= MAIN FUNCTIONS =============
     function makeOffer(OfferParams memory params) external nonReentrant onlyOfferRole returns (uint256 offerId) {
-        if (!permissions.hasRole(NFT_ROLE(), params.assetContract)) revert NFTNotWhitelisted();
+        OfferStorage storage s = _offerStorage();
 
-        if (!permissions.supportedCurrencies(params.currency)) revert CurrencyNotSupported();
-
+        if (!s.coreStorage.permissions.hasRole(NFT_ROLE(), params.assetContract)) revert NFTNotWhitelisted();
+        if (!s.coreStorage.permissions.supportedCurrencies(params.currency)) revert CurrencyNotSupported();
         if (params.quantity == 0) revert ZeroQuantity();
         if (params.totalPrice == 0) revert ZeroPrice();
         if (params.expirationTimestamp <= block.timestamp) revert InvalidExpirationTimestamp();
@@ -143,7 +186,6 @@ contract NFTOffer is ReentrancyGuard {
                 tokenType = TokenType.ERC721;
                 if (params.quantity != 1) revert QuantityMustBeOne();
             } else {
-                // Check if it's ERC1155
                 bool isERC1155 = IERC1155(params.assetContract).supportsInterface(type(IERC1155).interfaceId);
                 if (!isERC1155) revert AssetMustBeERC721OrERC1155();
                 tokenType = TokenType.ERC1155;
@@ -156,10 +198,10 @@ contract NFTOffer is ReentrancyGuard {
         if (currency.balanceOf(msg.sender) < params.totalPrice) revert InsufficientCurrencyBalance();
         if (currency.allowance(msg.sender, address(this)) < params.totalPrice) revert InsufficientCurrencyAllowance();
 
-        _offerIdCounter++;
-        offerId = _offerIdCounter;
+        s.coreStorage.offerIdCounter++;
+        offerId = s.coreStorage.offerIdCounter;
 
-        _offers[offerId] = Offer({
+        s.offerData.offers[offerId] = Offer({
             offerId: offerId,
             offeror: msg.sender,
             assetContract: params.assetContract,
@@ -187,7 +229,8 @@ contract NFTOffer is ReentrancyGuard {
     }
 
     function cancelOffer(uint256 offerId) external nonReentrant {
-        Offer storage offer = _offers[offerId];
+        OfferStorage storage s = _offerStorage();
+        Offer storage offer = s.offerData.offers[offerId];
 
         if (offer.offerId != offerId) revert OfferDoesNotExist();
         if (offer.offeror != msg.sender) revert NotOfferor();
@@ -199,7 +242,8 @@ contract NFTOffer is ReentrancyGuard {
     }
 
     function acceptOffer(uint256 offerId) external nonReentrant {
-        Offer storage offer = _offers[offerId];
+        OfferStorage storage s = _offerStorage();
+        Offer storage offer = s.offerData.offers[offerId];
 
         if (offer.offerId != offerId) revert OfferDoesNotExist();
         if (offer.status != Status.ACTIVE) revert OfferNotActive();
@@ -224,11 +268,11 @@ contract NFTOffer is ReentrancyGuard {
             nft.safeTransferFrom(msg.sender, offer.offeror, offer.tokenId, offer.quantity, "");
         }
 
-        uint256 platformFee = (offer.totalPrice * feePercentage) / BASIS_POINTS;
+        uint256 platformFee = (offer.totalPrice * s.coreStorage.feePercentage) / BASIS_POINTS;
         uint256 sellerAmount = offer.totalPrice - platformFee;
 
         if (platformFee > 0) {
-            currency.transferFrom(offer.offeror, feeRecipient, platformFee);
+            currency.transferFrom(offer.offeror, s.coreStorage.feeRecipient, platformFee);
         }
         currency.transferFrom(offer.offeror, msg.sender, sellerAmount);
 
@@ -246,38 +290,41 @@ contract NFTOffer is ReentrancyGuard {
         );
     }
 
+    // ============= VIEW FUNCTIONS =============
     function totalOffers() external view returns (uint256) {
-        return _offerIdCounter;
+        return _offerStorage().coreStorage.offerIdCounter;
     }
 
     function getOffer(uint256 offerId) external view returns (Offer memory offer) {
-        if (offerId == 0 || offerId > _offerIdCounter) revert OfferIdOutOfRange();
-        return _offers[offerId];
+        OfferStorage storage s = _offerStorage();
+        if (offerId == 0 || offerId > s.coreStorage.offerIdCounter) revert OfferIdOutOfRange();
+        return s.offerData.offers[offerId];
     }
 
     function getAllOffers(uint256 startId, uint256 endId) external view returns (Offer[] memory offers) {
+        OfferStorage storage s = _offerStorage();
         if (startId > endId) revert InvalidRange();
-        if (endId > _offerIdCounter) revert OfferIdOutOfRange();
+        if (endId > s.coreStorage.offerIdCounter) revert OfferIdOutOfRange();
 
         uint256 length = endId - startId + 1;
         offers = new Offer[](length);
 
         for (uint256 i = 0; i < length; i++) {
-            offers[i] = _offers[startId + i];
+            offers[i] = s.offerData.offers[startId + i];
         }
 
         return offers;
     }
 
     function getAllValidOffers(uint256 startId, uint256 endId) external view returns (Offer[] memory offers) {
+        OfferStorage storage s = _offerStorage();
         if (startId > endId) revert InvalidRange();
-        if (endId > _offerIdCounter) revert OfferIdOutOfRange();
+        if (endId > s.coreStorage.offerIdCounter) revert OfferIdOutOfRange();
 
-        // First, count valid offers
         uint256 validCount = 0;
         for (uint256 i = startId; i <= endId; i++) {
-            Offer memory offer = _offers[i];
-            if (isOfferValid(offer)) {
+            Offer memory offer = s.offerData.offers[i];
+            if (_isOfferValid(offer)) {
                 validCount++;
             }
         }
@@ -286,8 +333,8 @@ contract NFTOffer is ReentrancyGuard {
 
         uint256 currentIndex = 0;
         for (uint256 i = startId; i <= endId; i++) {
-            Offer memory offer = _offers[i];
-            if (isOfferValid(offer)) {
+            Offer memory offer = s.offerData.offers[i];
+            if (_isOfferValid(offer)) {
                 offers[currentIndex] = offer;
                 currentIndex++;
             }
@@ -296,7 +343,7 @@ contract NFTOffer is ReentrancyGuard {
         return offers;
     }
 
-    function isOfferValid(Offer memory offer) internal view returns (bool) {
+    function _isOfferValid(Offer memory offer) internal view returns (bool) {
         if (offer.status != Status.ACTIVE || offer.expirationTimestamp < block.timestamp) {
             return false;
         }
@@ -306,18 +353,30 @@ contract NFTOffer is ReentrancyGuard {
             currency.allowance(offer.offeror, address(this)) >= offer.totalPrice);
     }
 
-    // Admin functions
-    function setFeeRecipient(address _feeRecipient) external {
-        if (!permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
+    function permissions() external view returns (address) {
+        return address(_offerStorage().coreStorage.permissions);
+    }
 
+    function feeRecipient() external view returns (address) {
+        return _offerStorage().coreStorage.feeRecipient;
+    }
+
+    function feePercentage() external view returns (uint256) {
+        return _offerStorage().coreStorage.feePercentage;
+    }
+
+    // ============= ADMIN FUNCTIONS =============
+    function setFeeRecipient(address _feeRecipient) external {
+        OfferStorage storage s = _offerStorage();
+        if (!s.coreStorage.permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
         if (_feeRecipient == address(0)) revert ZeroAddress();
-        feeRecipient = _feeRecipient;
+        s.coreStorage.feeRecipient = _feeRecipient;
     }
 
     function setFeePercentage(uint256 _feePercentage) external {
-        if (!permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
+        OfferStorage storage s = _offerStorage();
+        if (!s.coreStorage.permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
         require(_feePercentage <= 1000, "Fee too high");
-        feePercentage = _feePercentage;
+        s.coreStorage.feePercentage = _feePercentage;
     }
 }
-
