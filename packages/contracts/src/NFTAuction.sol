@@ -6,13 +6,25 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "./IPermissions.sol";
+import "./library/ReentrancyGuard.sol";
 
-contract NFTAuction is IERC721Receiver, ERC1155Holder {
+error InValidRouterAddress();
+error InValidFeeReceiverAddress();
+error OnlyCallableViaRouter();
+error OnlyFeeReceiver();
+error FeeReceiverNotSet();
+error ETHWithdrawalFailed();
+error FeeWithdrawalFailed();
+error NoFeesToWithdraw();
+
+contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     // ============= STORAGE STRUCTS =============
     struct CoreStorage {
         uint256 totalAuctions;
         IPermission permissionsContract;
         bool initialized;
+        uint256 decimal;
+        uint256 minTimeAuction;
     }
 
     struct AuctionData {
@@ -20,10 +32,19 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         mapping(uint256 => mapping(address => uint256)) bids; // map check bid amount in a auction
     }
 
+    struct FeeData {
+        mapping(address => uint256) currencyFees;
+        mapping(address => uint256) accumulatedFees;
+    }
+
     struct AuctionStorage {
         CoreStorage coreStorage;
         AuctionData auctionData;
+        FeeData feeData;
+        address router;
+        address feeReceiver;
     }
+
 
     // ============= UNSTRUCTURED STORAGE SLOT =============
     uint256 private constant AUCTION_STORAGE_SLOT = uint256(keccak256("eip1967.auction.storage")) - 1;
@@ -48,8 +69,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     function NFT_ROLE() public pure returns (bytes32) {
         return keccak256("NFT_ROLE");
     }
-
-    uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
     enum AuctionStatus {
         CREATED, // Created: when auction is created
@@ -98,8 +117,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         uint256 _endTime;
     }
 
-    uint256 public constant MIN_TIME_AUCTION = 1 hours; // 1 hour
-
     // ============= EVENTS =============
     event AuctionCreated(
         uint256 indexed auctionId,
@@ -125,13 +142,27 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
     event AuctionTokenCollected(uint256 indexed auctionId, address indexed winner, uint256 tokenId);
     event NFTReceived(address operator, address from, uint256 tokenId, bytes data);
     event UpdatePermissionsContract(address oldPermissionsContract, address newPermissionsContract);
+    event RouterSet(address indexed router);
+    event FeeReceiverUpdated(address indexed oldReceiver, address indexed newReceiver);
+    event FeeWithdrawn(address indexed feeReceiver, address indexed currency, uint256 amount);
 
     // ============= INITIALIZATION =============
-    function initializeAuction(address _permissionsContract) external {
+    function initializeAuction(address _permissionsContract, address _router, address _feeReceiver) external {
         AuctionStorage storage s = _auctionStorage();
         require(!s.coreStorage.initialized, "Auction: Already initialized");
+        if (_router == address(0)) revert InValidRouterAddress();
+        if (_feeReceiver == address(0)) revert InValidFeeReceiverAddress();
+
+        s.coreStorage.totalAuctions = 0;
+        s.coreStorage.decimal = 10000; // set decimal
+        s.coreStorage.minTimeAuction = 15 minutes; // set min time auction 15 minutes
         s.coreStorage.permissionsContract = IPermission(_permissionsContract);
+        s.router = _router;
+        s.feeReceiver = _feeReceiver;
         s.coreStorage.initialized = true;
+
+        emit RouterSet(_router);
+        emit FeeReceiverUpdated(address(0), _feeReceiver);
     }
 
     // ============= GET STORAGE =============
@@ -141,6 +172,18 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
 
     function totalAuctions() external view returns (uint256) {
         return _auctionStorage().coreStorage.totalAuctions;
+    }
+
+    function getMinTimeAuction() external view returns (uint256) {
+        return _auctionStorage().coreStorage.minTimeAuction;
+    }
+
+    function getCurrencyFee(address _currency) external view returns (uint256) {
+        return _auctionStorage().feeData.currencyFees[_currency];
+    }
+
+    function getAccumulatedFee(address _currency) external view returns (uint256) {
+        return _auctionStorage().feeData.accumulatedFees[_currency];
     }
 
     // ============= PERMISSION FUNCTIONS =============
@@ -202,6 +245,18 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         _;
     }
 
+    modifier onlyRouter() {
+        AuctionStorage storage s = _auctionStorage();
+        if (s.router != address(0) && address(this) != s.router) revert OnlyCallableViaRouter();
+        _;
+    }
+
+    modifier onlyFeeReceiver() {
+        AuctionStorage storage s = _auctionStorage();
+        if (msg.sender != s.feeReceiver) revert OnlyFeeReceiver();
+        _;
+    }
+
     // ============= ADMIN FUNCTIONS =============
     function setPermissionsContract(address _permissionsContract) external {
         _checkManagementPermission();
@@ -211,6 +266,48 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         emit UpdatePermissionsContract(oldPermissionsContract, _permissionsContract);
     }
 
+    function setFeeReceiver(address _feeReceiver) external {
+        _checkManagementPermission();
+        if (_feeReceiver == address(0)) revert InValidFeeReceiverAddress();
+        AuctionStorage storage s = _auctionStorage();
+        address oldReceiver = s.feeReceiver;
+        s.feeReceiver = _feeReceiver;
+        emit FeeReceiverUpdated(oldReceiver, _feeReceiver);
+    }
+
+    function setCurrencyFee(address _currency, uint256 _fee) external {
+        _checkManagementPermission();
+        AuctionStorage storage s = _auctionStorage();
+        s.feeData.currencyFees[_currency] = _fee;
+    }
+
+    function setRouter(address _router) external {
+        _checkManagementPermission();
+        if (_router == address(0)) revert InValidRouterAddress();
+        AuctionStorage storage s = _auctionStorage();
+        s.router = _router;
+        emit RouterSet(_router);
+    }
+
+    function setMinTimeAuction(uint256 _minTimeAuction) external {
+        _checkManagementPermission();
+        AuctionStorage storage s = _auctionStorage();
+        s.coreStorage.minTimeAuction = _minTimeAuction;
+    }
+
+    function getPermissionsContract() external view returns (address) {
+        return address(_auctionStorage().coreStorage.permissionsContract);
+    }
+
+    function getRouter() external view returns (address) {
+        return _auctionStorage().router;
+    }
+
+    function getFeeReceiver() external view returns (address) {
+        return _auctionStorage().feeReceiver;
+    }
+
+    // ============= MAIN FUNCTIONS =============
     function onERC721Received(
         address operator,
         address from,
@@ -234,10 +331,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         }
     }
 
-    function getPermissionsContract() external view returns (address) {
-        return address(_auctionStorage().coreStorage.permissionsContract);
-    }
-
     function createAuction(
         AuctionParams memory _auctionParams
     )
@@ -256,7 +349,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         );
         require(_auctionParams._timeBufferInSeconds > 0, "Time buffer should be greater than 0");
         require(_auctionParams._stepAmount > 0, "Step amount should be greater than 0"); // decimal and max step amount, 10000 == 100%
-        require(_auctionParams._startTime + MIN_TIME_AUCTION <= _auctionParams._endTime, "Auction time is too short");
+        require(_auctionParams._startTime + _auctionStorage().coreStorage.minTimeAuction <= _auctionParams._endTime, "Auction time is too short");
 
         TokenType types = IERC165(_auctionParams._assetContract).supportsInterface(type(IERC721).interfaceId)
             ? TokenType.ERC721
@@ -369,9 +462,13 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
 
         auction.isPayoutCollected = true;
 
-        // Transfer payout to auction creator
+        // calculate fee amount
+        uint256 feeAmount = (auction.highestBid * s.feeData.currencyFees[auction.currency]) / s.coreStorage.decimal;
+        s.feeData.accumulatedFees[auction.currency] += feeAmount;
+
+        // transfer payout to seller
         IERC20 currency = IERC20(auction.currency);
-        require(currency.transfer(auction.auctionCreator, auction.highestBid), "Payout transfer failed");
+        require(currency.transfer(auction.auctionCreator, auction.highestBid - feeAmount), "Payout transfer failed");
 
         emit AuctionPayoutCollected(_auctionId, msg.sender, auction.highestBid);
         emit AuctionFinalized(_auctionId, auction.highestBidder, auction.highestBid, auction.currency);
@@ -557,13 +654,12 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
         if (s.auctionData.auctions[_auctionId].highestBidder == address(0)) {
             requiredAmount =
                 s.auctionData.auctions[_auctionId].startPrice +
-                ((s.auctionData.auctions[_auctionId].startPrice * s.auctionData.auctions[_auctionId].stepAmount) /
-                    BPS); // nếu chưa có người đặt giá thì đặt giá bằng start price
+                ((s.auctionData.auctions[_auctionId].startPrice * s.auctionData.auctions[_auctionId].stepAmount) / s.coreStorage.decimal); // nếu chưa có người đặt giá thì đặt giá bằng start price
         } else {
             // Nếu đã có người đặt giá, tính bước giá tối thiểu ex step = 500 is 5%
             requiredAmount =
                 currentHighestBid +
-                ((currentHighestBid * s.auctionData.auctions[_auctionId].stepAmount) / BPS); // step amount in %
+                ((currentHighestBid * s.auctionData.auctions[_auctionId].stepAmount) / s.coreStorage.decimal); // step amount in %
         }
 
         return _bidAmount >= requiredAmount;
@@ -576,5 +672,24 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
             size := extcodesize(account)
         }
         return size > 0;
+    }
+
+    function withdrawFees(address currency) external onlyFeeReceiver nonReentrant {
+        AuctionStorage storage s = _auctionStorage();
+        if (s.feeReceiver == address(0)) revert FeeReceiverNotSet();
+
+        uint256 amount = s.feeData.accumulatedFees[currency];
+        if (amount == 0) revert NoFeesToWithdraw();
+
+        s.feeData.accumulatedFees[currency] = 0;
+
+        if (currency == address(0)) {
+            (bool success, ) = s.feeReceiver.call{value: amount}("");
+            if (!success) revert ETHWithdrawalFailed();
+        } else {
+            if (!IERC20(currency).transfer(s.feeReceiver, amount)) revert FeeWithdrawalFailed();
+        }
+
+        emit FeeWithdrawn(s.feeReceiver, currency, amount);
     }
 }

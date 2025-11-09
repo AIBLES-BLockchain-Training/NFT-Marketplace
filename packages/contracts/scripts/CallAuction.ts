@@ -159,34 +159,172 @@ class Auction {
     }
   }
 
+  async setMinTimeAuction(minTimeInSeconds: number) {
+    console.log(`Setting minimum time for auction to ${minTimeInSeconds} seconds...`);
+    try {
+      const tx = await this.contract.setMinTimeAuction(minTimeInSeconds);
+      await tx.wait();
+      console.log('Minimum time for auction set successfully: ' , tx.hash);
+    } catch (error) {
+      console.error('Error setting minimum time for auction:', error);
+      throw new Error('Failed to set minimum time for auction');
+    }
+  }
+
+  async setCurrencyFee(currency: string, fee: number) {
+    console.log(`Setting currency fee for ${currency} to ${fee}...`);
+    try {
+      const tx = await this.contract.setCurrencyFee(currency, fee);
+      await tx.wait();
+      console.log('Currency fee set successfully: ' , tx.hash);
+    } catch (error) {
+      console.error('Error setting currency fee:', error);
+      throw new Error('Failed to set currency fee');
+    }
+  }
+
   async getMin() {
-    return await this.contract.MIN_TIME_AUCTION();
+    return await this.contract.getMinTimeAuction();
   }
 
   async getAddressPermissionsContract() {
     return await this.contract.getPermissionsContract();
+  }
+
+  async getAddressFeeReceiver() {
+    return await this.contract.getFeeReceiver();
+  }
+  
+  async getAddressRouter() {
+    return await this.contract.getRouter();
+  }
+
+  async getCurrencyFee(currency: string) {
+    return await this.contract.getCurrencyFee(currency);
+  }
+
+  async getAccumulatedFee(currency: string) {
+    return await this.contract.getAccumulatedFee(currency);
+  }
+
+  async withdrawFees(currency: string) {
+    console.log(`Withdrawing accumulated fee for currency: ${currency}`);
+    try {
+      const tx = await this.contract.withdrawFees(currency);
+      await tx.wait();
+      console.log('Withdraw fee successful:', tx.hash);
+    } catch (error) {
+      console.error('Error withdrawing fee:', error);
+      throw new Error('Failed to withdraw fee');
+    }
+  }
+}
+
+class Currency {
+  private contract: any;
+  
+  constructor(contract: any) {
+    this.contract = contract;
+  }
+
+  static async init(address: any, signer: Signer) {
+    console.log(`Initializing Currency contract at address: ${address}`);
+    const contract = await ethers.getContractAt('MockToken', address, signer);
+    return new Currency(contract);
+  }
+
+  async mint(to: string, amount: bigint) {
+    console.log(`Minting ${amount} tokens to address: ${to}`);
+    try {
+      const tx = await this.contract.mint(to, amount);
+      await tx.wait();
+      console.log('Mint successful:', tx.hash);
+    } catch (error) {
+      console.error('Error minting tokens:', error);
+      throw new Error('Failed to mint tokens');
+    }
+  }
+
+  async approve(spender: string, amount: bigint) {
+    console.log(`Approving ${amount} tokens for spender: ${spender}`);
+    try {
+      const tx = await this.contract.approve(spender, amount);
+      await tx.wait();
+      console.log('Approval successful:', tx.hash);
+    } catch (error) {
+      console.error('Error approving tokens:', error);
+      throw new Error('Failed to approve tokens');
+    }
+  }
+}
+
+class NFT {
+  private contract: any;
+  
+  constructor(contract: any) {
+    this.contract = contract;
+  }
+
+  static async init(address: any, signer: Signer) {
+    console.log(`Initializing NFT contract at address: ${address}`);
+    const contract = await ethers.getContractAt('MockERC721', address, signer);
+    return new NFT(contract);
+  }
+  async setApprovalForAll(operator: string, approved: boolean) {
+    console.log(`Setting approval for all: operator=${operator}, approved=${approved}`);
+    try {
+      const tx = await this.contract.setApprovalForAll(operator, approved);
+      await tx.wait();
+      console.log('Set approval for all successful:', tx.hash);
+    } catch (error) {
+      console.error('Error setting approval for all:', error);
+      throw new Error('Failed to set approval for all');
+    }
   }
 }
 
 async function main() {
   const [signer] = await ethers.getSigners();
   const AUCTION_ADDRESS = process.env['ADDRESS_AUCTION'];
-  const auction = await Auction.init(AUCTION_ADDRESS, signer);
-  // const auction = await Auction.init('0xD571fAD055557D1F1954454E1511973FF919bfe4', bidder);
+  const CURRENCY_ADDRESS = process.env['CURRENCY_ADDRESS'];
+  const NFT_ADDRESS = process.env['NFT_ADDRESS'];
 
+  if (!AUCTION_ADDRESS) {
+    throw new Error('AUCTION_ADDRESS is not defined in environment variables');
+  }
+
+  if (!CURRENCY_ADDRESS) {
+    throw new Error('CURRENCY_ADDRESS is not defined in environment variables');
+  }
+
+  if (!NFT_ADDRESS) {
+    throw new Error('NFT_ADDRESS is not defined in environment variables');
+  }
+
+  const auction = await Auction.init(AUCTION_ADDRESS, signer);
+  const currency = await Currency.init(CURRENCY_ADDRESS, signer);
+  const nft =  await NFT.init(NFT_ADDRESS, signer);
+  // const auction = await Auction.init('0xD571fAD055557D1F1954454E1511973FF919bfe4', bidder);
   console.log('Signer address: ', await signer.getAddress());
   // console.log('Bidder address: ', await bidder.getAddress());
-
+  
+  console.log('-----------------------------------');
   console.log('Permissions Contract Address:', await auction.getAddressPermissionsContract());
+  console.log('Router Address:', await auction.getAddressRouter());
+  console.log('Fee Receiver Address:', await auction.getAddressFeeReceiver());
+  console.log('Minimum Time for Auction (seconds):', (await auction.getMin()).toString());
+  console.log('Fee Of Currency:', (await auction.getCurrencyFee(CURRENCY_ADDRESS)).toString());
+  console.log('Currency Accumulated Fee:', (await auction.getAccumulatedFee(CURRENCY_ADDRESS)).toString());
 
+  console.log('-----------------------------------');
   const totalAuctions = await auction.getTotalAuction();
   console.log('Total Auctions:', totalAuctions.toString());
+  // await currency.mint(await signer.getAddress(), ethers.parseEther('10'));
+  // await auction.setCurrencyFee(CURRENCY_ADDRESS, 200); // Set fee 2%
+  // await auction.setMinTimeAuction(300); // Set min time auction to 5 minutes
 
-
-  console.log(await auction.getMin());
-
-  // const auctionDetails = await auction.getAuctionDetails(3);
-  // console.log('Auction Details:', auctionDetails);
+  const auctionDetails = await auction.getAuctionDetails(1);
+  console.log('Auction Details:', auctionDetails);
 
   // const allAuctions = await auction.getAllAuctions('0', '10');
   // console.log('All Auctions:', allAuctions);
@@ -200,37 +338,39 @@ async function main() {
   // const auctionExpired = await auction.getAuctionExpired('0');
   // console.log('Auction Expired:', auctionExpired);
 
-  const cancelAuction = await auction.cancelAuction(1);
-  console.log('Cancel Auction:', cancelAuction);
+  // const cancelAuction = await auction.cancelAuction(1);
+  // console.log('Cancel Auction:', cancelAuction);
 
   // const auctionParams: AuctionParams = {
-  //   _assetContract: '0xB0eB2df330E749516Ec7CA058359D2B05c452094',
+  //   _assetContract: NFT_ADDRESS,
   //   _tokenId: 84,
   //   _quantity: 1,
-  //   _currency: '0xB6321DCd16BC2e2C8Da380a0772707068c5Ad390',
+  //   _currency: CURRENCY_ADDRESS,
   //   _startPrice: ethers.parseEther('0.01'),
   //   _ceilingPrice: ethers.parseEther('0.02'),
   //   _stepAmount: 50,
   //   _timeBufferInSeconds: 300,
   //   _startTime: Math.floor(Date.now() / 1000),
-  //   _endTime: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+  //   _endTime: Math.floor(Date.now() / 1000) + 300, // 5p
   // };
-
+  // // await nft.setApprovalForAll(AUCTION_ADDRESS, true);
   // await auction.createAuction(auctionParams);
 
-  // const isNewWinningBid = await auction.checkIsNewWinningBid(0, ethers.parseEther('0.015'));
+  // const isNewWinningBid = await auction.checkIsNewWinningBid(1, ethers.parseEther('0.015'));
   // console.log('Is New Winning Bid:', isNewWinningBid);
-
-  // const bidAuction = await auction.bidInAuction(0, ethers.parseEther('0.015'), signer, false);
+  // await currency.approve(AUCTION_ADDRESS, ethers.parseEther('10'));
+  // const bidAuction = await auction.bidInAuction(1, ethers.parseEther('0.015'), signer, false);
   // console.log('Bid Auction:', bidAuction);
 
-  // auction.checkAuctionExpired(3);
+  // auction.checkAuctionExpired(1);
 
-  // const payout = await auction.collectAuctionPayout(0);
+  // const payout = await auction.collectAuctionPayout(1);
   // console.log('Auction Payout:', payout);
 
-  // const collectToken = await auction.collectAuctionToken(0);
+  // const collectToken = await auction.collectAuctionToken(1);
   // console.log('Auction Collect Token:', collectToken);
+
+  // await auction.withdrawFees(CURRENCY_ADDRESS);
 }
 
 main().catch(console.error);
