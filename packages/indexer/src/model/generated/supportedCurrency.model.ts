@@ -1,6 +1,7 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, FloatColumn as FloatColumn_, BigIntColumn as BigIntColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
 import {CurrencyApproval} from "./currencyApproval.model"
 import {PurchaseHistory} from "./purchaseHistory.model"
+import {FeeWithdrawal} from "./feeWithdrawal.model"
 
 @Entity_()
 export class SupportedCurrency {
@@ -36,4 +37,7 @@ export class SupportedCurrency {
 
     @OneToMany_(() => PurchaseHistory, e => e.currency)
     purchaseHistory!: PurchaseHistory[]
+
+    @OneToMany_(() => FeeWithdrawal, e => e.currency)
+    feeWithdrawals!: FeeWithdrawal[]
 }

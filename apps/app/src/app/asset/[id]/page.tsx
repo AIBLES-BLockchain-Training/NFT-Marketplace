@@ -1,0 +1,404 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { MainLayout } from '../../../components/layout/MainLayout';
+import { NFTDetail } from '../../../components/nft/NFTDetail';
+import { BuyModal } from '../../../components/marketplace/BuyModal';
+import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
+import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
+import { UpdateListingModal } from '../../../components/marketplace/UpdateListingModal';
+import { AddCurrencyModal } from '../../../components/marketplace/AddCurrencyModal';
+import { ApproveBuyerModal } from '../../../components/marketplace/ApproveBuyerModal';
+import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
+import { Spinner } from '../../../components/common/Spinner';
+import { graphqlClient } from '../../../lib/graphql/client';
+import { GET_NFT_BY_ID_QUERY } from '../../../lib/graphql/queries';
+import { useWallet } from '../../../hooks/useWallet';
+import { useTransactionModal } from '../../../hooks/useTransactionModal';
+import { NFT, Listing } from '../../../types';
+import {
+  encodeCancelListing,
+  encodeApproveBuyerForListing,
+} from '../../../lib/web3/encoding';
+import toast from 'react-hot-toast';
+
+export default function AssetPage() {
+  const params = useParams();
+  const id = params?.id as string;
+  const { address } = useWallet();
+  const { sendTransaction, showResultModal, result, closeModal } = useTransactionModal();
+
+  const [nft, setNft] = useState<NFT | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [showCreateListing, setShowCreateListing] = useState(false);
+  const [showCreateAuction, setShowCreateAuction] = useState(false);
+  const [showUpdateListing, setShowUpdateListing] = useState(false);
+  const [showAddCurrency, setShowAddCurrency] = useState(false);
+  const [showApproveBuyer, setShowApproveBuyer] = useState(false);
+  const [isNFTOwner, setIsNFTOwner] = useState(false);
+
+  const loadNFT = useCallback(async () => {
+    if (!id) return;
+
+    setIsLoading(true);
+    try {
+      // Try to load from GraphQL indexer first
+      const result = await graphqlClient.query(GET_NFT_BY_ID_QUERY, { id });
+
+      if (result?.nft) {
+        console.log('NFT loaded from indexer:', {
+          id: result.nft.id,
+          name: result.nft.name,
+          traits: result.nft.traits,
+          traitsCount: result.nft.traits?.length || 0
+        });
+        setNft(result.nft);
+        return;
+      }
+
+      // NFT not found in indexer - parse ID and fetch from Moralis
+      // ID format: "0xcontract-tokenId"
+      const [contractAddress, tokenId] = id.split('-');
+
+      if (!contractAddress || !tokenId) {
+        throw new Error('Invalid NFT ID format');
+      }
+
+      // Fetch from Moralis API
+      const response = await fetch(`/api/nft/${contractAddress}/${tokenId}`);
+
+      if (!response.ok) {
+        throw new Error('NFT not found');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const moralisNFT = data.data;
+        const metadata = moralisNFT.normalized_metadata || {};
+
+        // Transform to app NFT format (without listings/auctions/offers)
+        const nft: NFT = {
+          id: id,
+          tokenId: tokenId,
+          name: metadata.name || moralisNFT.name || `Token #${tokenId}`,
+          imageUrl: metadata.image,
+          description: metadata.description,
+          metadataUri: moralisNFT.token_uri,
+          collection: {
+            id: contractAddress.toLowerCase(),
+            name: moralisNFT.name || 'Unknown Collection',
+            symbol: moralisNFT.symbol || 'NFT',
+            collectionType: moralisNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            creator: {
+              id: contractAddress.toLowerCase(),
+              name: moralisNFT.name || 'Unknown',
+              subjectType: 'CONTRACT' as const,
+              createdAt: new Date().toISOString(),
+            },
+            totalSupply: '0',
+            createdAt: new Date().toISOString(),
+          },
+          traits: metadata.attributes?.map((attr: { trait_type: string; value: string | number }, idx: number) => ({
+            id: `${id}-${idx}`,
+            traitType: attr.trait_type,
+            value: String(attr.value),
+            displayType: undefined,
+          })) || [],
+          // No listings/auctions/offers for NFTs not in indexer
+          listings: [],
+          auctions: [],
+          offers: [],
+        };
+
+        setNft(nft);
+      } else {
+        throw new Error('NFT not found');
+      }
+    } catch (error) {
+      console.error('Failed to load NFT:', error);
+      setNft(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadNFT();
+  }, [loadNFT]);
+
+  // Verify ownership
+  useEffect(() => {
+    const verifyOwnership = async () => {
+      if (!address || !nft || !id) {
+        setIsNFTOwner(false);
+        return;
+      }
+
+      // First check if nft.owners exists (from indexer)
+      if (nft.owners && nft.owners.length > 0) {
+        const ownerCheck = nft.owners.some(
+          (o) => o.ownerAddress.toLowerCase() === address.toLowerCase()
+        );
+        setIsNFTOwner(ownerCheck);
+        return;
+      }
+
+      // Otherwise verify via API (for NFTs not in indexer)
+      try {
+        const parts = id.split('-');
+        if (parts.length < 2) {
+          setIsNFTOwner(false);
+          return;
+        }
+
+        const contractAddress = parts[0];
+        const tokenId = parts.slice(1).join('-');
+
+        const response = await fetch('/api/nft/verify-owner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            contractAddress,
+            tokenId,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setIsNFTOwner(data.data.isOwner);
+        } else {
+          setIsNFTOwner(false);
+        }
+      } catch (error) {
+        console.error('Failed to verify ownership:', error);
+        setIsNFTOwner(false);
+      }
+    };
+
+    verifyOwnership();
+  }, [address, nft, id]);
+
+  const handleBuyClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowBuyModal(true);
+  };
+
+  const handleUpdateListingClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowUpdateListing(true);
+  };
+
+  const handleAddCurrencyClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowAddCurrency(true);
+  };
+
+  const handleApproveBuyerClick = (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedListing(listing);
+    setShowApproveBuyer(true);
+  };
+
+  const handleApproveBuyerSubmit = async (buyerAddress: string, approve: boolean) => {
+    if (!address || !selectedListing) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+
+    try {
+      const tx = encodeApproveBuyerForListing(
+        BigInt(selectedListing.id),
+        buyerAddress,
+        approve
+      );
+      const receipt = await sendTransaction(
+        tx,
+        approve ? 'Buyer approved successfully!' : 'Buyer approval revoked!'
+      );
+
+      if (receipt?.status === 1) {
+        // Reload NFT data to get updated buyer approvals
+        loadNFT();
+      }
+    } catch (error: unknown) {
+      console.error('Approve buyer error:', error);
+      throw error;
+    }
+  };
+
+  const handleCancelListing = async (listing: Listing) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+
+    try {
+      const tx = encodeCancelListing(BigInt(listing.id)); // listing.id is the listingId from contract
+      const receipt = await sendTransaction(tx, 'Listing cancelled successfully!');
+
+      if (receipt?.status === 1) {
+        loadNFT();
+      }
+    } catch (error: unknown) {
+      console.error('Cancel listing error:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="w-full px-4 py-20 flex justify-center">
+          <Spinner size="lg" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!nft) {
+    return (
+      <MainLayout>
+        <div className="w-full px-4 py-20 text-center">
+          <h2 className="text-2xl font-bold text-white mb-4">NFT Not Found</h2>
+          <p className="text-gray-400">The NFT you&apos;re looking for doesn&apos;t exist.</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const activeListings = nft.listings?.filter((l) => l.status === 'CREATED') || [];
+
+  return (
+    <MainLayout>
+      <div className="w-full px-4 py-8">
+        <NFTDetail
+          nft={nft}
+          isOwner={isNFTOwner}
+          activeListings={activeListings}
+          onBuy={handleBuyClick}
+          onCreateListing={() => setShowCreateListing(true)}
+          onCreateAuction={() => setShowCreateAuction(true)}
+          onCancelListing={handleCancelListing}
+          onUpdateListing={handleUpdateListingClick}
+          onAddCurrency={handleAddCurrencyClick}
+          onApproveBuyer={handleApproveBuyerClick}
+        />
+
+        {/* Create Listing Modal */}
+        {isNFTOwner && (
+          <CreateListingModal
+            nft={nft}
+            isOpen={showCreateListing}
+            onClose={() => setShowCreateListing(false)}
+            onSuccess={() => {
+              loadNFT();
+            }}
+          />
+        )}
+
+        {/* Create Auction Modal */}
+        {isNFTOwner && (
+          <CreateAuctionModal
+            nft={nft}
+            isOpen={showCreateAuction}
+            onClose={() => setShowCreateAuction(false)}
+            onSuccess={() => {
+              loadNFT();
+            }}
+          />
+        )}
+
+        {/* Update Listing Modal */}
+        {selectedListing && (
+          <UpdateListingModal
+            nft={nft}
+            listing={selectedListing}
+            isOpen={showUpdateListing}
+            onClose={() => {
+              setShowUpdateListing(false);
+              setSelectedListing(null);
+            }}
+            onSuccess={() => {
+              loadNFT();
+              setShowUpdateListing(false);
+              setSelectedListing(null);
+            }}
+          />
+        )}
+
+        {/* Add Currency Modal */}
+        {selectedListing && (
+          <AddCurrencyModal
+            listingId={selectedListing.id}
+            isOpen={showAddCurrency}
+            onClose={() => {
+              setShowAddCurrency(false);
+              setSelectedListing(null);
+            }}
+            onSuccess={() => {
+              loadNFT();
+              setShowAddCurrency(false);
+              setSelectedListing(null);
+            }}
+          />
+        )}
+
+        {/* Approve Buyer Modal */}
+        {selectedListing && (
+          <ApproveBuyerModal
+            isOpen={showApproveBuyer}
+            onClose={() => {
+              setShowApproveBuyer(false);
+              setSelectedListing(null);
+            }}
+            listing={selectedListing}
+            onApprove={handleApproveBuyerSubmit}
+          />
+        )}
+      </div>
+
+      {/* Modals */}
+      {selectedListing && showBuyModal && (
+        <BuyModal
+          isOpen={showBuyModal}
+          onClose={() => {
+            setShowBuyModal(false);
+            setSelectedListing(null);
+          }}
+          listing={selectedListing}
+          onSuccess={loadNFT}
+        />
+      )}
+
+      {result && (
+        <TransactionResultModal
+          isOpen={showResultModal}
+          onClose={closeModal}
+          success={result.success}
+          message={result.message}
+          txHash={result.txHash}
+        />
+      )}
+    </MainLayout>
+  );
+}

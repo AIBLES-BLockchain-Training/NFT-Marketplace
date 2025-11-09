@@ -5,7 +5,10 @@ import {
   RoleAssignment,
   PermissionEvent,
   PermissionEventType,
-  SupportedCurrency
+  SupportedCurrency,
+  RoleRequest,
+  NFTRoleRequest,
+  RequestStatus
 } from '../model'
 import * as PermissionsABI from '../abi/Permissions'
 
@@ -34,7 +37,9 @@ export async function processPermissionsEvents(
   subjectMap: Map<string, Subject>,
   currencyMap: Map<string, SupportedCurrency>,
   roleAssignments: RoleAssignment[],
-  permissionEvents: PermissionEvent[]
+  permissionEvents: PermissionEvent[],
+  roleRequests: RoleRequest[] = [],
+  nftRoleRequests: NFTRoleRequest[] = []
 ) {
   async function getOrCreateRole(roleHash: string, roleName?: string): Promise<Role> {
     if (roleMap.has(roleHash)) {
@@ -55,7 +60,7 @@ export async function processPermissionsEvents(
     return role
   }
 
-  async function getOrCreateSubject(address: string): Promise<Subject> {
+  async function getOrCreateSubject(address: string, type?: SubjectType): Promise<Subject> {
     const subjectId = address.toLowerCase()
 
     if (subjectMap.has(subjectId)) {
@@ -64,7 +69,7 @@ export async function processPermissionsEvents(
 
     let subject = await ctx.store.get(Subject, subjectId)
     if (!subject) {
-      const subjectType = SubjectType.USER
+      const subjectType = type || SubjectType.USER
 
       subject = new Subject({
         id: subjectId,
@@ -208,10 +213,13 @@ export async function processPermissionsEvents(
 
         let currency = await getOrCreateCurrency(currencyAddress)
         if (!currency) {
+          const currencyId = currencyAddress.toLowerCase()
+          const isNativeToken = currencyId === '0x0000000000000000000000000000000000000000'
+
           currency = new SupportedCurrency({
-            id: currencyAddress.toLowerCase(),
-            name: `Currency_${currencyAddress.slice(0, 6)}`,
-            symbol: 'UNKNOWN',
+            id: currencyId,
+            name: isNativeToken ? 'ETH' : `Currency_${currencyAddress.slice(0, 6)}`,
+            symbol: isNativeToken ? 'ETH' : 'UNKNOWN',
             decimals: 18,
             isActive: true,
             feePercentage: 0,
@@ -238,15 +246,12 @@ export async function processPermissionsEvents(
 
       else if (topic0 === PermissionsABI.events.RoleAdminChanged?.topic) {
         const { role: roleHash, previousAdminRole, newAdminRole } = PermissionsABI.events.RoleAdminChanged.decode(log)
-
-        console.log(`Role admin changed for role ${roleHash}: ${previousAdminRole} -> ${newAdminRole} at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.RoleRegistered?.topic) {
         const { role: roleHash, adminRole } = PermissionsABI.events.RoleRegistered.decode(log)
 
         await getOrCreateRole(roleHash)
-        console.log(`Role registered: ${roleHash} with admin role ${adminRole} at block ${blockNumber}`)
       }
 
       else if (topic0 === PermissionsABI.events.UserRoleAssigned?.topic) {
@@ -279,6 +284,22 @@ export async function processPermissionsEvents(
             transactionHash: transactionHash
           })
           roleAssignments.push(assignment)
+        }
+
+        // Update corresponding RoleRequest to APPROVED
+        const pendingRequests = await ctx.store.find(RoleRequest, {
+          where: {
+            requester: { id: subject.id },
+            role: { id: role.id },
+            status: RequestStatus.PENDING
+          }
+        })
+
+        for (const request of pendingRequests) {
+          request.status = RequestStatus.APPROVED
+          request.processedAt = timestamp
+          request.processedBy = contractAddress
+          roleRequests.push(request)
         }
       }
 
@@ -314,25 +335,132 @@ export async function processPermissionsEvents(
       else if (topic0 === PermissionsABI.events.NFTRoleAssigned?.topic) {
         const { nft } = PermissionsABI.events.NFTRoleAssigned.decode(log)
 
-        console.log(`NFT role assigned to ${nft} at block ${blockNumber}`)
+        // NFT_ROLE hash = keccak256('NFT_ROLE')
+        const NFT_ROLE_HASH = '0x8736816fdbcc15f6cc3f6dcf60e42b0ef33eb02281d312c807a38b4ad09190c0'
+
+        const role = await getOrCreateRole(NFT_ROLE_HASH, 'NFT_ROLE')
+        const nftSubject = await getOrCreateSubject(nft, SubjectType.CONTRACT)
+
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === nftSubject.id && a.role.id === role.id && !(a as any)._toRemove
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: nftSubject.id },
+              role: { id: role.id }
+            }
+          })
+        }
+
+        if (!existingAssignment) {
+          const assignmentId = `${nftSubject.id}-${role.id}-${transactionHash}-${log.logIndex}`
+          const assignment = new RoleAssignment({
+            id: assignmentId,
+            subject: nftSubject,
+            role: role,
+            assignedAt: timestamp,
+            assignedBy: contractAddress,
+            transactionHash: transactionHash
+          })
+          roleAssignments.push(assignment)
+        } else {
+          existingAssignment.assignedAt = timestamp
+          existingAssignment.assignedBy = contractAddress
+          existingAssignment.transactionHash = transactionHash
+          roleAssignments.push(existingAssignment)
+        }
+
+        // Update corresponding NFTRoleRequest to APPROVED
+        const pendingRequests = await ctx.store.find(NFTRoleRequest, {
+          where: {
+            nftAddress: nft.toLowerCase(),
+            status: RequestStatus.PENDING
+          }
+        })
+
+        for (const request of pendingRequests) {
+          request.status = RequestStatus.APPROVED
+          request.processedAt = timestamp
+          request.processedBy = contractAddress
+          nftRoleRequests.push(request)
+        }
+
       }
 
       else if (topic0 === PermissionsABI.events.NFTRoleRevoked?.topic) {
         const { nft } = PermissionsABI.events.NFTRoleRevoked.decode(log)
 
-        console.log(`NFT role revoked from ${nft} at block ${blockNumber}`)
+        // NFT_ROLE hash = keccak256('NFT_ROLE')
+        const NFT_ROLE_HASH = '0x8736816fdbcc15f6cc3f6dcf60e42b0ef33eb02281d312c807a38b4ad09190c0'
+
+        const role = await getOrCreateRole(NFT_ROLE_HASH, 'NFT_ROLE')
+        const nftSubject = await getOrCreateSubject(nft, SubjectType.CONTRACT)
+
+        let existingAssignment = roleAssignments.find(a =>
+          a.subject.id === nftSubject.id && a.role.id === role.id
+        )
+
+        if (!existingAssignment) {
+          existingAssignment = await ctx.store.findOne(RoleAssignment, {
+            where: {
+              subject: { id: nftSubject.id },
+              role: { id: role.id }
+            }
+          })
+        }
+
+        if (existingAssignment) {
+          const index = roleAssignments.indexOf(existingAssignment)
+          if (index > -1) {
+            roleAssignments.splice(index, 1)
+          }
+          (existingAssignment as any)._toRemove = true
+          roleAssignments.push(existingAssignment)
+        }
       }
 
       else if (topic0 === PermissionsABI.events.RoleRequested?.topic) {
         const { requester, role: roleHash } = PermissionsABI.events.RoleRequested.decode(log)
 
-        console.log(`Role ${roleHash} requested by ${requester} at block ${blockNumber}`)
+        const role = await getOrCreateRole(roleHash)
+        const requesterSubject = await getOrCreateSubject(requester)
+
+        const requestId = `${transactionHash}-${log.logIndex}`
+        const roleRequest = new RoleRequest({
+          id: requestId,
+          requester: requesterSubject,
+          role: role,
+          status: RequestStatus.PENDING,
+          requestedAt: timestamp,
+          processedAt: undefined,
+          processedBy: undefined,
+          transactionHash: transactionHash,
+          blockNumber: blockNumber
+        })
+        roleRequests.push(roleRequest)
       }
 
       else if (topic0 === PermissionsABI.events.NFTRoleRequested?.topic) {
         const { nft, tokenId, requester } = PermissionsABI.events.NFTRoleRequested.decode(log)
 
-        console.log(`NFT role requested for ${nft}#${tokenId} by ${requester} at block ${blockNumber}`)
+        const requesterSubject = await getOrCreateSubject(requester)
+
+        const requestId = `${transactionHash}-${log.logIndex}`
+        const nftRoleRequest = new NFTRoleRequest({
+          id: requestId,
+          requester: requesterSubject,
+          nftAddress: nft.toLowerCase(),
+          tokenId: tokenId,
+          status: RequestStatus.PENDING,
+          requestedAt: timestamp,
+          processedAt: undefined,
+          processedBy: undefined,
+          transactionHash: transactionHash,
+          blockNumber: blockNumber
+        })
+        nftRoleRequests.push(nftRoleRequest)
       }
 
     } catch (error) {
