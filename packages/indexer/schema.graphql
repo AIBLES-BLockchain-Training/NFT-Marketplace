@@ -40,9 +40,6 @@ type Collection @entity {
   id: ID! @index # contract address
   name: String!
   symbol: String! @index
-  description: String
-  logoUrl: String
-  bannerUrl: String
   collectionType: CollectionType!
   creator: Subject! @index
   totalSupply: BigInt!
@@ -113,6 +110,19 @@ type SupportedCurrency @entity {
   # Relations
   currencyApprovals: [CurrencyApproval]! @derivedFrom(field: "currency")
   purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "currency")
+  feeWithdrawals: [FeeWithdrawal]! @derivedFrom(field: "currency")
+}
+
+# FeeWithdrawal entity - Lich su rut fee tu cac extensions
+type FeeWithdrawal @entity {
+  id: ID! @index # txHash-logIndex
+  extensionType: ExtensionType! @index
+  currency: SupportedCurrency! @index
+  amount: BigInt! @index
+  receiver: String! @index # MultiSig wallet address
+  timestamp: DateTime! @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
 }
 
 # CurrencyApproval entity - cac currencies duoc approve cho listings
@@ -258,6 +268,33 @@ type PermissionEvent @entity {
   blockNumber: Int! @index
 }
 
+# Role request from users
+type RoleRequest @entity {
+  id: ID! @index
+  requester: Subject! @index
+  role: Role! @index
+  status: RequestStatus! @index
+  requestedAt: DateTime! @index
+  processedAt: DateTime
+  processedBy: String @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
+# NFT role request from users
+type NFTRoleRequest @entity {
+  id: ID! @index
+  requester: Subject! @index
+  nftAddress: String! @index
+  tokenId: BigInt! @index
+  status: RequestStatus! @index
+  requestedAt: DateTime! @index
+  processedAt: DateTime
+  processedBy: String @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
 # Enums
 enum SubjectType {
   USER
@@ -295,6 +332,12 @@ enum TradeType {
   LISTING
 }
 
+enum ExtensionType {
+  LISTING
+  AUCTION
+  OFFER
+}
+
 enum RouterEventType {
   ROUTE_CREATED
   ROUTE_EXECUTED
@@ -305,5 +348,11 @@ enum PermissionEventType {
   ROLE_GRANTED
   ROLE_REVOKED
   ADMIN_ROLE_CHANGED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 

@@ -21,15 +21,6 @@ export class Collection {
     @StringColumn_({nullable: false})
     symbol!: string
 
-    @StringColumn_({nullable: true})
-    description!: string | undefined | null
-
-    @StringColumn_({nullable: true})
-    logoUrl!: string | undefined | null
-
-    @StringColumn_({nullable: true})
-    bannerUrl!: string | undefined | null
-
     @Column_("varchar", {length: 7, nullable: false})
     collectionType!: CollectionType
 

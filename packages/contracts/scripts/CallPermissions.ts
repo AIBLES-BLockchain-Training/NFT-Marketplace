@@ -254,13 +254,13 @@ async function main() {
     // Define functions to call - All use permissionsDirect instead of routerAsPermissions
     const functionsToCall = [
       // Step 1: Add ETH as supported currency
-      () => addCurrencies(permissionsDirect, [ethers.ZeroAddress]),
+      // () => addCurrencies(permissionsDirect, [ethers.ZeroAddress]),
 
       // Step 2: Assign NFT role to test NFT
-      () => assignNFTRoles(permissionsDirect, ["0x7408EEF6F74E89ACE60729CC29CC4274ee81aaE2"]),
+      // () => assignNFTRoles(permissionsDirect, ["0x01b398945A4a005c074e472aeefC04081485fBBC"]),
 
       // Step 3: Assign LISTING_ROLE to signer
-      () => assignUserRoles(permissionsDirect, roles.LISTING_ROLE, [signer.address]),
+      // () => assignUserRoles(permissionsDirect, roles.LISTING_ROLE, [signer.address]),
 
       // Step 4: Assign OFFER_ROLE to signer
       () => assignUserRoles(permissionsDirect, roles.OFFER_ROLE, [signer.address]),

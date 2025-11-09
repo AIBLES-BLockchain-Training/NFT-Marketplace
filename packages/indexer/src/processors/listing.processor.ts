@@ -10,9 +10,19 @@ import {
   TradeType,
   CurrencyApproval,
   BuyerApproval,
-  SupportedCurrency
+  SupportedCurrency,
+  TokenOwnership,
+  Trait,
+  FeeWithdrawal,
+  ExtensionType
 } from '../model'
 import * as ListingABI from '../abi/Listing'
+import {
+  fetchCollectionMetadataUnified,
+  fetchNFTMetadataUnified,
+  detectContractType
+} from '../utils/metadata'
+import { ethers } from 'ethers'
 
 export function getListingTopics(): string[] {
   return [
@@ -29,6 +39,11 @@ export function getListingTopics(): string[] {
   ].filter(Boolean) as string[]
 }
 
+// Initialize provider for fetching on-chain metadata
+const provider = new ethers.JsonRpcProvider(
+  process.env.RPC_ENDPOINT || process.env.RPC_SEPOLIA_HTTP
+)
+
 export async function processListingEvents(
   logs: any[],
   ctx: any,
@@ -40,9 +55,11 @@ export async function processListingEvents(
   currencyMap: Map<string, SupportedCurrency>,
   purchaseHistories: PurchaseHistory[],
   currencyApprovals: CurrencyApproval[],
-  buyerApprovals: BuyerApproval[]
+  buyerApprovals: BuyerApproval[],
+  tokenOwnershipMap: Map<string, TokenOwnership>,
+  feeWithdrawals: FeeWithdrawal[]
 ) {
-  async function getOrCreateSubject(address: string): Promise<Subject> {
+  async function getOrCreateSubject(address: string, type?: SubjectType): Promise<Subject> {
     const subjectId = address.toLowerCase()
     if (subjectMap.has(subjectId)) {
       return subjectMap.get(subjectId)!
@@ -51,7 +68,7 @@ export async function processListingEvents(
     if (!subject) {
       subject = new Subject({
         id: subjectId,
-        subjectType: SubjectType.USER,
+        subjectType: type || SubjectType.USER,
         name: `${address.slice(0, 6)}...${address.slice(-4)}`,
         avatarUrl: undefined,
         backgroundUrl: undefined,
@@ -75,14 +92,16 @@ export async function processListingEvents(
     }
     let collection = await ctx.store.get(Collection, collectionId)
     if (!collection) {
+      const [metadata, contractType] = await Promise.all([
+        fetchCollectionMetadataUnified(contractAddress, provider),
+        detectContractType(contractAddress, provider)
+      ])
+
       collection = new Collection({
         id: collectionId,
-        name: `Collection ${contractAddress.slice(0, 6)}`,
-        symbol: 'NFT',
-        description: undefined,
-        logoUrl: undefined,
-        bannerUrl: undefined,
-        collectionType: CollectionType.ERC721,
+        name: metadata.name,
+        symbol: metadata.symbol,
+        collectionType: contractType === 'ERC721' ? CollectionType.ERC721 : CollectionType.ERC1155,
         creator: creator,
         totalSupply: BigInt(0),
         floorPrice: undefined,
@@ -103,14 +122,18 @@ export async function processListingEvents(
     }
     let nft = await ctx.store.get(NFT, nftId)
     if (!nft) {
-      const collection = await getOrCreateCollection(contractAddress, owner)
+      const contractSubject = await getOrCreateSubject(contractAddress, SubjectType.CONTRACT)
+      const collection = await getOrCreateCollection(contractAddress, contractSubject)
+
+      const metadata = await fetchNFTMetadataUnified(contractAddress, tokenId.toString(), provider)
+
       nft = new NFT({
         id: nftId,
         collection: collection,
         tokenId: tokenId,
-        name: `NFT #${tokenId}`,
-        imageUrl: undefined,
-        description: undefined,
+        name: metadata?.name || `${collection.name} #${tokenId}`,
+        imageUrl: metadata?.image,
+        description: metadata?.description,
         metadataUri: undefined,
         listings: [],
         purchaseHistory: [],
@@ -118,6 +141,24 @@ export async function processListingEvents(
         extensions: [],
         owners: []
       })
+
+      if (metadata?.attributes && Array.isArray(metadata.attributes)) {
+        const traits: Trait[] = []
+        for (const attr of metadata.attributes) {
+          if (attr.trait_type && attr.value !== undefined && attr.value !== null) {
+            const traitId = `${nftId}-${attr.trait_type}-${attr.value}`
+            const trait = new Trait({
+              id: traitId,
+              nft: nft,
+              traitType: String(attr.trait_type),
+              value: String(attr.value),
+              displayType: attr.display_type || undefined
+            })
+            traits.push(trait)
+          }
+        }
+        nft.traits = traits
+      }
     }
     nftMap.set(nftId, nft)
     return nft
@@ -150,12 +191,57 @@ export async function processListingEvents(
     if (listingMap.has(listingId)) {
       return listingMap.get(listingId)!
     }
-    const listing = await ctx.store.get(Listing, listingId)
+    const listing = await ctx.store.get(Listing, {
+      where: { id: listingId },
+      relations: { owner: true, nft: true }
+    })
     if (listing) {
       listingMap.set(listingId, listing)
       return listing
     }
     return null
+  }
+
+  async function getOrCreateTokenOwnership(nft: NFT, ownerAddress: string): Promise<TokenOwnership> {
+    const ownershipId = `${nft.id}-${ownerAddress.toLowerCase()}`
+
+    if (tokenOwnershipMap.has(ownershipId)) {
+      return tokenOwnershipMap.get(ownershipId)!
+    }
+
+    let ownership = await ctx.store.get(TokenOwnership, ownershipId)
+    if (!ownership) {
+      ownership = new TokenOwnership({
+        id: ownershipId,
+        nft: nft,
+        ownerAddress: ownerAddress.toLowerCase(),
+        balance: BigInt(0),
+        updatedAt: new Date()
+      })
+    }
+    tokenOwnershipMap.set(ownershipId, ownership)
+    return ownership
+  }
+
+  async function updateTokenOwnership(
+    nft: NFT,
+    fromAddress: string,
+    toAddress: string,
+    quantity: bigint,
+    timestamp: Date
+  ) {
+    const sellerOwnership = await getOrCreateTokenOwnership(nft, fromAddress)
+    sellerOwnership.balance = sellerOwnership.balance - quantity
+    sellerOwnership.updatedAt = timestamp
+
+    if (sellerOwnership.balance < BigInt(0)) {
+      console.warn(`Negative balance for ${fromAddress} on NFT ${nft.id}. Setting to 0.`)
+      sellerOwnership.balance = BigInt(0)
+    }
+
+    const buyerOwnership = await getOrCreateTokenOwnership(nft, toAddress)
+    buyerOwnership.balance = buyerOwnership.balance + quantity
+    buyerOwnership.updatedAt = timestamp
   }
 
   for (let log of logs) {
@@ -216,6 +302,9 @@ export async function processListingEvents(
           listing.isReserved = reserved
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
@@ -227,6 +316,9 @@ export async function processListingEvents(
           listing.status = ListingStatus.COMPLETED
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
@@ -238,6 +330,9 @@ export async function processListingEvents(
           listing.status = ListingStatus.CANCELED
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
@@ -284,22 +379,32 @@ export async function processListingEvents(
 
         if (listing) {
           const currencyEntity = await getOrCreateCurrency(currency)
+          const approvalId = `${listingIdStr}-${currencyEntity.id}`
 
-          const existingApproval = await ctx.store.findOne(CurrencyApproval, {
-            where: {
-              listing: { id: listingIdStr },
-              currency: { id: currencyEntity.id }
-            }
-          })
+          // Check in current batch first
+          let existingApproval = currencyApprovals.find(a => a.id === approvalId)
+
+          if (!existingApproval) {
+            // Check in database
+            existingApproval = await ctx.store.findOne(CurrencyApproval, {
+              where: {
+                listing: { id: listingIdStr },
+                currency: { id: currencyEntity.id }
+              }
+            })
+          }
 
           if (existingApproval) {
             existingApproval.pricePerToken = price
             existingApproval.updatedAt = timestamp
             existingApproval.transactionHash = transactionHash
-            currencyApprovals.push(existingApproval)
+            // Only push if not already in array
+            if (!currencyApprovals.includes(existingApproval)) {
+              currencyApprovals.push(existingApproval)
+            }
           } else {
             const approval = new CurrencyApproval({
-              id: `${listingIdStr}-${currencyEntity.id}`,
+              id: approvalId,
               listing: listing,
               currency: currencyEntity,
               pricePerToken: price,
@@ -317,6 +422,21 @@ export async function processListingEvents(
         const { admin, currency, amount } = ListingABI.events.FeeWithdrawn.decode(log)
 
         const currencyEntity = await getOrCreateCurrency(currency)
+
+        // Create FeeWithdrawal record
+        const feeWithdrawal = new FeeWithdrawal({
+          id: `${transactionHash}-${log.logIndex}`,
+          extensionType: ExtensionType.LISTING,
+          currency: currencyEntity,
+          amount: amount,
+          receiver: admin.toLowerCase(),
+          timestamp: timestamp,
+          transactionHash: transactionHash,
+          blockNumber: blockNumber
+        })
+        feeWithdrawals.push(feeWithdrawal)
+
+        // Update currency totalAmountFee (keep for backward compatibility)
         if (currencyEntity && currencyEntity.totalAmountFee >= amount) {
           currencyEntity.totalAmountFee = currencyEntity.totalAmountFee - amount
           currencyMap.set(currencyEntity.id, currencyEntity)
@@ -335,7 +455,6 @@ export async function processListingEvents(
 
       else if (topic0 === ListingABI.events.PermissionContractUpdated?.topic) {
         const { oldPermission, newPermission } = ListingABI.events.PermissionContractUpdated.decode(log)
-        console.log(`Permission contract updated from ${oldPermission} to ${newPermission} at block ${blockNumber}`)
       }
 
       else if (topic0 === ListingABI.events.NFTPurchased?.topic) {
@@ -354,7 +473,8 @@ export async function processListingEvents(
 
           if (approvalsInBatch.length === 0) {
             const approvalsFromDb = await ctx.store.find(CurrencyApproval, {
-              where: { listing: { id: listingIdStr } }
+              where: { listing: { id: listingIdStr } },
+              relations: { currency: true }
             })
             allApprovals = approvalsFromDb
           }
@@ -390,6 +510,14 @@ export async function processListingEvents(
           })
           purchaseHistories.push(purchaseHistory)
 
+          await updateTokenOwnership(
+            listing.nft,
+            listing.owner.id,
+            buyerSubject.id,
+            quantity,
+            timestamp
+          )
+
           if (listing.quantity >= quantity) {
             listing.quantity = listing.quantity - quantity
           } else {
@@ -401,6 +529,9 @@ export async function processListingEvents(
           if (listing.quantity === BigInt(0)) {
             listing.status = ListingStatus.COMPLETED
           }
+
+          // IMPORTANT: Add updated listing to map so it gets saved
+          listingMap.set(listingIdStr, listing)
         }
       }
 
