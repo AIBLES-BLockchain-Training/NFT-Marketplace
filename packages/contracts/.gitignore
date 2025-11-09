@@ -30,3 +30,7 @@ Thumbs.db
 
 # Deployment history
 deployments/
+
+# Mock/Test scripts (should not be committed)
+scripts/DeployMockToken.ts
+scripts/AddMockTokenCurrency.ts
