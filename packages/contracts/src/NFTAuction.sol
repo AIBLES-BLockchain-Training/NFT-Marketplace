@@ -51,8 +51,6 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder {
 
     uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
 
-    uint256 public constant BPS = 10000; // basis points (100% = 10000 bps)
-
     enum AuctionStatus {
         CREATED, // Created: when auction is created
         ACTIVE, // Active: when auction has bidder

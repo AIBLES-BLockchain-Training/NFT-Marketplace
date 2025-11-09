@@ -25,7 +25,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('\n📋 Deploy Configuration:');
+  console.log('\nDeploy Configuration:');
   console.log('- Deployer:', deployer.address);
   console.log('- Fee Recipient:', config.feeRecipient);
   console.log(' - Fee Percentage:', config.feePercentage, '(2.5%)');
@@ -66,7 +66,7 @@ async function main() {
     // Save to file
     const filename = `nft-offer-${network.name}-${Date.now()}.json`;
     fs.writeFileSync(path.join(deploymentsDir, filename), JSON.stringify(deploymentData, null, 2));
-    console.log('💾 Deployment data saved to:', filename);
+    console.log('Deployment data saved to:', filename);
 
     // Verify contract if on testnet/mainnet
     if (network.name !== 'hardhat' && network.name !== 'localhost') {
