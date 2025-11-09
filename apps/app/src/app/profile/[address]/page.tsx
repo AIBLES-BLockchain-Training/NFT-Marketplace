@@ -625,7 +625,8 @@ function CollectionsGrid({
     }
   }, [groupedNFTs]);
 
-  if (isLoading || loadingMetadata) {
+  // Only show loading spinner on initial load
+  if (isLoading && Object.keys(groupedNFTs).length === 0) {
     return (
       <div className="flex justify-center py-20">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />

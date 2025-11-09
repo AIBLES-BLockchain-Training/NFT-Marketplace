@@ -110,6 +110,19 @@ type SupportedCurrency @entity {
   # Relations
   currencyApprovals: [CurrencyApproval]! @derivedFrom(field: "currency")
   purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "currency")
+  feeWithdrawals: [FeeWithdrawal]! @derivedFrom(field: "currency")
+}
+
+# FeeWithdrawal entity - Lich su rut fee tu cac extensions
+type FeeWithdrawal @entity {
+  id: ID! @index # txHash-logIndex
+  extensionType: ExtensionType! @index
+  currency: SupportedCurrency! @index
+  amount: BigInt! @index
+  receiver: String! @index # MultiSig wallet address
+  timestamp: DateTime! @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
 }
 
 # CurrencyApproval entity - cac currencies duoc approve cho listings
@@ -317,6 +330,12 @@ enum OfferStatus {
 enum TradeType {
   AUCTION
   LISTING
+}
+
+enum ExtensionType {
+  LISTING
+  AUCTION
+  OFFER
 }
 
 enum RouterEventType {

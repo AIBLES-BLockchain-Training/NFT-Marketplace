@@ -15,7 +15,8 @@ import {
   BuyerApproval,
   TokenOwnership,
   RoleRequest,
-  NFTRoleRequest
+  NFTRoleRequest,
+  FeeWithdrawal
 } from './model'
 
 import {
@@ -113,6 +114,7 @@ class CombinedIndexer {
       const buyerApprovals: BuyerApproval[] = []
       const roleRequests: RoleRequest[] = []
       const nftRoleRequests: NFTRoleRequest[] = []
+      const feeWithdrawals: FeeWithdrawal[] = []
 
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
@@ -161,7 +163,8 @@ class CombinedIndexer {
           purchaseHistories,
           currencyApprovals,
           buyerApprovals,
-          tokenOwnershipMap
+          tokenOwnershipMap,
+          feeWithdrawals
         )
       }
 
@@ -187,13 +190,21 @@ class CombinedIndexer {
       const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
       const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
 
+      // Deduplicate role assignments by ID to avoid "ON CONFLICT" errors
+      const uniqueAssignmentsMap = new Map<string, any>()
+      for (const assignment of assignmentsToSave) {
+        uniqueAssignmentsMap.set(assignment.id, assignment)
+      }
+      const uniqueAssignments = Array.from(uniqueAssignmentsMap.values())
+
       if (assignmentsToRemove.length > 0) {
         console.log(`Removing ${assignmentsToRemove.length} role assignments`)
         await ctx.store.remove(assignmentsToRemove)
       }
 
-      if (assignmentsToSave.length > 0) {
-        await ctx.store.save(assignmentsToSave)
+      if (uniqueAssignments.length > 0) {
+        console.log(`Saving ${uniqueAssignments.length} unique role assignments (${assignmentsToSave.length - uniqueAssignments.length} duplicates removed)`)
+        await ctx.store.save(uniqueAssignments)
       }
 
       await ctx.store.save(permissionEvents)
@@ -202,9 +213,11 @@ class CombinedIndexer {
       await ctx.store.save(purchaseHistories)
       await ctx.store.save(roleRequests)
       await ctx.store.save(nftRoleRequests)
+      await ctx.store.save(feeWithdrawals)
 
       console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
       console.log(`Role requests: ${roleRequests.length}, NFT role requests: ${nftRoleRequests.length}`)
+      console.log(`Fee withdrawals: ${feeWithdrawals.length}`)
     })
   }
 }

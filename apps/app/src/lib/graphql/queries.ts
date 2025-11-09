@@ -1024,3 +1024,83 @@ export const GET_SUPPORTED_CURRENCIES_QUERY = `
     }
   }
 `;
+
+// ============= REVENUE QUERIES =============
+
+export const GET_FEE_WITHDRAWALS_QUERY = `
+  query GetFeeWithdrawals($limit: Int, $offset: Int, $extensionType: ExtensionType) {
+    feeWithdrawals(
+      limit: $limit
+      offset: $offset
+      where: { extensionType_eq: $extensionType }
+      orderBy: timestamp_DESC
+    ) {
+      id
+      extensionType
+      currency {
+        id
+        symbol
+        decimals
+      }
+      amount
+      receiver
+      timestamp
+      transactionHash
+      blockNumber
+    }
+  }
+`;
+
+export const GET_CURRENCY_FEE_STATS_QUERY = `
+  query GetCurrencyFeeStats {
+    supportedCurrencies(where: { isActive_eq: true }) {
+      id
+      symbol
+      decimals
+      feePercentage
+      totalAmountFee
+    }
+  }
+`;
+
+export const GET_PURCHASE_HISTORIES_FOR_FEES_QUERY = `
+  query GetPurchaseHistoriesForFees($limit: Int, $offset: Int) {
+    purchaseHistories(
+      limit: $limit
+      offset: $offset
+      orderBy: timestamp_DESC
+    ) {
+      id
+      totalPrice
+      tradeType
+      timestamp
+      currency {
+        id
+        symbol
+        decimals
+      }
+    }
+  }
+`;
+
+export const GET_REVENUE_STATS_QUERY = `
+  query GetRevenueStats {
+    supportedCurrenciesConnection {
+      totalCount
+      edges {
+        node {
+          id
+          symbol
+          decimals
+          totalAmountFee
+        }
+      }
+    }
+    feeWithdrawalsConnection {
+      totalCount
+    }
+    purchaseHistoriesConnection {
+      totalCount
+    }
+  }
+`;

@@ -16,6 +16,10 @@ import { AdminList } from '../../components/admin/AdminList';
 import { RoleAssignmentsList } from '../../components/admin/RoleAssignmentsList';
 import { WhitelistedNFTList } from '../../components/admin/WhitelistedNFTList';
 import { WhitelistedCurrenciesList } from '../../components/admin/WhitelistedCurrenciesList';
+import { RevenueStats } from '../../components/admin/revenue/RevenueStats';
+import { FeePoolsTable } from '../../components/admin/revenue/FeePoolsTable';
+import { WithdrawFeeForm } from '../../components/admin/revenue/WithdrawFeeForm';
+import { WithdrawalHistory } from '../../components/admin/revenue/WithdrawalHistory';
 import { Spinner } from '../../components/common/Spinner';
 import { graphqlClient } from '../../lib/graphql/client';
 import {
@@ -33,7 +37,7 @@ interface Activity {
 }
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'permissions' | 'settings' | 'data'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'permissions' | 'settings' | 'revenue' | 'data'>('overview');
   const [stats, setStats] = useState({
     totalCollections: 0,
     totalNFTs: 0,
@@ -155,8 +159,21 @@ export default function AdminDashboard() {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Settings & Revenue
+              Settings
               {activeTab === 'settings' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('revenue')}
+              className={`px-6 py-3 font-semibold transition-colors relative whitespace-nowrap ${
+                activeTab === 'revenue'
+                  ? 'text-primary-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Revenue & Fees
+              {activeTab === 'revenue' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400" />
               )}
             </button>
@@ -329,9 +346,22 @@ export default function AdminDashboard() {
             <div className="space-y-8">
               {/* Currency Management */}
               <CurrencyManagement />
+            </div>
+          )}
 
-              {/* Fee Management */}
-              <FeeManagement />
+          {activeTab === 'revenue' && (
+            <div className="space-y-8">
+              {/* Revenue Stats */}
+              <RevenueStats />
+
+              {/* Fee Pools Breakdown */}
+              <FeePoolsTable />
+
+              {/* Withdraw Fees Form */}
+              <WithdrawFeeForm />
+
+              {/* Withdrawal History */}
+              <WithdrawalHistory />
             </div>
           )}
 

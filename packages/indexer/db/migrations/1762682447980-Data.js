@@ -1,5 +1,5 @@
-module.exports = class Data1762569071744 {
-    name = 'Data1762569071744'
+module.exports = class Data1762682447980 {
+    name = 'Data1762682447980'
 
     async up(db) {
         await db.query(`CREATE TABLE "bid" ("id" character varying NOT NULL, "bidder_address" text NOT NULL, "bid_amount" numeric NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "auction_id" character varying, CONSTRAINT "PK_ed405dda320051aca2dcb1a50bb" PRIMARY KEY ("id"))`)
@@ -26,6 +26,14 @@ module.exports = class Data1762569071744 {
         await db.query(`CREATE INDEX "IDX_bbbfc0e1b7c744d845516f9c00" ON "purchase_history" ("block_number") `)
         await db.query(`CREATE INDEX "IDX_89c2cd63c77830504ef41a6a79" ON "purchase_history" ("auction_id") `)
         await db.query(`CREATE INDEX "IDX_ebeda06837f66178b17f934452" ON "purchase_history" ("listing_id") `)
+        await db.query(`CREATE TABLE "fee_withdrawal" ("id" character varying NOT NULL, "extension_type" character varying(7) NOT NULL, "amount" numeric NOT NULL, "receiver" text NOT NULL, "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, "transaction_hash" text NOT NULL, "block_number" integer NOT NULL, "currency_id" character varying, CONSTRAINT "PK_43250748c6d85298d1bde579ba1" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE INDEX "IDX_01bc5b3abf53c3a1f691cd8f4b" ON "fee_withdrawal" ("extension_type") `)
+        await db.query(`CREATE INDEX "IDX_d48ee1f918073f025725446a91" ON "fee_withdrawal" ("currency_id") `)
+        await db.query(`CREATE INDEX "IDX_78b9e42c33bfa34664791940cf" ON "fee_withdrawal" ("amount") `)
+        await db.query(`CREATE INDEX "IDX_f51c8a14d34bfaca237e602071" ON "fee_withdrawal" ("receiver") `)
+        await db.query(`CREATE INDEX "IDX_4f2f882457b981b0fa33b42227" ON "fee_withdrawal" ("timestamp") `)
+        await db.query(`CREATE INDEX "IDX_550af18532972c61d3a88a443a" ON "fee_withdrawal" ("transaction_hash") `)
+        await db.query(`CREATE INDEX "IDX_b214707e8fd9ae113a0b404b20" ON "fee_withdrawal" ("block_number") `)
         await db.query(`CREATE TABLE "supported_currency" ("id" character varying NOT NULL, "name" text NOT NULL, "symbol" text NOT NULL, "decimals" integer NOT NULL, "is_active" boolean NOT NULL, "fee_percentage" numeric NOT NULL, "total_amount_fee" numeric NOT NULL, CONSTRAINT "PK_2e485dd8c3b90bc8e9b9441e833" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_fe45391d246b0139bb1cc89b40" ON "supported_currency" ("symbol") `)
         await db.query(`CREATE INDEX "IDX_7dfe005d11d6df845050ebff1b" ON "supported_currency" ("is_active") `)
@@ -70,7 +78,7 @@ module.exports = class Data1762569071744 {
         await db.query(`CREATE INDEX "IDX_5a72eeac2be693e0e900b111cd" ON "collection_trait_stat" ("collection_id") `)
         await db.query(`CREATE INDEX "IDX_7af24a61216738fee5bc9841d6" ON "collection_trait_stat" ("trait_type") `)
         await db.query(`CREATE INDEX "IDX_daa277eb7b9576004cbb0c36aa" ON "collection_trait_stat" ("trait_value") `)
-        await db.query(`CREATE TABLE "collection" ("id" character varying NOT NULL, "name" text NOT NULL, "symbol" text NOT NULL, "description" text, "logo_url" text, "banner_url" text, "collection_type" character varying(7) NOT NULL, "total_supply" numeric NOT NULL, "floor_price" numeric, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "creator_id" character varying, CONSTRAINT "PK_ad3f485bbc99d875491f44d7c85" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "collection" ("id" character varying NOT NULL, "name" text NOT NULL, "symbol" text NOT NULL, "collection_type" character varying(7) NOT NULL, "total_supply" numeric NOT NULL, "floor_price" numeric, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL, "creator_id" character varying, CONSTRAINT "PK_ad3f485bbc99d875491f44d7c85" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_c3c9836e9553afb999efc307aa" ON "collection" ("symbol") `)
         await db.query(`CREATE INDEX "IDX_6753650e35d87d7c96af6f6860" ON "collection" ("creator_id") `)
         await db.query(`CREATE INDEX "IDX_f2c977a66579d262693a8cdbcd" ON "collection" ("created_at") `)
@@ -132,6 +140,7 @@ module.exports = class Data1762569071744 {
         await db.query(`ALTER TABLE "purchase_history" ADD CONSTRAINT "FK_5521fe6573c19e4c98498110ca3" FOREIGN KEY ("currency_id") REFERENCES "supported_currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "purchase_history" ADD CONSTRAINT "FK_89c2cd63c77830504ef41a6a797" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "purchase_history" ADD CONSTRAINT "FK_ebeda06837f66178b17f9344526" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
+        await db.query(`ALTER TABLE "fee_withdrawal" ADD CONSTRAINT "FK_d48ee1f918073f025725446a916" FOREIGN KEY ("currency_id") REFERENCES "supported_currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "currency_approval" ADD CONSTRAINT "FK_d3ca11c5d7768fe69a6d95fb9a0" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "currency_approval" ADD CONSTRAINT "FK_2e488890a844580d412e449e929" FOREIGN KEY ("currency_id") REFERENCES "supported_currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
         await db.query(`ALTER TABLE "buyer_approval" ADD CONSTRAINT "FK_afa904ed4e8810a6c0e0ee9182c" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`)
@@ -180,6 +189,14 @@ module.exports = class Data1762569071744 {
         await db.query(`DROP INDEX "public"."IDX_bbbfc0e1b7c744d845516f9c00"`)
         await db.query(`DROP INDEX "public"."IDX_89c2cd63c77830504ef41a6a79"`)
         await db.query(`DROP INDEX "public"."IDX_ebeda06837f66178b17f934452"`)
+        await db.query(`DROP TABLE "fee_withdrawal"`)
+        await db.query(`DROP INDEX "public"."IDX_01bc5b3abf53c3a1f691cd8f4b"`)
+        await db.query(`DROP INDEX "public"."IDX_d48ee1f918073f025725446a91"`)
+        await db.query(`DROP INDEX "public"."IDX_78b9e42c33bfa34664791940cf"`)
+        await db.query(`DROP INDEX "public"."IDX_f51c8a14d34bfaca237e602071"`)
+        await db.query(`DROP INDEX "public"."IDX_4f2f882457b981b0fa33b42227"`)
+        await db.query(`DROP INDEX "public"."IDX_550af18532972c61d3a88a443a"`)
+        await db.query(`DROP INDEX "public"."IDX_b214707e8fd9ae113a0b404b20"`)
         await db.query(`DROP TABLE "supported_currency"`)
         await db.query(`DROP INDEX "public"."IDX_fe45391d246b0139bb1cc89b40"`)
         await db.query(`DROP INDEX "public"."IDX_7dfe005d11d6df845050ebff1b"`)
@@ -286,6 +303,7 @@ module.exports = class Data1762569071744 {
         await db.query(`ALTER TABLE "purchase_history" DROP CONSTRAINT "FK_5521fe6573c19e4c98498110ca3"`)
         await db.query(`ALTER TABLE "purchase_history" DROP CONSTRAINT "FK_89c2cd63c77830504ef41a6a797"`)
         await db.query(`ALTER TABLE "purchase_history" DROP CONSTRAINT "FK_ebeda06837f66178b17f9344526"`)
+        await db.query(`ALTER TABLE "fee_withdrawal" DROP CONSTRAINT "FK_d48ee1f918073f025725446a916"`)
         await db.query(`ALTER TABLE "currency_approval" DROP CONSTRAINT "FK_d3ca11c5d7768fe69a6d95fb9a0"`)
         await db.query(`ALTER TABLE "currency_approval" DROP CONSTRAINT "FK_2e488890a844580d412e449e929"`)
         await db.query(`ALTER TABLE "buyer_approval" DROP CONSTRAINT "FK_afa904ed4e8810a6c0e0ee9182c"`)

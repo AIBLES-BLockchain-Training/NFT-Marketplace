@@ -12,7 +12,9 @@ import {
   BuyerApproval,
   SupportedCurrency,
   TokenOwnership,
-  Trait
+  Trait,
+  FeeWithdrawal,
+  ExtensionType
 } from '../model'
 import * as ListingABI from '../abi/Listing'
 import {
@@ -54,7 +56,8 @@ export async function processListingEvents(
   purchaseHistories: PurchaseHistory[],
   currencyApprovals: CurrencyApproval[],
   buyerApprovals: BuyerApproval[],
-  tokenOwnershipMap: Map<string, TokenOwnership>
+  tokenOwnershipMap: Map<string, TokenOwnership>,
+  feeWithdrawals: FeeWithdrawal[]
 ) {
   async function getOrCreateSubject(address: string, type?: SubjectType): Promise<Subject> {
     const subjectId = address.toLowerCase()
@@ -419,6 +422,21 @@ export async function processListingEvents(
         const { admin, currency, amount } = ListingABI.events.FeeWithdrawn.decode(log)
 
         const currencyEntity = await getOrCreateCurrency(currency)
+
+        // Create FeeWithdrawal record
+        const feeWithdrawal = new FeeWithdrawal({
+          id: `${transactionHash}-${log.logIndex}`,
+          extensionType: ExtensionType.LISTING,
+          currency: currencyEntity,
+          amount: amount,
+          receiver: admin.toLowerCase(),
+          timestamp: timestamp,
+          transactionHash: transactionHash,
+          blockNumber: blockNumber
+        })
+        feeWithdrawals.push(feeWithdrawal)
+
+        // Update currency totalAmountFee (keep for backward compatibility)
         if (currencyEntity && currencyEntity.totalAmountFee >= amount) {
           currencyEntity.totalAmountFee = currencyEntity.totalAmountFee - amount
           currencyMap.set(currencyEntity.id, currencyEntity)
