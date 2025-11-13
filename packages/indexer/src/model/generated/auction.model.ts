@@ -1,5 +1,6 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, IntColumn as IntColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
 import {NFT} from "./nft.model"
+import {Subject} from "./subject.model"
 import {SupportedCurrency} from "./supportedCurrency.model"
 import {AuctionStatus} from "./_auctionStatus"
 import {Bid} from "./bid.model"
@@ -16,11 +17,15 @@ export class Auction {
 
     @Index_()
     @ManyToOne_(() => NFT, {nullable: true})
-    nftId!: NFT
+    nft!: NFT
 
     @Index_()
-    @StringColumn_({nullable: false})
-    sellerAddress!: string
+    @ManyToOne_(() => Subject, {nullable: true})
+    seller!: Subject
+
+    @Index_()
+    @ManyToOne_(() => Subject, {nullable: true})
+    winningBidder!: Subject | undefined | null
 
     @BigIntColumn_({nullable: false})
     quantity!: bigint
@@ -53,9 +58,11 @@ export class Auction {
     @Column_("varchar", {length: 9, nullable: false})
     status!: AuctionStatus
 
-    @Index_()
-    @ManyToOne_(() => Bid, {nullable: true})
-    winningBid!: Bid | undefined | null
+    @BooleanColumn_({nullable: false})
+    isPayoutCollected!: boolean
+
+    @BooleanColumn_({nullable: false})
+    isTokenCollected!: boolean
 
     @OneToMany_(() => Bid, e => e.auction)
     bids!: Bid[]

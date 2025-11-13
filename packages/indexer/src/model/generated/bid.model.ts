@@ -1,5 +1,6 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, StringColumn as StringColumn_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
 import {Auction} from "./auction.model"
+import {Subject} from "./subject.model"
 
 @Entity_()
 export class Bid {
@@ -15,8 +16,8 @@ export class Bid {
     auction!: Auction
 
     @Index_()
-    @StringColumn_({nullable: false})
-    bidderAddress!: string
+    @ManyToOne_(() => Subject, {nullable: true})
+    bidder!: Subject
 
     @Index_()
     @BigIntColumn_({nullable: false})
