@@ -24,9 +24,22 @@ class Auction {
   }
 
   static async init(address: any, signer: Signer) {
-    console.log(`Initializing Auction contract at address: ${address}`);
-    const contract = await ethers.getContractAt('NFTAuction', address, signer);
+    console.log(`Initializing Auction via Router at address: ${address}`);
+    const auctionInterface = (await ethers.getContractFactory('NFTAuction')).interface;
+    const contract = new ethers.Contract(address, auctionInterface, signer);
     return new Auction(contract);
+  }
+
+  async initializeAuction(addressPermission: string, addressFeeReceiver: string, addressRouter: string) {
+    console.log('Initializing auction with permission, fee receiver, and router addresses...');
+    try {
+      const tx = await this.contract.initializeAuction(addressPermission, addressFeeReceiver, addressRouter);
+      await tx.wait();
+      console.log('Auction initialized successfully:', tx.hash);
+    } catch (error) {
+      console.error('Error initializing auction:', error);
+      throw new Error('Failed to initialize auction');
+    }
   }
 
   async getTotalAuction() {
@@ -81,11 +94,46 @@ class Auction {
     console.log('Creating auction with parameters:', auctionParams);
     try {
       const tx = await this.contract.createAuction(auctionParams);
+      console.log('  Transaction hash:', tx.hash);
       await tx.wait();
-      console.log('Auction created successfully:', tx);
-    } catch (error) {
-      console.error('Error creating auction:', error);
-      throw new Error('Failed to create auction');
+      console.log('  ✅ Auction created successfully!');
+    } catch (error: any) {
+      let reason = 'Unknown revert reason';
+
+      // 1. Thử tìm lý do trong thuộc tính 'reason' (phổ biến)
+      if (error.reason) {
+        reason = error.reason;
+      }
+      // 2. Thử tìm trong lỗi lồng nhau (nested error) từ Ethers/Hardhat
+      else if (error.error && error.error.reason) {
+        reason = error.error.reason;
+      }
+      // 3. Thử tìm trong dữ liệu trả về của JSON-RPC
+      else if (error.data && error.data.message) {
+        reason = error.data.message;
+      }
+      // 4. Thử tìm trong lỗi lồng nhau sâu hơn
+      else if (error.error && error.error.data && error.error.data.message) {
+        reason = error.error.data.message;
+      }
+      // 5. Lấy thông báo lỗi chung nếu không tìm thấy gì khác
+      else if (error.message) {
+        reason = error.message;
+      }
+
+      // Làm sạch thông báo lỗi
+      reason = reason
+        .replace('execution reverted: ', '')
+        .replace('Error: ', '')
+        .replace('VM Exception while processing transaction: reverted with reason string ', '');
+
+      console.error(`\n❌ Error creating auction!`);
+      console.error(`  Revert Reason: ${reason}\n`);
+
+      // Bạn có thể bỏ comment dòng sau để xem toàn bộ đối tượng lỗi
+      // console.error("Full error object:", JSON.stringify(error, null, 2));
+
+      throw new Error(`Failed to create auction: ${reason}`);
     }
   }
 
@@ -135,15 +183,15 @@ class Auction {
     }
   }
 
-  async setPermissionContract(newPermissionAddress: string) {
-    console.log('Setting permission contract...');
+  async setPermissionsContract(newPermissionsAddress: string) {
+    console.log('Setting permissions contract...');
     try {
-      const tx = await this.contract.setPermissionContract(newPermissionAddress);
+      const tx = await this.contract.setPermissionsContract(newPermissionsAddress);
       await tx.wait();
-      console.log('Permission contract set successfully:', tx);
+      console.log('Permissions contract set successfully:', tx);
     } catch (error) {
-      console.error('Error setting permission contract:', error);
-      throw new Error('Failed to set permission contract');
+      console.error('Error setting permissions contract:', error);
+      throw new Error('Failed to set permissions contract');
     }
   }
 
@@ -164,7 +212,7 @@ class Auction {
     try {
       const tx = await this.contract.setMinTimeAuction(minTimeInSeconds);
       await tx.wait();
-      console.log('Minimum time for auction set successfully: ' , tx.hash);
+      console.log('Minimum time for auction set successfully: ', tx.hash);
     } catch (error) {
       console.error('Error setting minimum time for auction:', error);
       throw new Error('Failed to set minimum time for auction');
@@ -176,7 +224,7 @@ class Auction {
     try {
       const tx = await this.contract.setCurrencyFee(currency, fee);
       await tx.wait();
-      console.log('Currency fee set successfully: ' , tx.hash);
+      console.log('Currency fee set successfully: ', tx.hash);
     } catch (error) {
       console.error('Error setting currency fee:', error);
       throw new Error('Failed to set currency fee');
@@ -194,7 +242,7 @@ class Auction {
   async getAddressFeeReceiver() {
     return await this.contract.getFeeReceiver();
   }
-  
+
   async getAddressRouter() {
     return await this.contract.getRouter();
   }
@@ -222,7 +270,7 @@ class Auction {
 
 class Currency {
   private contract: any;
-  
+
   constructor(contract: any) {
     this.contract = contract;
   }
@@ -260,7 +308,7 @@ class Currency {
 
 class NFT {
   private contract: any;
-  
+
   constructor(contract: any) {
     this.contract = contract;
   }
@@ -283,11 +331,15 @@ class NFT {
   }
 }
 
+
 async function main() {
   const [signer] = await ethers.getSigners();
   const AUCTION_ADDRESS = process.env['ADDRESS_AUCTION'];
   const CURRENCY_ADDRESS = process.env['CURRENCY_ADDRESS'];
   const NFT_ADDRESS = process.env['NFT_ADDRESS'];
+  const ROUTER_ADDRESS = process.env['ADDRESS_ROUTER'] || '0x...';
+  const PERMISSIONS = process.env['ADDRESS_PERMISSIONS'] || '0x...';
+  const FEE_RECEIVER = process.env['ADDRESS_FEE_RECEIVER'] || '0x...';
 
   if (!AUCTION_ADDRESS) {
     throw new Error('AUCTION_ADDRESS is not defined in environment variables');
@@ -301,20 +353,29 @@ async function main() {
     throw new Error('NFT_ADDRESS is not defined in environment variables');
   }
 
-  const auction = await Auction.init(AUCTION_ADDRESS, signer);
+  if (ROUTER_ADDRESS === '0x...') {
+    throw new Error('ROUTER_ADDRESS is not defined in environment variables');
+  }
+
+  if (PERMISSIONS === '0x...') {
+    throw new Error('PERMISSIONS is not defined in environment variables');
+  }
+
+  if (FEE_RECEIVER === '0x...') {
+    throw new Error('FEE_RECEIVER is not defined in environment variables');
+  }
+
+  const auction = await Auction.init(ROUTER_ADDRESS, signer); // router call address
   const currency = await Currency.init(CURRENCY_ADDRESS, signer);
-  const nft =  await NFT.init(NFT_ADDRESS, signer);
-  // const auction = await Auction.init('0xD571fAD055557D1F1954454E1511973FF919bfe4', bidder);
+  const nft = await NFT.init(NFT_ADDRESS, signer);
   console.log('Signer address: ', await signer.getAddress());
-  // console.log('Bidder address: ', await bidder.getAddress());
-  
+
   console.log('-----------------------------------');
   console.log('Permissions Contract Address:', await auction.getAddressPermissionsContract());
-  console.log('Router Address:', await auction.getAddressRouter());
   console.log('Fee Receiver Address:', await auction.getAddressFeeReceiver());
   console.log('Minimum Time for Auction (seconds):', (await auction.getMin()).toString());
-  console.log('Fee Of Currency:', (await auction.getCurrencyFee(CURRENCY_ADDRESS)).toString());
-  console.log('Currency Accumulated Fee:', (await auction.getAccumulatedFee(CURRENCY_ADDRESS)).toString());
+  // console.log('Fee Of Currency:', (await auction.getCurrencyFee(CURRENCY_ADDRESS)).toString());
+  // console.log('Currency Accumulated Fee:', (await auction.getAccumulatedFee(CURRENCY_ADDRESS)).toString());
 
   console.log('-----------------------------------');
   const totalAuctions = await auction.getTotalAuction();
@@ -323,8 +384,8 @@ async function main() {
   // await auction.setCurrencyFee(CURRENCY_ADDRESS, 200); // Set fee 2%
   // await auction.setMinTimeAuction(300); // Set min time auction to 5 minutes
 
-  const auctionDetails = await auction.getAuctionDetails(1);
-  console.log('Auction Details:', auctionDetails);
+  // const auctionDetails = await auction.getAuctionDetails(1);
+  // console.log('Auction Details:', auctionDetails);
 
   // const allAuctions = await auction.getAllAuctions('0', '10');
   // console.log('All Auctions:', allAuctions);
@@ -338,9 +399,10 @@ async function main() {
   // const auctionExpired = await auction.getAuctionExpired('0');
   // console.log('Auction Expired:', auctionExpired);
 
-  // const cancelAuction = await auction.cancelAuction(1);
+  // const cancelAuction = await auction.cancelAuction(2);
   // console.log('Cancel Auction:', cancelAuction);
 
+  // await nft.setApprovalForAll(AUCTION_ADDRESS, true);
   // const auctionParams: AuctionParams = {
   //   _assetContract: NFT_ADDRESS,
   //   _tokenId: 84,
@@ -353,24 +415,25 @@ async function main() {
   //   _startTime: Math.floor(Date.now() / 1000),
   //   _endTime: Math.floor(Date.now() / 1000) + 300, // 5p
   // };
-  // // await nft.setApprovalForAll(AUCTION_ADDRESS, true);
+
   // await auction.createAuction(auctionParams);
 
   // const isNewWinningBid = await auction.checkIsNewWinningBid(1, ethers.parseEther('0.015'));
   // console.log('Is New Winning Bid:', isNewWinningBid);
-  // await currency.approve(AUCTION_ADDRESS, ethers.parseEther('10'));
+  // await currency.approve(ROUTER_ADDRESS, ethers.parseEther('10'));
   // const bidAuction = await auction.bidInAuction(1, ethers.parseEther('0.015'), signer, false);
   // console.log('Bid Auction:', bidAuction);
 
   // auction.checkAuctionExpired(1);
 
-  // const payout = await auction.collectAuctionPayout(1);
-  // console.log('Auction Payout:', payout);
+  const payout = await auction.collectAuctionPayout(1);
+  console.log('Auction Payout:', payout);
 
   // const collectToken = await auction.collectAuctionToken(1);
   // console.log('Auction Collect Token:', collectToken);
 
   // await auction.withdrawFees(CURRENCY_ADDRESS);
+
 }
 
 main().catch(console.error);

@@ -23,19 +23,30 @@ interface Extension {
 // Configuration
 function getAuctionFunctions(): AuctionFunction[] {
   return [
-    { selector: "0x0858e5ad", signature: "bidInAuction(uint256,uint256)" },
+     // === Các hàm tương tác lõi (User-facing) ===
+    { selector: "0x172e9f7b", signature: "createAuction((address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))" },
     { selector: "0x96b5a755", signature: "cancelAuction(uint256)" },
+    { selector: "0x0858e5ad", signature: "bidInAuction(uint256,uint256)" },
     { selector: "0xebf05a62", signature: "collectAuctionPayout(uint256)" },
     { selector: "0x12090b22", signature: "collectAuctionToken(uint256)" },
-    { selector: "0x1a72240f", signature: "createAuction(AuctionParams)" },
+    { selector: "0x150b7a02", signature: "onERC721Received(address,address,uint256,bytes)" },
+
+    // === Các hàm quản trị (Admin/Setter) ===
+    { selector: "0x3db0f5c1", signature: "initializeAuction(address,address,address)" },
+    { selector: "0xefdcd974", signature: "setFeeReceiver(address)" },
+    { selector: "0xf9a6b221", signature: "setMinTimeAuction(uint256)" },
+    { selector: "0xd183ce74", signature: "setPermissionsContract(address)" },
+    { selector: "0xc0d78655", signature: "setRouter(address)" },
+      
+    // === Các hàm xem/đọc (View/Getter) ===
     { selector: "0xc291537c", signature: "getAllAuctions(uint256,uint256)" },
     { selector: "0x7b063801", signature: "getAllValidAuctions(uint256,uint256)" },
     { selector: "0x78bd7935", signature: "getAuction(uint256)" },
-    { selector: "0x62349d13", signature: "getNewWinningBid(uint256)" },
-    { selector: "0x51a345a7", signature: "initializeAuction(address)" },
-    { selector: "0x1389b117", signature: "isAuctionExpired(uint256)" },
-    { selector: "0x2eb566bd", signature: "isNewWinningBid(uint256,uint256)" },
-    { selector: "0x16002f4a", signature: "totalAuctions()" }
+    { selector: "0x16002f4a", signature: "totalAuctions()" },
+    { selector: "0xb0f479a1", signature: "getRouter()" },
+    { selector: "0xe8a35392", signature: "getFeeReceiver()" },
+    { selector: "0x964623dd", signature: "getPermissionsContract()" },
+    { selector: "0x0b9d3578", signature: "getMinTimeAuction()" }
   ];
 }
 
@@ -86,13 +97,22 @@ async function addAuctionExtension(extensionManager: any, auctionAddress: string
   console.log("- Name:", extension.metadata.name);
   console.log("- Implementation:", extension.metadata.implementation);
   console.log("- Functions count:", extension.functions.length);
-  const extensionTuple = [
-    [extension.metadata.name, extension.metadata.metadataURI, extension.metadata.implementation],
-    extension.functions.map(f => [f.functionSelector, f.functionSignature])
-  ];
+  const extensionObj = {
+    metadata: {
+      name: extension.metadata.name,
+      metadataURI: extension.metadata.metadataURI,
+      implementation: extension.metadata.implementation
+    },
+    functions: extension.functions.map(f => ({
+      functionSelector: f.functionSelector,
+      functionSignature: f.functionSignature
+    }))
+  };
+
+
 
   console.log("Submitting transaction to add extension...");
-  const tx = await extensionManager.addExtension(extensionTuple);
+  const tx = await extensionManager.addExtension(extensionObj);
   console.log("Transaction submitted. Hash:", tx.hash);
   console.log("Waiting for confirmation...");
   const receipt = await tx.wait();

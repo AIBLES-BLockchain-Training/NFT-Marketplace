@@ -17,7 +17,9 @@ import {
   TokenOwnership,
   RoleRequest,
   NFTRoleRequest,
-  FeeWithdrawal
+  FeeWithdrawal,
+  Auction,
+  Bid
 } from './model'
 
 import {
@@ -32,6 +34,10 @@ import {
   processOfferEvents,
   getOfferTopics
 } from './processors/offer.processor'
+import {
+  processAuctionEvents,
+  getAuctionTopics
+} from './processors/auction.processor'
 
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
@@ -103,6 +109,15 @@ class CombinedIndexer {
         topic0: offerTopics
       })
     }
+
+    // Add logs for auction contract
+    const auctionTopics = getAuctionTopics()
+    if (auctionTopics.length > 0) {
+      this.processor.addLog({
+        address: [CONTRACT_ADDRESSES.router.toLowerCase()],
+        topic0: auctionTopics
+      })
+    }
   }
 
   async run() {
@@ -115,12 +130,14 @@ class CombinedIndexer {
     await this.processor.run(db, async (ctx) => {
       const listingMap: Map<string, Listing> = new Map()
       const offerMap: Map<string, Offer> = new Map()
+      const auctionMap: Map<string, Auction> = new Map()
       const subjectMap: Map<string, Subject> = new Map()
       const collectionMap: Map<string, Collection> = new Map()
       const nftMap: Map<string, NFT> = new Map()
       const currencyMap: Map<string, SupportedCurrency> = new Map()
       const roleMap: Map<string, Role> = new Map()
       const tokenOwnershipMap: Map<string, TokenOwnership> = new Map()
+      const bidMap: Map<string, Bid> = new Map()
 
       const roleAssignments: RoleAssignment[] = []
       const permissionEvents: PermissionEvent[] = []
@@ -134,6 +151,7 @@ class CombinedIndexer {
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
       const offerLogs: any[] = []
+      const auctionLogs: any[] = []
 
       for (let block of ctx.blocks) {
         for (let log of block.logs) {
@@ -145,6 +163,7 @@ class CombinedIndexer {
             // Router emits both Listing and Offer events
             listingLogs.push({ ...log, block })
             offerLogs.push({ ...log, block })
+            auctionLogs.push({ ...log, block })
           }
         }
       }
@@ -187,18 +206,36 @@ class CombinedIndexer {
       }
 
       // Process offer events
-      if (offerLogs.length > 0) {
-        console.log(`Processing ${offerLogs.length} offer events`)
-        await processOfferEvents(
-          offerLogs,
+      // if (offerLogs.length > 0) {
+      //   console.log(`Processing ${offerLogs.length} offer events`)
+      //   await processOfferEvents(
+      //     offerLogs,
+      //     ctx,
+      //     CONTRACT_ADDRESSES.router.toLowerCase(),
+      //     offerMap,
+      //     subjectMap,
+      //     collectionMap,
+      //     nftMap,
+      //     currencyMap,
+      //     purchaseHistories
+      //   )
+      // }
+
+      // Process auction events
+      if (auctionLogs.length > 0) {
+        console.log(`Processing ${auctionLogs.length} auction events`)
+        await processAuctionEvents(
+          auctionLogs,
           ctx,
           CONTRACT_ADDRESSES.router.toLowerCase(),
-          offerMap,
+          auctionMap,
+          nftMap,
           subjectMap,
           collectionMap,
-          nftMap,
+          bidMap,
           currencyMap,
-          purchaseHistories
+          purchaseHistories,
+          tokenOwnershipMap
         )
       }
 
@@ -221,6 +258,8 @@ class CombinedIndexer {
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
       await ctx.store.save(Array.from(offerMap.values()))
+      await ctx.store.save(Array.from(auctionMap.values()))
+      await ctx.store.save(Array.from(bidMap.values()))
 
       const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
       const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)

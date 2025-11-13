@@ -95,9 +95,6 @@ export async function processAuctionEvents(
         id: collectionId,
         name: metadata.name,
         symbol: metadata.symbol,
-        description: metadata.description,
-        bannerUrl: metadata.banner_image,
-        logoUrl: metadata.image,
         collectionType: contractType == 'ERC721' ? CollectionType.ERC721 : CollectionType.ERC1155,
         creator: creator,
         createdAt: new Date(),
@@ -346,6 +343,7 @@ export async function processAuctionEvents(
         }
         if (auction.status === AuctionStatus.CREATED) {
           auction.status = AuctionStatus.ACTIVE;
+          auction.winningBidder = bidderSubject;
         }
         const bidId = `${auctionIdStr}-${bidder.toLowerCase()}`;
         console.log(`Processing bid ${bidId} for auction ${auctionIdStr}`);
@@ -397,7 +395,7 @@ export async function processAuctionEvents(
           await updateTokenOwnership(
             auction.nft,
             contractAddress,
-            auction.winningBidder.id,
+            winner,
             auction.quantity,
             timestamp
           );
