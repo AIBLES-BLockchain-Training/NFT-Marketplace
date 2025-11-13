@@ -4,19 +4,18 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper functions
 async function getContracts() {
-  const routerAddress = process.env['ADDRESS_ROUTER'] || "";
+  const listingAddress = process.env['ADDRESS_LISTING'] || "";
   const permissionsAddress = process.env['ADDRESS_PERMISSIONS'] || "";
   const feeReceiverAddress = process.env['ADDRESS_FEE_RECEIVER'] || "";
 
-  if (!routerAddress || !permissionsAddress || !feeReceiverAddress) {
-    throw new Error("Please set ADDRESS_ROUTER, ADDRESS_PERMISSIONS, and ADDRESS_FEE_RECEIVER environment variables");
+  if (!listingAddress || !permissionsAddress || !feeReceiverAddress) {
+    throw new Error("Please set ADDRESS_LISTING, ADDRESS_PERMISSIONS, and ADDRESS_FEE_RECEIVER environment variables");
   }
 
   const [signer] = await ethers.getSigners();
-  const listingInterface = (await ethers.getContractFactory("Listing")).interface;
-  const routerAsListing = new ethers.Contract(routerAddress, listingInterface, signer);
+  const listing = await ethers.getContractAt("Listing", listingAddress, signer);
 
-  return { routerAsListing, routerAddress, permissionsAddress, feeReceiverAddress, signer };
+  return { listing, permissionsAddress, feeReceiverAddress, signer };
 }
 
 // Initialization functions
@@ -35,17 +34,14 @@ async function checkCurrentPermissionContract(routerAsListing: any) {
 async function initializeListing(
   routerAsListing: any,
   permissionsAddress: string,
-  routerAddress: string,
   feeReceiverAddress: string
 ) {
   console.log("Initializing Listing contract...");
   console.log("- Permissions address:", permissionsAddress);
-  console.log("- Router address:", routerAddress);
   console.log("- Fee Receiver address (Multisig):", feeReceiverAddress);
 
   const tx = await routerAsListing.initializeListing(
     permissionsAddress,
-    routerAddress,
     feeReceiverAddress
   );
   console.log("Transaction hash:", tx.hash);
@@ -107,7 +103,7 @@ async function main() {
 
       async (currentPermission: string) => {
         if (currentPermission === ethers.ZeroAddress) {
-          await initializeListing(routerAsListing, permissionsAddress, routerAddress, feeReceiverAddress);
+          await initializeListing(routerAsListing, permissionsAddress, feeReceiverAddress);
         } else if (currentPermission !== permissionsAddress) {
           console.log("Different permission contract already set, updating...");
           await setPermissionContract(routerAsListing, permissionsAddress);
