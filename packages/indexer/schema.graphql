@@ -223,7 +223,7 @@ type BuyerApproval @entity {
 type PurchaseHistory @entity {
   id: ID! @index
   transactionHash: String! @unique
-  nft: NFT! @index
+  nft: NFT @index # Allow null for deleted/unmapped NFTs
   seller: Subject! @index
   buyer: Subject! @index
   quantity: BigInt!
@@ -232,9 +232,9 @@ type PurchaseHistory @entity {
   tradeType: TradeType! @index
   timestamp: DateTime! @index
   blockNumber: Int! @index
-  
+
   # Relation
-  auction: Auction 
+  auction: Auction
   listing: Listing
 }
 

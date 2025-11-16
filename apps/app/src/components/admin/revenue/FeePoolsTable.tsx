@@ -5,7 +5,7 @@ import { Card } from '../../common/Card';
 import { Spinner } from '../../common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_CURRENCY_FEE_STATS_QUERY } from '../../../lib/graphql/queries';
-import { getAccumulatedFees, formatFeeAmount } from '../../../lib/web3/revenue';
+import { getAccumulatedFees, formatFeeAmount, getCurrencyFeePercentage } from '../../../lib/web3/revenue';
 
 interface CurrencyFee {
   currency: string;
@@ -29,13 +29,20 @@ export function FeePoolsTable() {
     loadPools();
   }, []);
 
+  // Helper to truncate address
+  const truncateAddress = (address: string) => {
+    if (address === '0x0000000000000000000000000000000000000000') {
+      return '0x0...0000';
+    }
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
   const loadPools = async () => {
     setIsLoading(true);
     try {
       // Query currencies from GraphQL
       const result = await graphqlClient.query(GET_CURRENCY_FEE_STATS_QUERY, {});
-      const allCurrencies = result?.supportedCurrencies || [];
-      const currencies = allCurrencies.slice(0, 5); // Giới hạn 5 currencies
+      const currencies = result?.supportedCurrencies || [];
 
       // Define extensions
       const extensions = [
@@ -51,18 +58,30 @@ export function FeePoolsTable() {
 
         if (ext.isActive) {
           for (const currency of currencies) {
+            const extensionType = ext.name.toLowerCase() as 'listing' | 'auction' | 'offer';
+
             // Query on-chain accumulated fees from extension contract
-            const accumulated = await getAccumulatedFees(
-              ext.name.toLowerCase() as 'listing' | 'auction' | 'offer',
-              currency.id
-            );
+            let accumulated = BigInt(0);
+            try {
+              accumulated = await getAccumulatedFees(extensionType, currency.id);
+            } catch (error) {
+              // Currency may not be configured in this extension, show 0
+            }
+
+            // Get fee percentage from contract (not GraphQL)
+            let feePercentage = 0;
+            try {
+              feePercentage = await getCurrencyFeePercentage(extensionType, currency.id);
+            } catch (error) {
+              // Fee not configured for this currency in this extension
+            }
 
             currencyFees.push({
               currency: currency.symbol,
               currencyAddress: currency.id,
               decimals: currency.decimals,
               accumulated: accumulated,
-              feePercentage: currency.feePercentage || 0,
+              feePercentage: feePercentage,
             });
           }
         }
@@ -100,7 +119,7 @@ export function FeePoolsTable() {
     <div>
       <div className="mb-6">
         <h3 className="text-2xl font-bold text-white mb-2">Fee Pools by Extension</h3>
-        <p className="text-sm text-gray-400">Available balances per extension (max 5 currencies shown)</p>
+        <p className="text-sm text-gray-400">Available balances per extension for all whitelisted currencies</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -154,7 +173,10 @@ export function FeePoolsTable() {
                     className="p-3 bg-dark-bg/50 border border-dark-border/50 rounded-lg hover:border-primary-500/30 transition-colors"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-white">{curr.currency}</span>
+                      <div>
+                        <span className="font-semibold text-white">{curr.currency}</span>
+                        <span className="text-xs text-gray-500 ml-2">({truncateAddress(curr.currencyAddress)})</span>
+                      </div>
                       <span className="text-xs text-gray-500">{curr.feePercentage.toFixed(2)}% fee</span>
                     </div>
                     <div className="flex items-baseline justify-between">

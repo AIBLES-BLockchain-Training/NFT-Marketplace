@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NFT } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -10,7 +10,17 @@ import { encodeCreateListing } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
 import { checkNFTApproval, approveNFT, isNFTCollectionWhitelisted } from '../../lib/web3/approve';
+import { graphqlClient } from '../../lib/graphql/client';
+import { GET_WHITELISTED_CURRENCIES_QUERY } from '../../lib/graphql/queries';
 import toast from 'react-hot-toast';
+
+interface WhitelistedCurrency {
+  id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  isActive: boolean;
+}
 
 interface CreateListingModalProps {
   nft: NFT;
@@ -27,6 +37,65 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
   const [duration, setDuration] = useState('7');
   const [reserved, setReserved] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [currencies, setCurrencies] = useState<WhitelistedCurrency[]>([]);
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(ZERO_ADDRESS);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+
+  // Fetch whitelisted currencies when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchCurrencies();
+    }
+  }, [isOpen]);
+
+  const fetchCurrencies = async () => {
+    try {
+      setLoadingCurrencies(true);
+      const result = await graphqlClient.query(GET_WHITELISTED_CURRENCIES_QUERY, {
+        limit: 100,
+        offset: 0,
+      });
+
+      const fetchedCurrencies = result.supportedCurrencies || [];
+
+      // Add ETH as first option if not already present
+      const ethCurrency = {
+        id: ZERO_ADDRESS,
+        name: 'Ethereum',
+        symbol: 'ETH',
+        decimals: 18,
+        isActive: true,
+      };
+
+      const hasEth = fetchedCurrencies.some((c: WhitelistedCurrency) =>
+        c.id.toLowerCase() === ZERO_ADDRESS.toLowerCase()
+      );
+
+      const allCurrencies = hasEth ? fetchedCurrencies : [ethCurrency, ...fetchedCurrencies];
+      setCurrencies(allCurrencies);
+      setSelectedCurrency(ZERO_ADDRESS); // Default to ETH
+    } catch (error) {
+      console.error('Error fetching currencies:', error);
+      // Fallback to ETH only
+      setCurrencies([{
+        id: ZERO_ADDRESS,
+        name: 'Ethereum',
+        symbol: 'ETH',
+        decimals: 18,
+        isActive: true,
+      }]);
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  };
+
+  // Helper function to truncate address
+  const truncateAddress = (address: string) => {
+    if (address === ZERO_ADDRESS) {
+      return '0x0...0000';
+    }
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +165,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: ZERO_ADDRESS,
+        currency: selectedCurrency, // Use selected currency
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
@@ -131,9 +200,38 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Currency Selector */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Price per Token (ETH)
+                Payment Currency
+              </label>
+              {loadingCurrencies ? (
+                <div className="flex items-center justify-center py-3 px-4 bg-dark-card border border-dark-border rounded-lg">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
+                  <span className="text-sm text-gray-400">Loading currencies...</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedCurrency}
+                  onChange={(e) => setSelectedCurrency(e.target.value)}
+                  className="w-full px-4 py-3 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
+                  required
+                >
+                  {currencies.map((currency) => (
+                    <option key={currency.id} value={currency.id}>
+                      {currency.symbol} - {currency.name} ({truncateAddress(currency.id)})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Select the currency buyers will use to purchase
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Price per Token ({currencies.find(c => c.id === selectedCurrency)?.symbol || 'Token'})
               </label>
               <Input
                 type="number"
@@ -145,7 +243,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
                 required
               />
               <p className="mt-2 text-xs text-gray-500">
-                Set your listing price in ETH
+                Set your listing price in {currencies.find(c => c.id === selectedCurrency)?.symbol || 'selected currency'}
               </p>
             </div>
 

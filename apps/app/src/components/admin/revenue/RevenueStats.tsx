@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { StatsCard } from '../StatsCard';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_CURRENCY_FEE_STATS_QUERY, GET_FEE_WITHDRAWALS_QUERY } from '../../../lib/graphql/queries';
-import { getAccumulatedFees } from '../../../lib/web3/revenue';
+import { getAccumulatedFees, getCurrencyFeePercentage } from '../../../lib/web3/revenue';
 import { ethers } from 'ethers';
 
 interface RevenueStatsData {
@@ -52,8 +52,14 @@ export function RevenueStats() {
 
         // Get accumulated from Listing contract
         const listingFees = await getAccumulatedFees('listing', currencyId);
-        // Get accumulated from Auction contract
-        const auctionFees = await getAccumulatedFees('auction', currencyId);
+
+        // Get accumulated from Auction contract (may fail if currency not configured)
+        let auctionFees = BigInt(0);
+        try {
+          auctionFees = await getAccumulatedFees('auction', currencyId);
+        } catch (auctionError) {
+          // Currency not configured in Auction contract, skip
+        }
         const accumulated = listingFees + auctionFees;
 
         if (currencyId === '0x0000000000000000000000000000000000000000') {

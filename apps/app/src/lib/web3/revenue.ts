@@ -6,29 +6,24 @@ const LISTING_ABI = [
   'function feeReceiver() external view returns (address)',
 ];
 
-/**
- * Get the contract address for a specific extension type
- */
-function getExtensionContractAddress(extensionType: 'listing' | 'auction' | 'offer'): string {
-  switch (extensionType) {
-    case 'listing':
-      return process.env.NEXT_PUBLIC_LISTING_CONTRACT!;
-    case 'auction':
-      return process.env.NEXT_PUBLIC_AUCTION_CONTRACT!;
-    case 'offer':
-      return process.env.NEXT_PUBLIC_OFFER_CONTRACT!;
-    default:
-      throw new Error(`Unknown extension type: ${extensionType}`);
-  }
-}
+const AUCTION_ABI = [
+  'function getAccumulatedFee(address currency) external view returns (uint256)', // Note: singular "Fee"
+  'function feeReceiver() external view returns (address)',
+];
+
+// Shared ABI for getCurrencyFee - both extensions use Listing's implementation via Router
+const GET_CURRENCY_FEE_ABI = [
+  'function getCurrencyFee(address currency) external view returns (uint256)',
+];
 
 /**
  * Get accumulated fees for a specific extension and currency
+ * NOTE: Uses Router contract address because it uses delegatecall pattern
+ * Router stores data and delegates to extension contracts for logic
  */
 export async function getAccumulatedFees(
   extensionType: 'listing' | 'auction' | 'offer',
-  currency: string,
-  routerAddress?: string // Keep for backward compatibility but not used
+  currency: string
 ): Promise<bigint> {
   try {
     if (!window.ethereum) {
@@ -36,13 +31,24 @@ export async function getAccumulatedFees(
     }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const extensionAddress = getExtensionContractAddress(extensionType);
-    const contract = new ethers.Contract(extensionAddress, LISTING_ABI, provider);
+    const routerAddress = process.env.NEXT_PUBLIC_ROUTER_CONTRACT!;
 
-    const fees = await contract.accumulatedFees(currency);
-    return fees;
+    // Different ABIs for different extensions
+    if (extensionType === 'listing') {
+      const contract = new ethers.Contract(routerAddress, LISTING_ABI, provider);
+      const fees = await contract.accumulatedFees(currency);
+      return fees;
+    } else if (extensionType === 'auction') {
+      const contract = new ethers.Contract(routerAddress, AUCTION_ABI, provider);
+      const fees = await contract.getAccumulatedFee(currency); // Note: singular
+      return fees;
+    } else {
+      // Offer not implemented yet
+      return BigInt(0);
+    }
   } catch (error) {
-    console.error(`Error getting accumulated fees for ${extensionType}:`, error);
+    // Currency may not be configured in this extension, return 0
+    console.debug(`No accumulated fees for ${extensionType} (currency not configured or no fees yet)`);
     return BigInt(0);
   }
 }
@@ -76,8 +82,9 @@ export async function getFeeReceiverAddress(
     }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const extensionAddress = getExtensionContractAddress(extensionType);
-    const contract = new ethers.Contract(extensionAddress, LISTING_ABI, provider);
+    const routerAddress = process.env.NEXT_PUBLIC_ROUTER_CONTRACT!;
+    const abi = extensionType === 'auction' ? AUCTION_ABI : LISTING_ABI;
+    const contract = new ethers.Contract(routerAddress, abi, provider);
 
     const receiver = await contract.feeReceiver();
     return receiver;
@@ -89,6 +96,8 @@ export async function getFeeReceiverAddress(
 
 /**
  * Get fee percentage for a currency
+ * NOTE: getCurrencyFee is only registered in Listing extension (selector 0x752d8a09)
+ * Both Listing and Auction use the same storage, so we always call via Listing's function
  */
 export async function getCurrencyFeePercentage(
   extensionType: 'listing' | 'auction' | 'offer',
@@ -100,14 +109,16 @@ export async function getCurrencyFeePercentage(
     }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const extensionAddress = getExtensionContractAddress(extensionType);
-    const contract = new ethers.Contract(extensionAddress, LISTING_ABI, provider);
+    const routerAddress = process.env.NEXT_PUBLIC_ROUTER_CONTRACT!;
+
+    // Always use GET_CURRENCY_FEE_ABI because only Listing has this function registered
+    const contract = new ethers.Contract(routerAddress, GET_CURRENCY_FEE_ABI, provider);
 
     const feeBps = await contract.getCurrencyFee(currency);
     // Convert basis points to percentage (e.g., 250 -> 2.5%)
     return Number(feeBps) / 100;
   } catch (error) {
-    console.error('Error getting currency fee:', error);
+    console.debug(`Currency ${currency} fee not configured in ${extensionType}`);
     return 0;
   }
 }

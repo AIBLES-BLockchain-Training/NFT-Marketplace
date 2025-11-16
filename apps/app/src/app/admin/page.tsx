@@ -13,7 +13,7 @@ import { CurrencyManagement } from '../../components/admin/CurrencyManagement';
 import { PermissionsSettings } from '../../components/admin/PermissionsSettings';
 import { ListingSettings } from '../../components/admin/ListingSettings';
 import { AuctionSettings } from '../../components/admin/AuctionSettings';
-import { ActivityTable } from '../../components/admin/ActivityTable';
+// import { ActivityTable } from '../../components/admin/ActivityTable'; // TODO: Uncomment when Activity Logs is ready
 import { AdminList } from '../../components/admin/AdminList';
 import { RoleAssignmentsList } from '../../components/admin/RoleAssignmentsList';
 import { WhitelistedNFTList } from '../../components/admin/WhitelistedNFTList';
@@ -30,13 +30,14 @@ import {
 } from '../../lib/graphql/queries';
 import toast from 'react-hot-toast';
 
-interface Activity {
+// TODO: Uncomment when Activity Logs is ready
+/* interface Activity {
   id: string;
   type: string;
   actor: { id: string };
   timestamp: string;
   metadata?: Record<string, unknown>;
-}
+} */
 
 type MenuItem =
   | 'dashboard'
@@ -45,8 +46,8 @@ type MenuItem =
   | 'currencies'
   | 'marketplace-settings'
   | 'fee-config'
-  | 'revenue'
-  | 'activity';
+  | 'revenue';
+  // | 'activity'; // TODO: Uncomment when Activity Logs is ready
 
 export default function AdminDashboard() {
   const [activeMenu, setActiveMenu] = useState<MenuItem>('dashboard');
@@ -58,7 +59,7 @@ export default function AdminDashboard() {
     totalUsers: 0,
     recentTrades: 0,
   });
-  const [activities, setActivities] = useState<Activity[]>([]);
+  // const [adminActivities, setAdminActivities] = useState<Activity[]>([]); // TODO: Uncomment when Activity Logs is ready
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -81,35 +82,149 @@ export default function AdminDashboard() {
         });
       }
 
-      // Load recent activities - wrap in try-catch due to null nft records
+      // TODO: Uncomment when Activity Logs is ready
+      // Load admin activities (role assignments, permission changes, withdrawals, etc.)
+      /* const adminActivitiesData: Activity[] = [];
+
+      // 1. Load Role Assignments
       try {
-        const purchaseResult = await graphqlClient.query(GET_PURCHASE_HISTORY_QUERY, {
-          limit: 10,
-          offset: 0,
-          where: {}
-        });
-        if (purchaseResult?.purchaseHistories) {
-          const activities = purchaseResult.purchaseHistories
-            .filter((p: any) => p.nft != null) // Skip items with null nft
-            .map((p: any) => ({
-              id: p.id,
-              type: p.tradeType || 'PURCHASE',
-              actor: p.buyer || { id: 'unknown' },
-              timestamp: p.timestamp,
+        const roleAssignmentsQuery = `
+          query GetRecentRoleAssignments {
+            roleAssignments(limit: 50, orderBy: assignedAt_DESC) {
+              id
+              role { id roleName }
+              assignedAt
+              subject { id }
+              assignedBy
+            }
+          }
+        `;
+        const roleResult = await graphqlClient.query(roleAssignmentsQuery, {});
+        if (roleResult?.roleAssignments) {
+          roleResult.roleAssignments.forEach((assignment: any) => {
+            adminActivitiesData.push({
+              id: `role-${assignment.id}`,
+              type: 'ROLE_ASSIGNED' as any,
+              actor: { id: assignment.assignedBy || 'system' },
+              timestamp: assignment.assignedAt,
               metadata: {
-                nft: p.nft,
-                seller: p.seller,
-                price: p.totalPrice,
-                currency: p.currency
+                role: assignment.role?.roleName || 'Unknown',
+                subject: assignment.subject,
               }
-            }));
-          setActivities(activities);
+            });
+          });
         }
-      } catch (purchaseError) {
-        // Ignore purchase history errors due to schema issues
-        console.warn('Could not load purchase history due to null NFT records:', purchaseError);
-        setActivities([]);
+      } catch (error) {
+        console.warn('Could not load role assignments:', error);
       }
+
+      // 2. Load Permission Events
+      try {
+        const permissionQuery = `
+          query GetRecentPermissions {
+            permissionEvents(limit: 50, orderBy: timestamp_DESC) {
+              id
+              eventType
+              role { id roleName }
+              subject { id }
+              granted
+              grantedBy
+              timestamp
+            }
+          }
+        `;
+        const permResult = await graphqlClient.query(permissionQuery, {});
+        if (permResult?.permissionEvents) {
+          permResult.permissionEvents.forEach((event: any) => {
+            adminActivitiesData.push({
+              id: `permission-${event.id}`,
+              type: event.granted ? 'ROLE_ASSIGNED' : 'ROLE_REVOKED' as any,
+              actor: { id: event.grantedBy || 'system' },
+              timestamp: event.timestamp,
+              metadata: {
+                role: event.role?.roleName || 'Unknown',
+                subject: event.subject,
+                eventType: event.eventType,
+              }
+            });
+          });
+        }
+      } catch (error) {
+        console.warn('Could not load permission events:', error);
+      }
+
+      // 3. Load NFT Role Requests (approved whitelisting)
+      try {
+        const nftRequestQuery = `
+          query GetApprovedNFTRequests {
+            nftRoleRequests(limit: 50, where: { status_eq: APPROVED }, orderBy: processedAt_DESC) {
+              id
+              nftAddress
+              tokenId
+              processedAt
+              processedBy
+              requester { id }
+            }
+          }
+        `;
+        const nftResult = await graphqlClient.query(nftRequestQuery, {});
+        if (nftResult?.nftRoleRequests) {
+          nftResult.nftRoleRequests.forEach((request: any) => {
+            if (request.processedAt) {
+              adminActivitiesData.push({
+                id: `nft-whitelist-${request.id}`,
+                type: 'NFT_WHITELISTED' as any,
+                actor: { id: request.processedBy || 'admin' },
+                timestamp: request.processedAt,
+                metadata: {
+                  nftContract: request.nftAddress,
+                  requester: request.requester,
+                }
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Could not load NFT whitelist approvals:', error);
+      }
+
+      // 4. Load Fee Withdrawals
+      try {
+        const withdrawalQuery = `
+          query GetRecentWithdrawals {
+            feeWithdrawals(limit: 50, orderBy: timestamp_DESC) {
+              id
+              amount
+              timestamp
+              currency { id symbol }
+              receiver
+            }
+          }
+        `;
+        const withdrawalResult = await graphqlClient.query(withdrawalQuery, {});
+        if (withdrawalResult?.feeWithdrawals) {
+          withdrawalResult.feeWithdrawals.forEach((withdrawal: any) => {
+            adminActivitiesData.push({
+              id: `withdrawal-${withdrawal.id}`,
+              type: 'FEE_WITHDRAWN' as any,
+              actor: { id: withdrawal.receiver || 'multisig' },
+              timestamp: withdrawal.timestamp,
+              metadata: {
+                amount: withdrawal.amount,
+                currency: withdrawal.currency,
+              }
+            });
+          });
+        }
+      } catch (error) {
+        console.warn('Could not load withdrawal events:', error);
+      }
+
+      // Sort by timestamp (newest first) and take top 20
+      adminActivitiesData.sort((a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setAdminActivities(adminActivitiesData.slice(0, 20)); */
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       toast.error('Failed to load dashboard data. Please try again.');
@@ -183,7 +298,8 @@ export default function AdminDashboard() {
         </svg>
       ),
     },
-    {
+    // TODO: Uncomment when Activity Logs is ready
+    /* {
       id: 'activity' as MenuItem,
       label: 'Activity Logs',
       icon: (
@@ -191,7 +307,7 @@ export default function AdminDashboard() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       ),
-    },
+    }, */
   ];
 
   if (isLoading) {
@@ -211,7 +327,7 @@ export default function AdminDashboard() {
       <MainLayout>
         <div className="flex min-h-screen">
           {/* Sidebar */}
-          <div className="w-64 bg-dark-card border-r border-dark-border flex-shrink-0">
+          <div className="w-72 bg-dark-card border-r border-dark-border flex-shrink-0">
             <div className="p-6">
               <h2 className="text-xl font-bold text-white mb-6">Admin Panel</h2>
               <nav className="space-y-1">
@@ -226,7 +342,7 @@ export default function AdminDashboard() {
                     }`}
                   >
                     {item.icon}
-                    <span className="text-sm">{item.label}</span>
+                    <span className="text-sm whitespace-nowrap">{item.label}</span>
                   </button>
                 ))}
               </nav>
@@ -300,9 +416,6 @@ export default function AdminDashboard() {
                     }
                   />
                 </div>
-
-                {/* Recent Activity */}
-                <ActivityTable activities={activities} />
               </div>
             )}
 
@@ -393,16 +506,17 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* TODO: Uncomment when Activity Logs is ready */}
             {/* Activity Logs */}
-            {activeMenu === 'activity' && (
+            {/* {activeMenu === 'activity' && (
               <div className="space-y-8">
                 <div>
                   <h1 className="text-3xl font-bold text-white mb-2">Activity Logs</h1>
-                  <p className="text-gray-400">View recent marketplace activities and transactions</p>
+                  <p className="text-gray-400">Admin actions history (role assignments, whitelisting, withdrawals)</p>
                 </div>
-                <ActivityTable activities={activities} />
+                <ActivityTable activities={adminActivities} />
               </div>
-            )}
+            )} */}
           </div>
         </div>
       </MainLayout>

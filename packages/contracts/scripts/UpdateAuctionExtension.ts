@@ -47,7 +47,8 @@ return [
   { selector: "0xb0f479a1", signature: "getRouter()" },
   { selector: "0xe8a35392", signature: "getFeeReceiver()" },
   { selector: "0x964623dd", signature: "getPermissionsContract()" },
-  { selector: "0x0b9d3578", signature: "getMinTimeAuction()" }
+  { selector: "0x0b9d3578", signature: "getMinTimeAuction()" },
+  { selector: "0x8e9dafdb", signature: "getAccumulatedFee(address)" }
 ];
 }
 

@@ -37,7 +37,9 @@ function getListingFunctions(): ListingFunction[] {
     { selector: "0x164e68de", signature: "withdrawFees(address)" },
     { selector: "0x48dd77df", signature: "approveBuyerForListing(uint256,address,bool)" },
     { selector: "0xea8f9a3c", signature: "approveCurrencyForListing(uint256,address,uint256)" },
-    { selector: "0x3fa615b0", signature: "feeReceiver()" }
+    { selector: "0x3fa615b0", signature: "feeReceiver()" },
+    { selector: "0xfcf66664", signature: "accumulatedFees(address)" },
+    { selector: "0x752d8a09", signature: "getCurrencyFee(address)" }
   ];
 }
 
