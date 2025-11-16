@@ -174,7 +174,9 @@ export interface Auction {
   auctionId: string;
   nft: NFT; // Changed from nftId for clarity
   sellerAddress: Address;
-  auctionCreator: Subject; // Auction creator details
+  seller: Subject; // Auction seller/creator details
+  winningBidder?: Subject; // Winning bidder details
+  winningBid?: Bid; // Computed from bids[0] (highest bid)
   quantity: string;
   currency: SupportedCurrency;
   minimumBidAmount: string; // Minimum bid for auction
@@ -185,10 +187,13 @@ export interface Auction {
   startTime: string;
   endTime: string;
   timeBufferInSeconds: number;
+  tokenType: 'ERC721' | 'ERC1155'; // Token standard
   status: AuctionStatus;
-  winningBid?: Bid;
   bids?: Bid[];
-  createdAt: string;
+  isPayoutCollected?: boolean; // Whether seller collected payout
+  isTokenCollected?: boolean; // Whether winner collected NFT
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Offer {

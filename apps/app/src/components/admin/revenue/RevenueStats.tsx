@@ -34,8 +34,6 @@ export function RevenueStats() {
   const loadStats = async () => {
     setIsLoading(true);
     try {
-      const routerAddress = process.env.NEXT_PUBLIC_ROUTER_ADDRESS!;
-
       // Get currency stats from GraphQL
       const currencyResult = await graphqlClient.query(GET_CURRENCY_FEE_STATS_QUERY, {});
 
@@ -48,12 +46,15 @@ export function RevenueStats() {
       let totalCollectedETH = BigInt(0);
       let totalWithdrawnETH = BigInt(0);
 
-      // Get accumulated fees from contract for each currency
+      // Get accumulated fees from contract for each currency (Listing + Auction)
       for (const currency of currencyResult?.supportedCurrencies || []) {
         const currencyId = currency.id;
 
-        // Get accumulated (available) from on-chain
-        const accumulated = await getAccumulatedFees('listing', currencyId, routerAddress);
+        // Get accumulated from Listing contract
+        const listingFees = await getAccumulatedFees('listing', currencyId);
+        // Get accumulated from Auction contract
+        const auctionFees = await getAccumulatedFees('auction', currencyId);
+        const accumulated = listingFees + auctionFees;
 
         if (currencyId === '0x0000000000000000000000000000000000000000') {
           // ETH

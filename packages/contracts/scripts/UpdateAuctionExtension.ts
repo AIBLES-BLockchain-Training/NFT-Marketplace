@@ -21,26 +21,33 @@ interface Extension {
 }
 
 // Configuration
-// QUAN TRỌNG: Sử dụng signature chuẩn (với tuple được mở rộng) để khớp với cách mã hóa của ethers.js
 function getAuctionFunctions(): AuctionFunction[] {
 return [
-  // === Các hàm tương tác lõi (User-facing) ===
-  // { selector: "0x1a72240f", signature: "createAuction((address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))" },
-  // { selector: "0x96b5a755", signature: "cancelAuction(uint256)" },
-  // { selector: "0x0858e5ad", signature: "bidInAuction(uint256,uint256)" },
-  // { selector: "0xebf05a62", signature: "collectAuctionPayout(uint256)" },
-  // { selector: "0x12090b22", signature: "collectAuctionToken(uint256)" },
-  // { selector: "0x150b7a02", signature: "onERC721Received(address,address,uint256,bytes)" },
+  { selector: "0x172e9f7b", signature: "createAuction((address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))" },
+  { selector: "0x96b5a755", signature: "cancelAuction(uint256)" },
+  { selector: "0x0858e5ad", signature: "bidInAuction(uint256,uint256)" },
+  { selector: "0xebf05a62", signature: "collectAuctionPayout(uint256)" },
+  { selector: "0x12090b22", signature: "collectAuctionToken(uint256)" },
 
-  // // === Các hàm quản trị (Admin/Setter) ===
-  // { selector: "0x3db0f5c1", signature: "initializeAuction(address,address,address)" },
-  // { selector: "0xefdcd974", signature: "setFeeReceiver(address)" },
-  // { selector: "0xf9a6b221", signature: "setMinTimeAuction(uint256)" },
-  // { selector: "0xd183ce74", signature: "setPermissionsContract(address)" },
-  // { selector: "0xc0d78655", signature: "setRouter(address)" },
-     
-   // === Các hàm xem/đọc (View/Getter) ===
-  { selector: "0x0b9d3578", signature: "getMinTimeAuction()" },
+  { selector: "0x150b7a02", signature: "onERC721Received(address,address,uint256,bytes)" },
+  { selector: "0xf23a6e61", signature: "onERC1155Received(address,address,uint256,uint256,bytes)" },
+  { selector: "0xbc197c81", signature: "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)" },
+  { selector: "0x01ffc9a7", signature: "supportsInterface(bytes4)" },
+
+  { selector: "0x3db0f5c1", signature: "initializeAuction(address,address,address)" },
+  { selector: "0xefdcd974", signature: "setFeeReceiver(address)" },
+  { selector: "0xf9a6b221", signature: "setMinTimeAuction(uint256)" },
+  { selector: "0xd183ce74", signature: "setPermissionsContract(address)" },
+  { selector: "0xc0d78655", signature: "setRouter(address)" },
+
+  { selector: "0xc291537c", signature: "getAllAuctions(uint256,uint256)" },
+  { selector: "0x7b063801", signature: "getAllValidAuctions(uint256,uint256)" },
+  { selector: "0x78bd7935", signature: "getAuction(uint256)" },
+  { selector: "0x16002f4a", signature: "totalAuctions()" },
+  { selector: "0xb0f479a1", signature: "getRouter()" },
+  { selector: "0xe8a35392", signature: "getFeeReceiver()" },
+  { selector: "0x964623dd", signature: "getPermissionsContract()" },
+  { selector: "0x0b9d3578", signature: "getMinTimeAuction()" }
 ];
 }
 

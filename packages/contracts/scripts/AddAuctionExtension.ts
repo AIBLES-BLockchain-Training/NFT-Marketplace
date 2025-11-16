@@ -29,7 +29,12 @@ function getAuctionFunctions(): AuctionFunction[] {
     { selector: "0x0858e5ad", signature: "bidInAuction(uint256,uint256)" },
     { selector: "0xebf05a62", signature: "collectAuctionPayout(uint256)" },
     { selector: "0x12090b22", signature: "collectAuctionToken(uint256)" },
+
+    // === NFT Receiver callbacks ===
     { selector: "0x150b7a02", signature: "onERC721Received(address,address,uint256,bytes)" },
+    { selector: "0xf23a6e61", signature: "onERC1155Received(address,address,uint256,uint256,bytes)" },
+    { selector: "0xbc197c81", signature: "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)" },
+    { selector: "0x01ffc9a7", signature: "supportsInterface(bytes4)" },
 
     // === Các hàm quản trị (Admin/Setter) ===
     { selector: "0x3db0f5c1", signature: "initializeAuction(address,address,address)" },

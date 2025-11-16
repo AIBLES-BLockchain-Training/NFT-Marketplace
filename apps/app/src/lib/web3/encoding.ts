@@ -22,6 +22,7 @@ export interface AuctionParams {
   startPrice: bigint;
   stepAmount: bigint;
   ceilingPrice: bigint;
+  timeBufferInSeconds: bigint; // Time buffer for auction extension
   startTimestamp: bigint;
   endTimestamp: bigint;
 }
@@ -160,15 +161,16 @@ export function encodeCreateAuction(params: AuctionParams): EncodedTransaction {
   const auctionInterface = new ethers.Interface(AuctionABI);
   const data = auctionInterface.encodeFunctionData('createAuction', [
     {
-      assetContract: params.assetContract,
-      tokenId: params.tokenId,
-      quantity: params.quantity,
-      currency: params.currency,
-      startPrice: params.startPrice,
-      stepAmount: params.stepAmount,
-      ceilingPrice: params.ceilingPrice,
-      startTimestamp: params.startTimestamp,
-      endTimestamp: params.endTimestamp,
+      _assetContract: params.assetContract,
+      _tokenId: params.tokenId,
+      _quantity: params.quantity,
+      _currency: params.currency,
+      _startPrice: params.startPrice,
+      _ceilingPrice: params.ceilingPrice,
+      _stepAmount: params.stepAmount,
+      _timeBufferInSeconds: params.timeBufferInSeconds,
+      _startTime: params.startTimestamp,
+      _endTime: params.endTimestamp,
     },
   ]);
 
@@ -179,9 +181,33 @@ export function encodeCreateAuction(params: AuctionParams): EncodedTransaction {
   };
 }
 
-export function encodeBidInAuction(auctionId: bigint, bidAmount: bigint): EncodedTransaction {
+export function encodeBidInAuction(params: {
+  auctionId: bigint;
+  bidAmount: bigint;
+  currency: Address;
+}): EncodedTransaction {
   const auctionInterface = new ethers.Interface(AuctionABI);
-  const data = auctionInterface.encodeFunctionData('bidInAuction', [auctionId, bidAmount]);
+  const data = auctionInterface.encodeFunctionData('bidInAuction', [params.auctionId, params.bidAmount]);
+
+  // Check if currency is native token (ETH)
+  // Contract uses address(0) or 0xEEEE... for native ETH
+  const isNativeToken = params.currency.toLowerCase() === ZERO_ADDRESS.toLowerCase() ||
+                        params.currency.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+
+  // Only send ETH value if bidding with native token
+  // For ERC-20 tokens, value should be 0 (tokens are transferred via approve + transferFrom)
+  const value = isNativeToken ? params.bidAmount.toString() : '0';
+
+  return {
+    to: CONTRACT_ADDRESSES.ROUTER,
+    data,
+    value,
+  };
+}
+
+export function encodeCancelAuction(params: { auctionId: bigint }): EncodedTransaction {
+  const auctionInterface = new ethers.Interface(AuctionABI);
+  const data = auctionInterface.encodeFunctionData('cancelAuction', [params.auctionId]);
 
   return {
     to: CONTRACT_ADDRESSES.ROUTER,
@@ -190,9 +216,9 @@ export function encodeBidInAuction(auctionId: bigint, bidAmount: bigint): Encode
   };
 }
 
-export function encodeCancelAuction(auctionId: bigint): EncodedTransaction {
+export function encodeCollectAuctionPayout(params: { auctionId: bigint }): EncodedTransaction {
   const auctionInterface = new ethers.Interface(AuctionABI);
-  const data = auctionInterface.encodeFunctionData('cancelAuction', [auctionId]);
+  const data = auctionInterface.encodeFunctionData('collectAuctionPayout', [params.auctionId]);
 
   return {
     to: CONTRACT_ADDRESSES.ROUTER,
@@ -201,20 +227,9 @@ export function encodeCancelAuction(auctionId: bigint): EncodedTransaction {
   };
 }
 
-export function encodeCollectAuctionPayout(auctionId: bigint): EncodedTransaction {
+export function encodeCollectAuctionToken(params: { auctionId: bigint }): EncodedTransaction {
   const auctionInterface = new ethers.Interface(AuctionABI);
-  const data = auctionInterface.encodeFunctionData('collectAuctionPayout', [auctionId]);
-
-  return {
-    to: CONTRACT_ADDRESSES.ROUTER,
-    data,
-    value: '0',
-  };
-}
-
-export function encodeCollectAuctionToken(auctionId: bigint): EncodedTransaction {
-  const auctionInterface = new ethers.Interface(AuctionABI);
-  const data = auctionInterface.encodeFunctionData('collectAuctionToken', [auctionId]);
+  const data = auctionInterface.encodeFunctionData('collectAuctionToken', [params.auctionId]);
 
   return {
     to: CONTRACT_ADDRESSES.ROUTER,

@@ -160,20 +160,27 @@ type Listing @entity {
 
 type Auction @entity {
   id: ID! @index
+  auctionId: BigInt! @index # Contract's auction ID
   nft: NFT! @index
   seller: Subject! @index
+  sellerAddress: String! @index # Seller's address for easy querying
   winningBidder: Subject @index
   quantity: BigInt!
   currency: SupportedCurrency! @index
+  minimumBidAmount: BigInt! # Minimum bid required for auction
   startPrice: BigInt! @index
   stepAmount: BigInt! @index
+  bidBufferBps: BigInt! # Bid buffer in basis points
   ceilingPrice: BigInt @index
   startTime: DateTime
   endTime: DateTime
   timeBufferInSeconds: Int!
+  tokenType: String! # ERC721 or ERC1155
   status: AuctionStatus!
   isPayoutCollected: Boolean!
   isTokenCollected: Boolean!
+  createdAt: DateTime! @index
+  updatedAt: DateTime
 
   # Relations
   bids: [Bid]! @derivedFrom(field: "auction")
@@ -184,6 +191,7 @@ type Bid @entity {
   id: ID! @index
   auction: Auction! @index
   bidder: Subject! @index
+  bidderAddress: String! @index # Bidder's address for easy querying
   bidAmount: BigInt! @index
   timestamp: DateTime!
 }

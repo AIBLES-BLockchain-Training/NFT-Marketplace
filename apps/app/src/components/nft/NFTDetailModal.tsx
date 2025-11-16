@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { NFT, Listing } from '../../types';
+import { NFT, Listing, Auction } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -10,6 +10,14 @@ import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { truncateTokenId } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
+import { useCancelAuction } from '../../hooks/useCancelAuction';
+import {
+  isAuctionActive,
+  getAuctionStatusText,
+  getAuctionStatusVariant,
+  hasAuctionEnded
+} from '../../lib/auction/status';
+import { CompactCountdownTimer } from '../auction/CountdownTimer';
 
 interface NFTDetailModalProps {
   isOpen: boolean;
@@ -20,6 +28,7 @@ interface NFTDetailModalProps {
   onNavigate?: (index: number) => void;
   isOwner?: boolean;
   activeListings?: Listing[];
+  activeAuctions?: Auction[];
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
@@ -27,6 +36,9 @@ interface NFTDetailModalProps {
   onUpdateListing?: (listing: Listing) => void;
   onAddCurrency?: (listing: Listing) => void;
   onApproveBuyer?: (listing: Listing) => void;
+  onPlaceBid?: (auction: Auction) => void;
+  onViewAuctionDetails?: (auction: Auction) => void;
+  onRefresh?: () => void;
 }
 
 export function NFTDetailModal({
@@ -38,6 +50,7 @@ export function NFTDetailModal({
   onNavigate,
   isOwner,
   activeListings = [],
+  activeAuctions = [],
   onBuy,
   onCreateListing,
   onCreateAuction,
@@ -45,6 +58,9 @@ export function NFTDetailModal({
   onUpdateListing,
   onAddCurrency,
   onApproveBuyer,
+  onPlaceBid,
+  onViewAuctionDetails,
+  onRefresh,
 }: NFTDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity' | 'approved'>('details');
   const hasReservedListing = activeListings.some(l => l.isReserved);
@@ -297,8 +313,8 @@ export function NFTDetailModal({
                   </div>
                 )}
 
-                {/* Owner Actions - No Listing */}
-                {isOwner && activeListings.length === 0 && (
+                {/* Owner Actions - No Listing/Auction */}
+                {isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (
                   <Card>
                     <h3 className="text-sm font-semibold text-gray-400 mb-4">List for Sale</h3>
                     <div className="space-y-3">
@@ -531,6 +547,146 @@ export function NFTDetailModal({
                   </Card>
                 )}
 
+                {/* Auctions Section */}
+                {activeAuctions.length > 0 && (
+                  <Card>
+                    <h3 className="text-sm font-semibold text-gray-400 mb-4">
+                      Active Auctions ({activeAuctions.length})
+                    </h3>
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {activeAuctions
+                        .filter(auction => isAuctionActive(auction) || !hasAuctionEnded(auction.endTime))
+                        .map((auction) => {
+                          const isMyAuction = address && auction.sellerAddress.toLowerCase() === address.toLowerCase();
+                          const currentBid = auction.bids && auction.bids.length > 0
+                            ? BigInt(auction.bids[0].bidAmount)
+                            : BigInt(auction.startPrice);
+                          const statusText = getAuctionStatusText(auction);
+                          const statusVariant = getAuctionStatusVariant(auction);
+                          const auctionActive = isAuctionActive(auction);
+
+                          return (
+                            <div
+                              key={auction.id}
+                              className="p-4 bg-dark-bg rounded-lg border border-dark-border hover:border-primary-500 transition-colors"
+                            >
+                              {/* Auction Header */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-sm font-semibold text-white">Auction #{auction.auctionId}</h4>
+                                  <Badge variant={statusVariant} size="sm">{statusText}</Badge>
+                                </div>
+                                {onViewAuctionDetails && (
+                                  <button
+                                    onClick={() => onViewAuctionDetails(auction)}
+                                    className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                                  >
+                                    View Full Details →
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Current Bid Info */}
+                              <div className="grid grid-cols-2 gap-4 mb-3">
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">Current Bid</p>
+                                  <div className="flex items-baseline gap-2">
+                                    <p className="text-lg font-bold text-primary-400">
+                                      {formatEth(currentBid)}
+                                    </p>
+                                    <p className="text-xs text-gray-400">{auction.currency.symbol}</p>
+                                  </div>
+                                  {auction.bids && auction.bids.length > 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {auction.bids.length} bid{auction.bids.length !== 1 ? 's' : ''}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">
+                                    {auctionActive ? 'Ends In' : 'Ended'}
+                                  </p>
+                                  {auctionActive ? (
+                                    <CompactCountdownTimer endTime={auction.endTime} />
+                                  ) : (
+                                    <p className="text-sm font-semibold text-gray-500">Auction Ended</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Auction Details */}
+                              <div className="grid grid-cols-3 gap-2 p-3 bg-dark-card rounded-lg mb-3">
+                                <div>
+                                  <p className="text-xs text-gray-400">Start Price</p>
+                                  <p className="text-xs font-semibold text-white">
+                                    {formatEth(BigInt(auction.startPrice))}
+                                  </p>
+                                </div>
+                                {auction.ceilingPrice && (
+                                  <div>
+                                    <p className="text-xs text-gray-400">Buyout</p>
+                                    <p className="text-xs font-semibold text-primary-400">
+                                      {formatEth(BigInt(auction.ceilingPrice))}
+                                    </p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs text-gray-400">Min Step</p>
+                                  <p className="text-xs font-semibold text-white">
+                                    +{(Number(auction.bidBufferBps) / 100).toFixed(1)}%
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              {auctionActive && (
+                                <>
+                                  {isMyAuction ? (
+                                    <AuctionOwnerActions auction={auction} onRefresh={onRefresh} />
+                                  ) : (
+                                    <div className="flex gap-2">
+                                      {onPlaceBid && (
+                                        <Button
+                                          onClick={() => onPlaceBid(auction)}
+                                          variant="primary"
+                                          className="flex-1"
+                                          size="sm"
+                                        >
+                                          Place Bid
+                                        </Button>
+                                      )}
+                                      {onViewAuctionDetails && (
+                                        <Button
+                                          onClick={() => onViewAuctionDetails(auction)}
+                                          variant="secondary"
+                                          size="sm"
+                                        >
+                                          Details
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
+                              {!auctionActive && onViewAuctionDetails && (
+                                <Button
+                                  onClick={() => onViewAuctionDetails(auction)}
+                                  variant="secondary"
+                                  size="sm"
+                                  fullWidth
+                                >
+                                  View Details
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </Card>
+                )}
+
                 {/* Tabs */}
                 <div className="border-b border-dark-border">
                   <div className="flex gap-6">
@@ -734,5 +890,48 @@ export function NFTDetailModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Auction Owner Actions Component
+ * Shows cancel button for auction owners
+ */
+function AuctionOwnerActions({ auction, onRefresh }: { auction: Auction; onRefresh?: () => void }) {
+  const { cancelAuction, isCancelling, canCancel, cancelReason } = useCancelAuction(auction, onRefresh);
+
+  if (canCancel) {
+    return (
+      <Button
+        onClick={() => cancelAuction(auction)}
+        variant="secondary"
+        size="sm"
+        fullWidth
+        isLoading={isCancelling}
+      >
+        Cancel Auction
+      </Button>
+    );
+  }
+
+  if (cancelReason) {
+    return (
+      <div className="p-2 bg-dark-card border border-dark-border rounded-lg">
+        <p className="text-xs text-gray-400 text-center">
+          {cancelReason}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      fullWidth
+      disabled
+    >
+      Manage Auction
+    </Button>
   );
 }

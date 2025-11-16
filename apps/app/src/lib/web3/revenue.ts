@@ -7,12 +7,28 @@ const LISTING_ABI = [
 ];
 
 /**
+ * Get the contract address for a specific extension type
+ */
+function getExtensionContractAddress(extensionType: 'listing' | 'auction' | 'offer'): string {
+  switch (extensionType) {
+    case 'listing':
+      return process.env.NEXT_PUBLIC_LISTING_CONTRACT!;
+    case 'auction':
+      return process.env.NEXT_PUBLIC_AUCTION_CONTRACT!;
+    case 'offer':
+      return process.env.NEXT_PUBLIC_OFFER_CONTRACT!;
+    default:
+      throw new Error(`Unknown extension type: ${extensionType}`);
+  }
+}
+
+/**
  * Get accumulated fees for a specific extension and currency
  */
 export async function getAccumulatedFees(
   extensionType: 'listing' | 'auction' | 'offer',
   currency: string,
-  routerAddress: string
+  routerAddress?: string // Keep for backward compatibility but not used
 ): Promise<bigint> {
   try {
     if (!window.ethereum) {
@@ -20,7 +36,8 @@ export async function getAccumulatedFees(
     }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(routerAddress, LISTING_ABI, provider);
+    const extensionAddress = getExtensionContractAddress(extensionType);
+    const contract = new ethers.Contract(extensionAddress, LISTING_ABI, provider);
 
     const fees = await contract.accumulatedFees(currency);
     return fees;
@@ -35,13 +52,12 @@ export async function getAccumulatedFees(
  */
 export async function getFeesForAllCurrencies(
   extensionType: 'listing' | 'auction' | 'offer',
-  currencies: Array<{ id: string; symbol: string }>,
-  routerAddress: string
+  currencies: Array<{ id: string; symbol: string }>
 ): Promise<Map<string, bigint>> {
   const feesMap = new Map<string, bigint>();
 
   for (const currency of currencies) {
-    const fees = await getAccumulatedFees(extensionType, currency.id, routerAddress);
+    const fees = await getAccumulatedFees(extensionType, currency.id);
     feesMap.set(currency.id, fees);
   }
 
@@ -51,14 +67,17 @@ export async function getFeesForAllCurrencies(
 /**
  * Get fee receiver address (MultiSig wallet)
  */
-export async function getFeeReceiverAddress(routerAddress: string): Promise<string> {
+export async function getFeeReceiverAddress(
+  extensionType: 'listing' | 'auction' | 'offer'
+): Promise<string> {
   try {
     if (!window.ethereum) {
       throw new Error('No wallet connected');
     }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(routerAddress, LISTING_ABI, provider);
+    const extensionAddress = getExtensionContractAddress(extensionType);
+    const contract = new ethers.Contract(extensionAddress, LISTING_ABI, provider);
 
     const receiver = await contract.feeReceiver();
     return receiver;
@@ -72,8 +91,8 @@ export async function getFeeReceiverAddress(routerAddress: string): Promise<stri
  * Get fee percentage for a currency
  */
 export async function getCurrencyFeePercentage(
-  currency: string,
-  routerAddress: string
+  extensionType: 'listing' | 'auction' | 'offer',
+  currency: string
 ): Promise<number> {
   try {
     if (!window.ethereum) {
@@ -81,7 +100,8 @@ export async function getCurrencyFeePercentage(
     }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(routerAddress, LISTING_ABI, provider);
+    const extensionAddress = getExtensionContractAddress(extensionType);
+    const contract = new ethers.Contract(extensionAddress, LISTING_ABI, provider);
 
     const feeBps = await contract.getCurrencyFee(currency);
     // Convert basis points to percentage (e.g., 250 -> 2.5%)

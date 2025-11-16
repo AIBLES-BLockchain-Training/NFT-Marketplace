@@ -119,7 +119,7 @@ export function AuctionCard({ auction, onBid, onCancel, isOwner }: AuctionCardPr
           <div>
             <p className="text-xs text-gray-400 mb-1">Auctioneer</p>
             <p className="text-xs font-mono text-primary-400">
-              {formatAddress(auction.auctionCreator.id)}
+              {formatAddress(auction.seller.id)}
             </p>
           </div>
         </div>

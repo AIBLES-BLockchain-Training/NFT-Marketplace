@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import Image from 'next/image';
-import { NFT, Listing } from '../../types';
+import { NFT, Listing, Auction } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
+import { AuctionCardCompact } from '../auction/AuctionCardCompact';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { getIpfsGateways, truncateTokenId } from '../../lib/utils/format';
@@ -14,16 +15,33 @@ interface NFTDetailProps {
   nft: NFT;
   isOwner?: boolean;
   activeListings?: Listing[];
+  activeAuctions?: Auction[];
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
+  onViewAuction?: (auction: Auction) => void;
+  onPlaceBid?: (auction: Auction) => void;
   onCancelListing?: (listing: Listing) => void;
   onUpdateListing?: (listing: Listing) => void;
   onAddCurrency?: (listing: Listing) => void;
   onApproveBuyer?: (listing: Listing) => void;
 }
 
-export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateListing, onCreateAuction, onCancelListing, onUpdateListing, onAddCurrency, onApproveBuyer }: NFTDetailProps) {
+export function NFTDetail({
+  nft,
+  isOwner,
+  activeListings = [],
+  activeAuctions = [],
+  onBuy,
+  onCreateListing,
+  onCreateAuction,
+  onViewAuction,
+  onPlaceBid,
+  onCancelListing,
+  onUpdateListing,
+  onAddCurrency,
+  onApproveBuyer
+}: NFTDetailProps) {
   const { address } = useWallet();
   const [imageError, setImageError] = useState(false);
   const [fallbackIndex, setFallbackIndex] = useState(0);
@@ -196,6 +214,24 @@ export function NFTDetail({ nft, isOwner, activeListings = [], onBuy, onCreateLi
             </div>
           </div>
         </Card>
+
+        {/* Auctions Section */}
+        {activeAuctions.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold text-white mb-4">Active Auctions</h2>
+            <div className="space-y-4">
+              {activeAuctions.map((auction) => (
+                <AuctionCardCompact
+                  key={auction.id}
+                  auction={auction}
+                  isOwner={isOwner}
+                  onViewDetails={onViewAuction || undefined}
+                  onPlaceBid={onPlaceBid}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Listings Section */}
         {activeListings.length > 0 && (

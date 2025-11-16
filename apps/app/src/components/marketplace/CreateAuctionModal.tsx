@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NFT } from '../../types';
+import { useState, useEffect } from 'react';
+import { NFT, SupportedCurrency } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -15,6 +15,9 @@ import {
   DEFAULT_BUYOUT_MULTIPLIER,
 } from '../../lib/constants';
 import { checkNFTApproval, approveNFT, isNFTCollectionWhitelisted } from '../../lib/web3/approve';
+import { graphqlClient } from '../../lib/graphql/client';
+import { GET_SUPPORTED_CURRENCIES_QUERY } from '../../lib/graphql/queries';
+import { truncate } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface CreateAuctionModalProps {
@@ -33,9 +36,85 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
   const [duration, setDuration] = useState('7'); // days
   const [bidBuffer, setBidBuffer] = useState(BID_BUFFER_BPS.MEDIUM);
   const [isApproving, setIsApproving] = useState(false);
+  const [isApproved, setIsApproved] = useState(false);
+  const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  const [currencies, setCurrencies] = useState<SupportedCurrency[]>([]);
+  const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency | null>(null);
+  const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(false);
+
+  // Load supported currencies when modal opens
+  useEffect(() => {
+    const loadCurrencies = async () => {
+      if (!isOpen) return;
+
+      setIsLoadingCurrencies(true);
+      try {
+        const result = await graphqlClient.query(GET_SUPPORTED_CURRENCIES_QUERY, {});
+        if (result?.supportedCurrencies) {
+          setCurrencies(result.supportedCurrencies);
+          // Auto-select first currency (usually ETH)
+          if (result.supportedCurrencies.length > 0) {
+            setSelectedCurrency(result.supportedCurrencies[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load currencies:', error);
+        toast.error('Failed to load supported currencies');
+      } finally {
+        setIsLoadingCurrencies(false);
+      }
+    };
+
+    loadCurrencies();
+  }, [isOpen]);
+
+  // Check approval status when modal opens
+  useEffect(() => {
+    const checkApprovalStatus = async () => {
+      if (!isOpen || !address || !nft) {
+        setIsApproved(false);
+        return;
+      }
+
+      setIsCheckingApproval(true);
+      try {
+        const isERC1155 = nft.collection.collectionType === 'ERC1155';
+        const approvalStatus = await checkNFTApproval(
+          nft.collection.id,
+          nft.tokenId,
+          address,
+          isERC1155
+        );
+        setIsApproved(!approvalStatus.needsApproval);
+      } catch (error) {
+        console.error('Check approval error:', error);
+        setIsApproved(false);
+      } finally {
+        setIsCheckingApproval(false);
+      }
+    };
+
+    checkApprovalStatus();
+  }, [isOpen, address, nft]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate NFT and capture values immediately at start
+    if (!nft) {
+      toast.error('NFT data is missing. Please close and reopen the modal.');
+      return;
+    }
+
+    if (!nft.collection || !nft.collection.id) {
+      toast.error('NFT collection data is missing. Please refresh the page.');
+      return;
+    }
+
+    // Capture NFT values at the start to prevent closure/stale prop issues
+    const capturedCollectionId = nft.collection.id;
+    const capturedTokenId = nft.tokenId;
+    const capturedCollectionType = nft.collection.collectionType;
 
     try {
       if (!minimumBid || parseFloat(minimumBid) <= 0) {
@@ -49,11 +128,11 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
         return;
       }
 
-      const isERC1155 = nft.collection.collectionType === 'ERC1155';
+      const isERC1155 = capturedCollectionType === 'ERC1155';
 
       // First check if NFT collection is whitelisted
       toast.loading('Checking NFT collection whitelist...', { id: 'whitelist-check' });
-      const isWhitelisted = await isNFTCollectionWhitelisted(nft.collection.id);
+      const isWhitelisted = await isNFTCollectionWhitelisted(capturedCollectionId);
       toast.dismiss('whitelist-check');
 
       if (!isWhitelisted) {
@@ -64,22 +143,13 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
         return;
       }
 
-      toast.loading('Checking NFT approval...', { id: 'approval-check' });
-      const approvalStatus = await checkNFTApproval(
-        nft.collection.id,
-        nft.tokenId,
-        address,
-        isERC1155
-      );
-      toast.dismiss('approval-check');
-
       // If not approved, request approval first
-      if (approvalStatus.needsApproval) {
+      if (!isApproved) {
         setIsApproving(true);
         toast.loading('Please approve NFT in your wallet...', { id: 'approval' });
 
         try {
-          const approved = await approveNFT(nft.collection.id, nft.tokenId, isERC1155);
+          const approved = await approveNFT(capturedCollectionId, capturedTokenId, isERC1155);
 
           if (!approved) {
             toast.error('NFT approval failed', { id: 'approval' });
@@ -88,6 +158,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
           }
 
           toast.success('NFT approved successfully!', { id: 'approval' });
+          setIsApproved(true);
         } catch (error: unknown) {
           toast.error(error instanceof Error ? error.message : 'Failed to approve NFT', { id: 'approval' });
           setIsApproving(false);
@@ -95,30 +166,48 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
         } finally {
           setIsApproving(false);
         }
+
+        // Continue to create auction automatically after approval
+        toast.loading('Creating auction...', { id: 'create-auction' });
       }
 
-      // Create auction
+      // Create auction - use captured values
       const minimumBidWei = BigInt(Math.floor(parseFloat(minimumBid) * 1e18));
       const buyoutBidWei = buyoutBid
         ? BigInt(Math.floor(parseFloat(buyoutBid) * 1e18))
         : minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
 
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
-      const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
+      const endTime = startTime + BigInt(Math.floor(parseFloat(duration) * SECONDS_PER_DAY));
 
-      const tx = encodeCreateAuction({
-        assetContract: nft.collection.id,
-        tokenId: BigInt(nft.tokenId),
+      // Check if currency is selected
+      if (!selectedCurrency) {
+        toast.error('Please select a currency');
+        return;
+      }
+
+      const auctionParams = {
+        assetContract: capturedCollectionId,
+        tokenId: BigInt(capturedTokenId),
         quantity: BigInt(quantity),
-        currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
+        currency: selectedCurrency.id, // Use selected currency address
         startPrice: minimumBidWei,
-        stepAmount: (minimumBidWei * BigInt(bidBuffer)) / 10000n,
+        stepAmount: BigInt(bidBuffer), // Send BPS directly (e.g., 500 for 5%), not Wei value
         ceilingPrice: buyoutBidWei,
+        timeBufferInSeconds: 600n, // 10 minutes - extends auction if bid placed near end
         startTimestamp: startTime,
         endTimestamp: endTime,
-      });
+      };
+
+      const tx = encodeCreateAuction(auctionParams);
 
       await sendTransaction(tx, 'Auction created successfully!');
+
+      // Dismiss loading toast
+      toast.dismiss('create-auction');
+
+      // Reset approval state on success
+      setIsApproved(false);
     } catch (error: unknown) {
       console.error('Create auction error:', error);
     }
@@ -146,9 +235,44 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Currency Selector */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Minimum Bid (ETH) *
+                Payment Currency *
+              </label>
+              {isLoadingCurrencies ? (
+                <div className="text-center py-4 text-gray-400">Loading currencies...</div>
+              ) : currencies.length === 0 ? (
+                <div className="text-center py-4 text-red-400">No supported currencies available</div>
+              ) : (
+                <>
+                  <select
+                    value={selectedCurrency?.id || ''}
+                    onChange={(e) => {
+                      const currency = currencies.find(c => c.id === e.target.value);
+                      setSelectedCurrency(currency || null);
+                    }}
+                    className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
+                    required
+                  >
+                    {currencies.map((currency) => (
+                      <option key={currency.id} value={currency.id}>
+                        {currency.name} - ({truncate(currency.id, 6, 4)})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedCurrency && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      Symbol: {selectedCurrency.symbol} | Full Address: {selectedCurrency.id}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Minimum Bid ({selectedCurrency?.symbol || 'Token'}) *
               </label>
               <Input
                 type="number"
@@ -158,6 +282,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
                 value={minimumBid}
                 onChange={(e) => setMinimumBid(e.target.value)}
                 required
+                disabled={!selectedCurrency}
               />
               <p className="mt-2 text-xs text-gray-500">
                 Starting price for the auction
@@ -166,15 +291,16 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
 
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Buyout Price (ETH) <span className="text-gray-600">(Optional)</span>
+                Buyout Price ({selectedCurrency?.symbol || 'Token'}) <span className="text-gray-600">(Optional)</span>
               </label>
               <Input
                 type="number"
                 step="any"
                 min="0"
-                placeholder={`Auto: ${parseFloat(minimumBid || '0') * 3} ETH`}
+                placeholder={`Auto: ${parseFloat(minimumBid || '0') * 3} ${selectedCurrency?.symbol || ''}`}
                 value={buyoutBid}
                 onChange={(e) => setBuyoutBid(e.target.value)}
+                disabled={!selectedCurrency}
               />
               <p className="mt-2 text-xs text-gray-500">
                 Instant purchase price. Defaults to 3x minimum bid if not set
@@ -241,8 +367,19 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
               <Button type="button" onClick={onClose} variant="secondary" fullWidth>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" fullWidth isLoading={isLoading || isApproving}>
-                {isApproving ? 'Approving...' : 'Create Auction'}
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                isLoading={isLoading || isApproving || isCheckingApproval}
+              >
+                {isCheckingApproval
+                  ? 'Checking...'
+                  : isApproving
+                  ? 'Approving...'
+                  : isApproved
+                  ? 'Create Auction'
+                  : 'Approve & Create'}
               </Button>
             </div>
           </form>

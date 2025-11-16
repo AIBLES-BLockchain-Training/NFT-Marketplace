@@ -32,8 +32,6 @@ export function FeePoolsTable() {
   const loadPools = async () => {
     setIsLoading(true);
     try {
-      const routerAddress = process.env.NEXT_PUBLIC_ROUTER_ADDRESS!;
-
       // Query currencies from GraphQL
       const result = await graphqlClient.query(GET_CURRENCY_FEE_STATS_QUERY, {});
       const allCurrencies = result?.supportedCurrencies || [];
@@ -42,7 +40,7 @@ export function FeePoolsTable() {
       // Define extensions
       const extensions = [
         { name: 'Listing', isActive: true },
-        { name: 'Auction', isActive: false },
+        { name: 'Auction', isActive: true },
         { name: 'Offer', isActive: false },
       ];
 
@@ -53,11 +51,10 @@ export function FeePoolsTable() {
 
         if (ext.isActive) {
           for (const currency of currencies) {
-            // Query on-chain accumulated fees
+            // Query on-chain accumulated fees from extension contract
             const accumulated = await getAccumulatedFees(
-              ext.name.toLowerCase() as 'listing',
-              currency.id,
-              routerAddress
+              ext.name.toLowerCase() as 'listing' | 'auction' | 'offer',
+              currency.id
             );
 
             currencyFees.push({

@@ -31,7 +31,7 @@ export function NFTWhitelistManagement() {
       const data = iface.encodeFunctionData('assignNFTRole', [addresses]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
         data,
       };
 
@@ -60,7 +60,7 @@ export function NFTWhitelistManagement() {
       const data = iface.encodeFunctionData('revokeNFTRole', [addresses]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
         data,
       };
 

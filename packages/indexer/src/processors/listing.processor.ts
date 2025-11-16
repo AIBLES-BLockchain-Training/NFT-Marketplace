@@ -22,6 +22,7 @@ import {
   fetchNFTMetadataUnified,
   detectContractType
 } from '../utils/metadata'
+import { fetchTokenInfo } from '../utils/erc20'
 import { ethers } from 'ethers'
 
 export function getListingTopics(): string[] {
@@ -164,23 +165,27 @@ export async function processListingEvents(
     return nft
   }
 
-  async function getOrCreateCurrency(address: string): Promise<SupportedCurrency> {
+  async function getOrCreateCurrency(address: string, block: any): Promise<SupportedCurrency> {
     const currencyId = address.toLowerCase()
     if (currencyMap.has(currencyId)) {
       return currencyMap.get(currencyId)!
     }
     let currency = await ctx.store.get(SupportedCurrency, currencyId)
     if (!currency) {
+      // Fetch real token info from ERC-20 contract
+      const tokenInfo = await fetchTokenInfo(ctx, block, currencyId);
+
       currency = new SupportedCurrency({
         id: currencyId,
-        name: currencyId === '0x0000000000000000000000000000000000000000' ? 'ETH' : `Token_${address.slice(0, 6)}`,
-        symbol: currencyId === '0x0000000000000000000000000000000000000000' ? 'ETH' : 'TKN',
-        decimals: 18,
+        name: tokenInfo.name,
+        symbol: tokenInfo.symbol,
+        decimals: tokenInfo.decimals,
         isActive: true,
         feePercentage: 0,
         totalAmountFee: BigInt(0),
-        currencyApprovals: [],
-        purchaseHistory: []
+        // Do NOT set @derivedFrom fields - they are auto-populated
+        // currencyApprovals: [],
+        // purchaseHistory: []
       })
     }
     currencyMap.set(currencyId, currency)
@@ -276,9 +281,10 @@ export async function processListingEvents(
             createdAt: timestamp,
             updatedAt: timestamp,
             transactionHash: transactionHash,
-            currencyApprovals: [],
-            buyerApprovals: [],
-            purchaseHistory: []
+            // Do NOT set @derivedFrom fields - they are auto-populated
+            // currencyApprovals: [],
+            // buyerApprovals: [],
+            // purchaseHistory: []
           })
           listingMap.set(listingIdStr, listing)
         }
@@ -378,7 +384,7 @@ export async function processListingEvents(
         let listing = await getListing(listingIdStr)
 
         if (listing) {
-          const currencyEntity = await getOrCreateCurrency(currency)
+          const currencyEntity = await getOrCreateCurrency(currency, log.block)
           const approvalId = `${listingIdStr}-${currencyEntity.id}`
 
           // Check in current batch first
@@ -421,7 +427,7 @@ export async function processListingEvents(
       else if (topic0 === ListingABI.events.FeeWithdrawn?.topic) {
         const { admin, currency, amount } = ListingABI.events.FeeWithdrawn.decode(log)
 
-        const currencyEntity = await getOrCreateCurrency(currency)
+        const currencyEntity = await getOrCreateCurrency(currency, log.block)
 
         // Create FeeWithdrawal record
         const feeWithdrawal = new FeeWithdrawal({
@@ -446,7 +452,7 @@ export async function processListingEvents(
       else if (topic0 === ListingABI.events.CurrencyFeeUpdated?.topic) {
         const { currency, fee } = ListingABI.events.CurrencyFeeUpdated.decode(log)
 
-        const currencyEntity = await getOrCreateCurrency(currency)
+        const currencyEntity = await getOrCreateCurrency(currency, log.block)
         if (currencyEntity) {
           currencyEntity.feePercentage = Number(fee) / 10000
           currencyMap.set(currencyEntity.id, currencyEntity)
@@ -463,7 +469,7 @@ export async function processListingEvents(
         let listing = await getListing(listingIdStr)
         if (listing) {
           const buyerSubject = await getOrCreateSubject(buyer)
-          let usedCurrency = await getOrCreateCurrency('0x0000000000000000000000000000000000000000')
+          let usedCurrency = await getOrCreateCurrency('0x0000000000000000000000000000000000000000', log.block)
 
           const approvalsInBatch = currencyApprovals.filter(a =>
             a.listing.id === listingIdStr

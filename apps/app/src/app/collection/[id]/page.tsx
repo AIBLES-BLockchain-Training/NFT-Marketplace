@@ -14,6 +14,8 @@ import { ApproveBuyerModal } from '../../../components/marketplace/ApproveBuyerM
 import { NFTDetailModal } from '../../../components/nft/NFTDetailModal';
 import { CreateListingModal } from '../../../components/marketplace/CreateListingModal';
 import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctionModal';
+import { BidModal } from '../../../components/auction/BidModal';
+import { AuctionDetailModal } from '../../../components/auction/AuctionDetailModal';
 import { graphqlClient } from '../../../lib/graphql/client';
 import {
   GET_COLLECTION_BY_ID_QUERY,
@@ -26,17 +28,20 @@ import {
 } from '../../../lib/graphql/queries';
 import { useWallet } from '../../../hooks/useWallet';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
-import { Collection, NFT, Listing } from '../../../types';
+import { useCancelAuction } from '../../../hooks/useCancelAuction';
+import { Collection, NFT, Listing, Auction } from '../../../types';
 import { formatEth } from '../../../lib/web3/utils';
 import { encodeCancelListing, encodeApproveBuyerForListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { truncateTokenId } from '../../../lib/utils/format';
 import { EditCollectionBanner } from '../../../components/collection/EditCollectionBanner';
+import { isAuctionActive, hasAuctionEnded, canCollectPayout, canCollectNFT } from '../../../lib/auction/status';
 import toast from 'react-hot-toast';
 
 type TabType = 'listed' | 'auctioned' | 'offered' | 'yours';
 type YoursSubTab = 'your-listed' | 'your-auctioned' | 'your-offered';
+type AuctionedSubTab = 'active' | 'expired' | 'claimable';
 
 interface NFTWithListing extends NFT {
   listing?: Listing;
@@ -50,13 +55,13 @@ interface ListingQueryResult {
 }
 
 interface AuctionQueryResult {
-  nftId: NFT;
+  nft: NFT;
   quantity: string;
   [key: string]: unknown;
 }
 
 interface OfferQueryResult {
-  nftId: NFT;
+  nftId: NFT; // Offer still uses nftId
   quantity: string;
   [key: string]: unknown;
 }
@@ -73,6 +78,7 @@ export default function CollectionDetailPage() {
   const [isLoadingNFTs, setIsLoadingNFTs] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('listed');
   const [yoursSubTab, setYoursSubTab] = useState<YoursSubTab>('your-listed');
+  const [auctionedSubTab, setAuctionedSubTab] = useState<AuctionedSubTab>('active');
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -84,6 +90,11 @@ export default function CollectionDetailPage() {
   const [selectedNFTIndex, setSelectedNFTIndex] = useState(0);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreateAuction, setShowCreateAuction] = useState(false);
+
+  // Auction Modals
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [showAuctionDetail, setShowAuctionDetail] = useState(false);
 
   // Collection Banner
   const [showEditBanner, setShowEditBanner] = useState(false);
@@ -111,7 +122,7 @@ export default function CollectionDetailPage() {
     }
   }, [id]);
 
-  const loadNFTs = useCallback(async (tab: TabType, subTab?: YoursSubTab) => {
+  const loadNFTs = useCallback(async (tab: TabType, subTab?: YoursSubTab, auctionSubTab?: AuctionedSubTab) => {
     setIsLoadingNFTs(true);
     try {
       let result: { listings?: ListingQueryResult[]; auctions?: AuctionQueryResult[]; offers?: OfferQueryResult[] };
@@ -173,17 +184,61 @@ export default function CollectionDetailPage() {
           }
           break;
 
-        case 'auctioned':
+        case 'auctioned': {
+          const currentAuctionSubTab = auctionSubTab || auctionedSubTab;
           result = await graphqlClient.query(GET_COLLECTION_AUCTIONED_NFTS_QUERY, {
             collectionId: id,
           });
           if (result.auctions) {
-            setNfts(result.auctions.map((auction: AuctionQueryResult) => ({
-              ...auction.nftId,
+            // Transform auctions: compute winningBid from bids array (same as auctions page)
+            let transformedAuctions = result.auctions.map((auction: any) => {
+              const sortedBids = auction.bids
+                ? [...auction.bids].sort((a: any, b: any) => {
+                    const amountDiff = BigInt(b.bidAmount) - BigInt(a.bidAmount);
+                    if (amountDiff !== 0n) return Number(amountDiff);
+                    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+                  })
+                : [];
+
+              return {
+                ...auction,
+                bids: sortedBids,
+                winningBid: sortedBids.length > 0 ? sortedBids[0] : undefined,
+              };
+            });
+
+            // Filter by sub-tab
+            if (currentAuctionSubTab === 'active') {
+              transformedAuctions = transformedAuctions.filter((auction: any) =>
+                !hasAuctionEnded(auction.endTime) && auction.status !== 'CANCELLED'
+              );
+            } else if (currentAuctionSubTab === 'expired') {
+              transformedAuctions = transformedAuctions.filter((auction: any) =>
+                hasAuctionEnded(auction.endTime) && auction.status !== 'CANCELLED'
+              );
+            } else if (currentAuctionSubTab === 'claimable') {
+              transformedAuctions = transformedAuctions.filter((auction: any) => {
+                if (!hasAuctionEnded(auction.endTime)) return false;
+                if (!address) return false;
+                if (auction.status === 'CANCELLED') return false;
+
+                const payoutCheck = canCollectPayout(auction, address);
+                const nftCheck = canCollectNFT(auction, address);
+
+                return payoutCheck.canCollect || nftCheck.canCollect;
+              });
+            }
+
+            const nftsWithAuctions = transformedAuctions.map((auction: AuctionQueryResult) => ({
+              ...auction.nft,
               auctionQuantity: auction.quantity,
-            })));
+              auctions: [auction], // Attach the transformed auction object
+            }));
+
+            setNfts(nftsWithAuctions);
           }
           break;
+        }
 
         case 'offered':
           result = await graphqlClient.query(GET_COLLECTION_OFFERED_NFTS_QUERY, {
@@ -259,8 +314,9 @@ export default function CollectionDetailPage() {
               });
               if (result.auctions) {
                 setNfts(result.auctions.map((auction: AuctionQueryResult) => ({
-                  ...auction.nftId,
+                  ...auction.nft,
                   auctionQuantity: auction.quantity,
+                  auctions: [auction], // Attach the full auction object
                 })));
               }
               break;
@@ -293,7 +349,7 @@ export default function CollectionDetailPage() {
     } finally {
       setIsLoadingNFTs(false);
     }
-  }, [id, address, yoursSubTab]);
+  }, [id, address, yoursSubTab, auctionedSubTab]);
 
   // Check if user is collection owner
   const checkOwnership = useCallback(async () => {
@@ -364,9 +420,35 @@ export default function CollectionDetailPage() {
 
   useEffect(() => {
     if (id) {
-      loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+      loadNFTs(
+        activeTab,
+        activeTab === 'yours' ? yoursSubTab : undefined,
+        activeTab === 'auctioned' ? auctionedSubTab : undefined
+      );
     }
-  }, [id, activeTab, yoursSubTab, loadNFTs]);
+  }, [id, activeTab, yoursSubTab, auctionedSubTab, loadNFTs]);
+
+  // Update selectedAuction when nfts data changes (after refresh)
+  useEffect(() => {
+    if (!selectedAuction || !nfts || nfts.length === 0) return;
+
+    // Only update if we're in auctioned tab
+    if (activeTab === 'auctioned' || (activeTab === 'yours' && yoursSubTab === 'your-auctioned')) {
+      // Find updated auction data
+      const updatedNFT = nfts.find(nft =>
+        nft.auctions && nft.auctions.length > 0 &&
+        nft.auctions[0].id === selectedAuction.id
+      );
+      if (updatedNFT && updatedNFT.auctions && updatedNFT.auctions[0]) {
+        const updatedAuction = updatedNFT.auctions[0];
+        // Only update if data actually changed (prevent infinite loop)
+        if (JSON.stringify(updatedAuction) !== JSON.stringify(selectedAuction)) {
+          setSelectedAuction(updatedAuction);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nfts, activeTab, yoursSubTab]); // Intentionally exclude selectedAuction to prevent loop
 
   // Close options menu when clicking outside
   useEffect(() => {
@@ -390,11 +472,27 @@ export default function CollectionDetailPage() {
     if (tab === 'yours') {
       setYoursSubTab('your-listed');
     }
+    if (tab === 'auctioned') {
+      setAuctionedSubTab('active');
+    }
   };
 
   const handleYoursSubTabChange = (subTab: YoursSubTab) => {
     setYoursSubTab(subTab);
   };
+
+  const handleAuctionedSubTabChange = (subTab: AuctionedSubTab) => {
+    setAuctionedSubTab(subTab);
+  };
+
+  // Memoized refresh handler for auction detail modal
+  const handleAuctionRefresh = useCallback(() => {
+    loadNFTs(
+      activeTab,
+      activeTab === 'yours' ? yoursSubTab : undefined,
+      activeTab === 'auctioned' ? auctionedSubTab : undefined
+    );
+  }, [loadNFTs, activeTab, yoursSubTab, auctionedSubTab]);
 
   const handleCancelListing = async (listing: Listing) => {
     if (!address) {
@@ -408,10 +506,48 @@ export default function CollectionDetailPage() {
       const receipt = await sendTransaction(tx, 'Listing cancelled successfully!');
 
       if (receipt?.status === 1) {
-        loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+        loadNFTs(
+          activeTab,
+          activeTab === 'yours' ? yoursSubTab : undefined,
+          activeTab === 'auctioned' ? auctionedSubTab : undefined
+        );
       }
     } catch (error: unknown) {
       console.error('Cancel listing error:', error);
+    }
+  };
+
+  const handleCancelAuction = async (auction: Auction) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+
+    // Import encodeCancelAuction when needed
+    const { encodeCancelAuction } = await import('../../../lib/web3/encoding');
+
+    try {
+      const tx = encodeCancelAuction({ auctionId: BigInt(auction.auctionId) });
+      const receipt = await sendTransaction(tx, 'Auction cancelled successfully!');
+
+      if (receipt?.status === 1) {
+        // Wait a bit for indexer to process the transaction
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Reload NFTs to remove cancelled auction
+        await loadNFTs(
+          activeTab,
+          activeTab === 'yours' ? yoursSubTab : undefined,
+          activeTab === 'auctioned' ? auctionedSubTab : undefined
+        );
+
+        // Close auction detail modal if open
+        setShowAuctionDetail(false);
+        setSelectedAuction(null);
+      }
+    } catch (error: unknown) {
+      console.error('Cancel auction error:', error);
+      toast.error('Failed to cancel auction');
     }
   };
 
@@ -431,6 +567,18 @@ export default function CollectionDetailPage() {
   };
 
   const handleNFTClick = (index: number) => {
+    // For Auctioned tab, open AuctionDetailModal instead of NFTDetailModal
+    if (activeTab === 'auctioned' || (activeTab === 'yours' && yoursSubTab === 'your-auctioned')) {
+      const nft = nfts[index];
+      const auction = nft.auctions && nft.auctions.length > 0 ? nft.auctions[0] : null;
+      if (auction) {
+        setSelectedAuction(auction);
+        setShowAuctionDetail(true);
+        return;
+      }
+    }
+
+    // Otherwise, open NFTDetailModal
     setSelectedNFTIndex(index);
     setShowNFTDetail(true);
   };
@@ -462,7 +610,11 @@ export default function CollectionDetailPage() {
 
       if (receipt?.status === 1) {
         // Reload NFTs to get updated buyer approvals
-        loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+        loadNFTs(
+          activeTab,
+          activeTab === 'yours' ? yoursSubTab : undefined,
+          activeTab === 'auctioned' ? auctionedSubTab : undefined
+        );
       }
     } catch (error: unknown) {
       console.error('Approve buyer error:', error);
@@ -668,6 +820,42 @@ export default function CollectionDetailPage() {
           )}
         </div>
 
+        {/* Sub-tabs for "Auctioned" */}
+        {activeTab === 'auctioned' && (
+          <div className="flex gap-3 mb-6 px-4">
+            <button
+              onClick={() => handleAuctionedSubTabChange('active')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                auctionedSubTab === 'active'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+              }`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => handleAuctionedSubTabChange('expired')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                auctionedSubTab === 'expired'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+              }`}
+            >
+              Expired
+            </button>
+            <button
+              onClick={() => handleAuctionedSubTabChange('claimable')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                auctionedSubTab === 'claimable'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+              }`}
+            >
+              Claimable
+            </button>
+          </div>
+        )}
+
         {/* Sub-tabs for "Yours" */}
         {activeTab === 'yours' && address && (
           <div className="flex gap-3 mb-6 px-4">
@@ -705,7 +893,11 @@ export default function CollectionDetailPage() {
         )}
 
         {/* NFTs Grid */}
-        {isLoadingNFTs ? (
+        {activeTab === 'auctioned' && auctionedSubTab === 'claimable' && !address ? (
+          <div className="text-center py-16 bg-dark-card border border-dark-border rounded-2xl">
+            <p className="text-gray-400 mb-4">Please connect your wallet to view claimable auctions</p>
+          </div>
+        ) : isLoadingNFTs ? (
           <div className="flex justify-center py-20">
             <Spinner size="lg" />
           </div>
@@ -714,6 +906,12 @@ export default function CollectionDetailPage() {
             <p className="text-gray-400">
               {activeTab === 'yours' && !address
                 ? 'Connect your wallet to see your activities'
+                : activeTab === 'auctioned' && auctionedSubTab === 'active'
+                ? 'No active auctions found'
+                : activeTab === 'auctioned' && auctionedSubTab === 'expired'
+                ? 'No expired auctions found'
+                : activeTab === 'auctioned' && auctionedSubTab === 'claimable'
+                ? 'No claimable auctions found'
                 : 'No NFTs found'}
             </p>
           </div>
@@ -722,8 +920,14 @@ export default function CollectionDetailPage() {
             {nfts.map((nft, index) => {
               // Get first listing (for cards that represent individual listings)
               const listing = nft.listings && nft.listings.length > 0 ? nft.listings[0] : null;
-              const isOwner = listing && address && listing.owner.id.toLowerCase() === address.toLowerCase();
+              const isListingOwner = listing && address && listing.owner.id.toLowerCase() === address.toLowerCase();
               const price = listing?.currencyApprovals?.[0];
+
+              // Get first auction (for auction cards)
+              const auction = nft.auctions && nft.auctions.length > 0 ? nft.auctions[0] : null;
+              const isAuctionOwner = auction && address && auction.sellerAddress.toLowerCase() === address.toLowerCase();
+              const auctionIsActive = auction ? isAuctionActive(auction) : false;
+              const auctionHasEnded = auction ? hasAuctionEnded(auction.endTime) : false;
 
               // Currency is now auto-approved on listing creation
               const displayPrice = price?.pricePerToken || listing?.pricePerToken;
@@ -788,7 +992,7 @@ export default function CollectionDetailPage() {
                        !isListingExpired(listing.endTimestamp) && (
                         <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out">
                           <div className="bg-gradient-to-t from-black via-black/90 to-transparent p-4 pt-8">
-                            {isOwner ? (
+                            {isListingOwner ? (
                               // Owner controls: Cancel and Update
                               <div className="flex gap-2">
                                 <button
@@ -864,6 +1068,68 @@ export default function CollectionDetailPage() {
                           </div>
                         </div>
                       )}
+
+                      {/* Auction Hover Overlay - Only show if auction is active */}
+                      {(activeTab === 'auctioned' || (activeTab === 'yours' && yoursSubTab === 'your-auctioned')) &&
+                       auction &&
+                       auctionIsActive &&
+                       !auctionHasEnded && (
+                        <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out">
+                          <div className="bg-gradient-to-t from-black via-black/90 to-transparent p-4 pt-8">
+                            {isAuctionOwner ? (
+                              <AuctionOwnerHoverButtons
+                                auction={auction}
+                                onCancel={() => {
+                                  setSelectedAuction(auction);
+                                  // Cancel directly
+                                  handleCancelAuction(auction);
+                                }}
+                                onViewDetails={() => {
+                                  setSelectedAuction(auction);
+                                  setShowAuctionDetail(true);
+                                }}
+                              />
+                            ) : (
+                              // Bidder view
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setSelectedAuction(auction);
+                                    setShowBidModal(true);
+                                  }}
+                                  className="flex-1 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                                >
+                                  Place Bid
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setSelectedAuction(auction);
+                                    setShowAuctionDetail(true);
+                                  }}
+                                  className="px-3 py-2 bg-dark-card hover:bg-dark-border text-white text-xs font-semibold rounded-lg transition-colors border border-dark-border"
+                                >
+                                  Details
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Auction Ended Badge */}
+                      {(activeTab === 'auctioned' || (activeTab === 'yours' && yoursSubTab === 'your-auctioned')) &&
+                       auction &&
+                       auctionHasEnded && (
+                        <div className="absolute inset-x-0 bottom-0">
+                          <div className="bg-gradient-to-t from-black via-black/90 to-transparent p-4 pt-8">
+                            <div className="text-center">
+                              <p className="text-gray-400 font-bold text-sm">Auction Ended</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="p-3 space-y-1">
                       <p className="text-sm font-semibold text-white truncate">{nft.name}</p>
@@ -875,6 +1141,16 @@ export default function CollectionDetailPage() {
                           <p className="text-[10px] text-gray-400">Listed by</p>
                           <p className="text-xs font-mono text-gray-300 truncate">
                             {listing.owner.id.slice(0, 6)}...{listing.owner.id.slice(-4)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Show auction seller for all auctions */}
+                      {auction && (
+                        <div className="pt-1 border-t border-dark-border">
+                          <p className="text-[10px] text-gray-400">Auctioned by</p>
+                          <p className="text-xs font-mono text-gray-300 truncate">
+                            {auction.sellerAddress.slice(0, 6)}...{auction.sellerAddress.slice(-4)}
                           </p>
                         </div>
                       )}
@@ -897,7 +1173,11 @@ export default function CollectionDetailPage() {
           }}
           listing={selectedListing}
           onSuccess={() => {
-            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+            loadNFTs(
+              activeTab,
+              activeTab === 'yours' ? yoursSubTab : undefined,
+              activeTab === 'auctioned' ? auctionedSubTab : undefined
+            );
           }}
         />
       )}
@@ -912,7 +1192,11 @@ export default function CollectionDetailPage() {
           }}
           listing={selectedListing}
           onSuccess={() => {
-            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+            loadNFTs(
+              activeTab,
+              activeTab === 'yours' ? yoursSubTab : undefined,
+              activeTab === 'auctioned' ? auctionedSubTab : undefined
+            );
           }}
         />
       )}
@@ -927,7 +1211,11 @@ export default function CollectionDetailPage() {
             setSelectedListing(null);
           }}
           onSuccess={() => {
-            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+            loadNFTs(
+              activeTab,
+              activeTab === 'yours' ? yoursSubTab : undefined,
+              activeTab === 'auctioned' ? auctionedSubTab : undefined
+            );
           }}
         />
       )}
@@ -969,6 +1257,7 @@ export default function CollectionDetailPage() {
             onNavigate={handleNavigateNFT}
             isOwner={isActualOwner}
             activeListings={selectedNFT.listings?.filter(l => l.status === 'CREATED') || []}
+            activeAuctions={selectedNFT.auctions?.filter(a => a.status === 'CREATED' || a.status === 'ACTIVE') || []}
             onBuy={handleBuyClick}
             onCreateListing={() => setShowCreateListing(true)}
             onCreateAuction={() => setShowCreateAuction(true)}
@@ -991,6 +1280,21 @@ export default function CollectionDetailPage() {
               setShowApproveBuyer(true);
               // Keep detail modal open in background
             }}
+            onPlaceBid={(auction) => {
+              setSelectedAuction(auction);
+              setShowBidModal(true);
+            }}
+            onViewAuctionDetails={(auction) => {
+              setSelectedAuction(auction);
+              setShowAuctionDetail(true);
+            }}
+            onRefresh={() => {
+              loadNFTs(
+                activeTab,
+                activeTab === 'yours' ? yoursSubTab : undefined,
+                activeTab === 'auctioned' ? auctionedSubTab : undefined
+              );
+            }}
           />
         );
       })()}
@@ -1003,7 +1307,11 @@ export default function CollectionDetailPage() {
           nft={nfts[selectedNFTIndex]}
           onSuccess={() => {
             setShowCreateListing(false);
-            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+            loadNFTs(
+              activeTab,
+              activeTab === 'yours' ? yoursSubTab : undefined,
+              activeTab === 'auctioned' ? auctionedSubTab : undefined
+            );
           }}
         />
       )}
@@ -1016,7 +1324,11 @@ export default function CollectionDetailPage() {
           nft={nfts[selectedNFTIndex]}
           onSuccess={() => {
             setShowCreateAuction(false);
-            loadNFTs(activeTab, activeTab === 'yours' ? yoursSubTab : undefined);
+            loadNFTs(
+              activeTab,
+              activeTab === 'yours' ? yoursSubTab : undefined,
+              activeTab === 'auctioned' ? auctionedSubTab : undefined
+            );
           }}
         />
       )}
@@ -1045,6 +1357,99 @@ export default function CollectionDetailPage() {
           }}
         />
       )}
+
+      {/* Bid Modal */}
+      {selectedAuction && (
+        <BidModal
+          isOpen={showBidModal}
+          onClose={() => {
+            setShowBidModal(false);
+            setSelectedAuction(null);
+          }}
+          auction={selectedAuction}
+          onSuccess={() => {
+            setShowBidModal(false);
+            setSelectedAuction(null);
+            loadNFTs(
+              activeTab,
+              activeTab === 'yours' ? yoursSubTab : undefined,
+              activeTab === 'auctioned' ? auctionedSubTab : undefined
+            );
+          }}
+        />
+      )}
+
+      {/* Auction Detail Modal */}
+      {selectedAuction && (
+        <AuctionDetailModal
+          isOpen={showAuctionDetail}
+          onClose={() => {
+            setShowAuctionDetail(false);
+            setSelectedAuction(null);
+          }}
+          auction={selectedAuction}
+          onRefresh={handleAuctionRefresh}
+        />
+      )}
     </MainLayout>
+  );
+}
+
+/**
+ * Auction Owner Hover Buttons Component
+ * Shows cancel button or disabled message based on auction state
+ */
+function AuctionOwnerHoverButtons({
+  auction,
+  onCancel,
+  onViewDetails,
+}: {
+  auction: Auction;
+  onCancel: () => void;
+  onViewDetails: () => void;
+}) {
+  // Check if auction has bids
+  const hasBids = auction.bids && auction.bids.length > 0;
+
+  if (hasBids) {
+    // Cannot cancel if there are bids
+    return (
+      <div className="text-center">
+        <p className="text-xs text-gray-400 mb-2">Cannot cancel auction with active bids</p>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            onViewDetails();
+          }}
+          className="w-full px-3 py-2 bg-dark-card hover:bg-dark-border text-white text-xs font-semibold rounded-lg transition-colors border border-dark-border"
+        >
+          View Details
+        </button>
+      </div>
+    );
+  }
+
+  // Can cancel - no bids yet
+  return (
+    <div className="flex gap-2">
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          onCancel();
+        }}
+        className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          onViewDetails();
+        }}
+        className="px-3 py-2 bg-dark-card hover:bg-dark-border text-white text-xs font-semibold rounded-lg transition-colors border border-dark-border"
+      >
+        Details
+      </button>
+    </div>
   );
 }
