@@ -199,7 +199,6 @@ export interface Auction {
 export interface Offer {
   id: string;
   offerId: string;
-  buyerAddress: Address;
   offeror: Subject; // Offer maker details
   tokenOwner?: Subject; // Target token owner (for specific offers)
   nft: NFT; // Changed from nftId for clarity
@@ -210,6 +209,9 @@ export interface Offer {
   expirationTimestamp: string; // Alias for expirationTime
   status: OfferStatus;
   createdAt: string;
+  updatedAt?: string;
+  transactionHash?: string; // Transaction hash when offer was created
+  blockNumber?: number; // Block number when offer was created
 }
 
 export interface PurchaseHistory {

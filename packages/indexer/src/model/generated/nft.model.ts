@@ -1,6 +1,8 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, StringColumn as StringColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
 import {Collection} from "./collection.model"
 import {Listing} from "./listing.model"
+import {Auction} from "./auction.model"
+import {Offer} from "./offer.model"
 import {PurchaseHistory} from "./purchaseHistory.model"
 import {Trait} from "./trait.model"
 import {Extension} from "./extension.model"
@@ -37,6 +39,12 @@ export class NFT {
 
     @OneToMany_(() => Listing, e => e.nft)
     listings!: Listing[]
+
+    @OneToMany_(() => Auction, e => e.nft)
+    auctions!: Auction[]
+
+    @OneToMany_(() => Offer, e => e.nft)
+    offers!: Offer[]
 
     @OneToMany_(() => PurchaseHistory, e => e.nft)
     purchaseHistory!: PurchaseHistory[]

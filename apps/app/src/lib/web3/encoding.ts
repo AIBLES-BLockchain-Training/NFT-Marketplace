@@ -33,7 +33,7 @@ export interface OfferParams {
   quantity: bigint;
   currency: Address;
   totalPrice: bigint;
-  expirationTime: bigint;
+  expirationTimestamp: bigint;
 }
 
 export function encodeCreateListing(params: ListingParams): EncodedTransaction {
@@ -240,10 +240,19 @@ export function encodeCollectAuctionToken(params: { auctionId: bigint }): Encode
 
 export function encodeMakeOffer(params: OfferParams): EncodedTransaction {
   const offerInterface = new ethers.Interface(OfferABI);
-  const data = offerInterface.encodeFunctionData('makeOffer', [params]);
+  const data = offerInterface.encodeFunctionData('makeOffer', [
+    {
+      assetContract: params.assetContract,
+      tokenId: params.tokenId,
+      quantity: params.quantity,
+      currency: params.currency,
+      totalPrice: params.totalPrice,
+      expirationTimestamp: params.expirationTimestamp,
+    },
+  ]);
 
   return {
-    to: CONTRACT_ADDRESSES.OFFER,
+    to: CONTRACT_ADDRESSES.ROUTER,
     data,
     value: '0',
   };
@@ -254,7 +263,7 @@ export function encodeAcceptOffer(offerId: bigint): EncodedTransaction {
   const data = offerInterface.encodeFunctionData('acceptOffer', [offerId]);
 
   return {
-    to: CONTRACT_ADDRESSES.OFFER,
+    to: CONTRACT_ADDRESSES.ROUTER,
     data,
     value: '0',
   };
@@ -265,7 +274,7 @@ export function encodeCancelOffer(offerId: bigint): EncodedTransaction {
   const data = offerInterface.encodeFunctionData('cancelOffer', [offerId]);
 
   return {
-    to: CONTRACT_ADDRESSES.OFFER,
+    to: CONTRACT_ADDRESSES.ROUTER,
     data,
     value: '0',
   };

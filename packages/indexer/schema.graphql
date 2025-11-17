@@ -64,6 +64,8 @@ type NFT @entity {
 
   # Relations
   listings: [Listing]! @derivedFrom(field: "nft")
+  auctions: [Auction]! @derivedFrom(field: "nft")
+  offers: [Offer]! @derivedFrom(field: "nft")
   purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "nft")
   traits: [Trait]! @derivedFrom(field: "nft")
   extensions: [Extension]! @derivedFrom(field: "nft")
@@ -197,14 +199,21 @@ type Bid @entity {
 }
 
 type Offer @entity {
-  id: ID! @index
-  buyerAddress: String! @index
-  nftId: NFT! @index
+  id: ID! @index # Format: contractAddress-offerId
+  offerId: String! @index # Contract's offer ID
+  offeror: Subject! @index # User who made the offer
+  tokenOwner: Subject @index # NFT owner at time of offer creation (can accept)
+  nft: NFT! @index
   quantity: BigInt!
   totalPrice: BigInt!
   currency: SupportedCurrency! @index
-  expirationTime: DateTime!
+  expirationTime: DateTime! @index
+  expirationTimestamp: BigInt! # Raw timestamp for calculations
   status: OfferStatus! @index
+  createdAt: DateTime! @index
+  updatedAt: DateTime
+  transactionHash: String! @index
+  blockNumber: Int! @index
 }
 
 # BuyerApproval entity - cac buyers duoc approve cho reserved listings
@@ -340,6 +349,7 @@ enum OfferStatus {
 enum TradeType {
   AUCTION
   LISTING
+  OFFER
 }
 
 enum ExtensionType {

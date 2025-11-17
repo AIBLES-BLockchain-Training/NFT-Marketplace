@@ -12,16 +12,19 @@ import { AddCurrencyModal } from '../../../components/marketplace/AddCurrencyMod
 import { ApproveBuyerModal } from '../../../components/marketplace/ApproveBuyerModal';
 import { AuctionDetailModal } from '../../../components/auction/AuctionDetailModal';
 import { BidModal } from '../../../components/auction/BidModal';
+import { MakeOfferModal } from '../../../components/marketplace/MakeOfferModal';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { Spinner } from '../../../components/common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_NFT_BY_ID_QUERY } from '../../../lib/graphql/queries';
 import { useWallet } from '../../../hooks/useWallet';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
-import { NFT, Listing, Auction } from '../../../types';
+import { NFT, Listing, Auction, Offer } from '../../../types';
 import {
   encodeCancelListing,
   encodeApproveBuyerForListing,
+  encodeAcceptOffer,
+  encodeCancelOffer,
 } from '../../../lib/web3/encoding';
 import toast from 'react-hot-toast';
 
@@ -43,6 +46,8 @@ export default function AssetPage() {
   const [showApproveBuyer, setShowApproveBuyer] = useState(false);
   const [showAuctionModal, setShowAuctionModal] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
+  const [showMakeOffer, setShowMakeOffer] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [isNFTOwner, setIsNFTOwner] = useState(false);
 
   const loadNFT = useCallback(async () => {
@@ -301,6 +306,35 @@ export default function AssetPage() {
     loadNFT();
   };
 
+  // Offer handlers
+  const handleMakeOffer = () => {
+    setShowMakeOffer(true);
+  };
+
+  const handleAcceptOffer = async (offer: Offer) => {
+    try {
+      const tx = encodeAcceptOffer(BigInt(offer.offerId));
+
+      await sendTransaction(tx, 'Offer accepted successfully!');
+      loadNFT();
+    } catch (error) {
+      console.error('Accept offer error:', error);
+      toast.error('Failed to accept offer');
+    }
+  };
+
+  const handleCancelOffer = async (offer: Offer) => {
+    try {
+      const tx = encodeCancelOffer(BigInt(offer.offerId));
+
+      await sendTransaction(tx, 'Offer cancelled successfully!');
+      loadNFT();
+    } catch (error) {
+      console.error('Cancel offer error:', error);
+      toast.error('Failed to cancel offer');
+    }
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -324,6 +358,7 @@ export default function AssetPage() {
 
   const activeListings = nft.listings?.filter((l) => l.status === 'CREATED') || [];
   const activeAuctions = nft.auctions?.filter((a) => a.status === 'CREATED' || a.status === 'ACTIVE') || [];
+  const activeOffers = nft.offers?.filter((o) => o.status === 'ACTIVE' || o.status === 'CREATED') || [];
 
   return (
     <MainLayout>
@@ -333,9 +368,13 @@ export default function AssetPage() {
           isOwner={isNFTOwner}
           activeListings={activeListings}
           activeAuctions={activeAuctions}
+          activeOffers={activeOffers}
           onBuy={handleBuyClick}
           onCreateListing={() => setShowCreateListing(true)}
           onCreateAuction={() => setShowCreateAuction(true)}
+          onMakeOffer={handleMakeOffer}
+          onAcceptOffer={handleAcceptOffer}
+          onCancelOffer={handleCancelOffer}
           onCancelListing={handleCancelListing}
           onUpdateListing={handleUpdateListingClick}
           onAddCurrency={handleAddCurrencyClick}
@@ -447,6 +486,19 @@ export default function AssetPage() {
           isOpen={showBidModal}
           onClose={handleCloseBidModal}
           onSuccess={handleBidSuccess}
+        />
+      )}
+
+      {/* Make Offer Modal */}
+      {showMakeOffer && nft && (
+        <MakeOfferModal
+          nft={nft}
+          isOpen={showMakeOffer}
+          onClose={() => setShowMakeOffer(false)}
+          onSuccess={() => {
+            setShowMakeOffer(false);
+            loadNFT();
+          }}
         />
       )}
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { NFT, Listing, Auction } from '../../types';
+import { NFT, Listing, Auction, PurchaseHistory } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -15,9 +15,12 @@ import {
   isAuctionActive,
   getAuctionStatusText,
   getAuctionStatusVariant,
-  hasAuctionEnded
+  hasAuctionEnded,
+  canCollectNFT
 } from '../../lib/auction/status';
 import { CompactCountdownTimer } from '../auction/CountdownTimer';
+import { graphqlClient } from '../../lib/graphql/client';
+import { GET_PURCHASE_HISTORY_QUERY } from '../../lib/graphql/queries';
 
 interface NFTDetailModalProps {
   isOpen: boolean;
@@ -29,16 +32,22 @@ interface NFTDetailModalProps {
   isOwner?: boolean;
   activeListings?: Listing[];
   activeAuctions?: Auction[];
+  activeOffers?: any[]; // Add offers support
+  initialTab?: 'details' | 'orders' | 'activity' | 'approved';
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
+  onMakeOffer?: () => void;
   onCancelListing?: (listing: Listing) => void;
   onUpdateListing?: (listing: Listing) => void;
   onAddCurrency?: (listing: Listing) => void;
   onApproveBuyer?: (listing: Listing) => void;
   onPlaceBid?: (auction: Auction) => void;
   onViewAuctionDetails?: (auction: Auction) => void;
+  onAcceptOffer?: (offer: any) => void;
+  onCancelOffer?: (offer: any) => void;
   onRefresh?: () => void;
+  processingOfferId?: string | null;
 }
 
 export function NFTDetailModal({
@@ -51,21 +60,66 @@ export function NFTDetailModal({
   isOwner,
   activeListings = [],
   activeAuctions = [],
+  activeOffers = [],
+  initialTab = 'details',
   onBuy,
   onCreateListing,
   onCreateAuction,
+  onMakeOffer,
   onCancelListing,
   onUpdateListing,
   onAddCurrency,
   onApproveBuyer,
   onPlaceBid,
   onViewAuctionDetails,
+  onAcceptOffer,
+  onCancelOffer,
   onRefresh,
+  processingOfferId,
 }: NFTDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity' | 'approved'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity' | 'approved'>(initialTab);
   const hasReservedListing = activeListings.some(l => l.isReserved);
   const [listingQuantities, setListingQuantities] = useState<{[listingId: string]: number}>({});
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { address } = useWallet();
+
+  // Update active tab when initialTab changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
+  // Fetch purchase history for this NFT
+  useEffect(() => {
+    const loadPurchaseHistory = async () => {
+      if (!isOpen || !nft?.id) return;
+
+      setIsLoadingHistory(true);
+      try {
+        const result = await graphqlClient.query(GET_PURCHASE_HISTORY_QUERY, {
+          limit: 50,
+          offset: 0,
+          where: {
+            nft: {
+              id_eq: nft.id
+            }
+          }
+        });
+
+        if (result.purchaseHistories) {
+          setPurchaseHistory(result.purchaseHistories);
+        }
+      } catch (error) {
+        console.error('Failed to load purchase history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadPurchaseHistory();
+  }, [isOpen, nft?.id]);
 
   // Initialize quantities for each listing
   useEffect(() => {
@@ -526,16 +580,31 @@ export function NFTDetailModal({
                                         Buy Now
                                       </Button>
                                       {/* Make Offer Button */}
-                                      <Button
-                                        variant="secondary"
-                                        className="flex-1"
-                                      >
-                                        Make Offer
-                                      </Button>
+                                      {onMakeOffer && (
+                                        <Button
+                                          variant="secondary"
+                                          onClick={onMakeOffer}
+                                          className="flex-1"
+                                        >
+                                          Make Offer
+                                        </Button>
+                                      )}
                                     </div>
                                   ) : (
-                                    <div className="text-center py-2 border-t border-dark-border">
-                                      <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
+                                    <div className="border-t border-dark-border pt-3">
+                                      <div className="text-center mb-3">
+                                        <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
+                                      </div>
+                                      {/* Only show Make Offer button if user is NOT the listing owner */}
+                                      {!isMyListing && onMakeOffer && (
+                                        <Button
+                                          variant="primary"
+                                          onClick={onMakeOffer}
+                                          className="w-full"
+                                        >
+                                          Make Offer
+                                        </Button>
+                                      )}
                                     </div>
                                   )}
                                 </>
@@ -670,15 +739,40 @@ export function NFTDetailModal({
                                 </>
                               )}
 
-                              {!auctionActive && onViewAuctionDetails && (
-                                <Button
-                                  onClick={() => onViewAuctionDetails(auction)}
-                                  variant="secondary"
-                                  size="sm"
-                                  fullWidth
-                                >
-                                  View Details
-                                </Button>
+                              {!auctionActive && (
+                                <>
+                                  {(() => {
+                                    // Check if current user can collect NFT (is winner)
+                                    const nftCheck = address ? canCollectNFT(auction, address) : { canCollect: false };
+                                    const isWinner = nftCheck.canCollect;
+
+                                    return (
+                                      <div className="flex gap-2">
+                                        {onViewAuctionDetails && (
+                                          <Button
+                                            onClick={() => onViewAuctionDetails(auction)}
+                                            variant="secondary"
+                                            size="sm"
+                                            className="flex-1"
+                                          >
+                                            View Details
+                                          </Button>
+                                        )}
+                                        {/* Show Make Offer for everyone except winner and auction owner */}
+                                        {!isWinner && !isMyAuction && onMakeOffer && (
+                                          <Button
+                                            onClick={onMakeOffer}
+                                            variant="primary"
+                                            size="sm"
+                                            className="flex-1"
+                                          >
+                                            Make Offer
+                                          </Button>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </>
                               )}
                             </div>
                           );
@@ -796,14 +890,226 @@ export function NFTDetailModal({
                 )}
 
                 {activeTab === 'orders' && (
-                  <div className="text-center py-12 text-gray-400">
-                    No active orders
+                  <div className="space-y-4">
+                    {activeOffers && activeOffers.length > 0 ? (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-white mb-3">Active Offers ({activeOffers.length})</h4>
+                        {activeOffers.map((offer: any) => {
+                          const isOfferMaker = address && offer.offeror?.id.toLowerCase() === address.toLowerCase();
+                          // Check if current user is the token owner
+                          // 1. From offer.tokenOwner (most accurate for specific offers)
+                          // 2. Fallback to isOwner prop (from nft.owners)
+                          const isTokenOwner = address ? (
+                            (offer.tokenOwner?.id && offer.tokenOwner.id.toLowerCase() === address.toLowerCase()) ||
+                            isOwner
+                          ) : false;
+
+                          return (
+                            <div key={offer.id} className="bg-dark-card rounded-lg p-4 border border-dark-border">
+                              <div className="space-y-3">
+                                {/* Offer Header with Price */}
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-semibold text-white">
+                                    Offer #{offer.offerId}
+                                  </p>
+                                  <div className="text-right">
+                                    <p className="text-lg font-bold text-primary-400">
+                                      {(() => {
+                                        const price = Number(offer.totalPrice) / 1e18;
+                                        if (price === 0) return '0';
+                                        const multiplier = Math.pow(10, 4);
+                                        const rounded = Math.round(price * multiplier) / multiplier;
+                                        let result = rounded.toFixed(4);
+                                        result = result.replace(/\.?0+$/, '');
+                                        return result;
+                                      })()} {offer.currency?.symbol || 'TOKEN'}
+                                    </p>
+                                    <p className="text-xs text-gray-400">
+                                      Qty: {offer.quantity}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Offered by section */}
+                                <div className="pt-2 border-t border-dark-border">
+                                  <p className="text-xs text-gray-400 mb-2">Offered by</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex-shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-semibold text-white truncate">
+                                        {offer.offeror?.name || 'Unknown'}
+                                      </p>
+                                      <p className="text-xs font-mono text-gray-400 truncate">
+                                        {offer.offeror?.id.slice(0, 6)}...{offer.offeror?.id.slice(-4)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <p className="text-gray-400">Price per Token</p>
+                                    <p className="text-white font-semibold">
+                                      {(() => {
+                                        const pricePerToken = Number(offer.totalPrice) / Number(offer.quantity) / 1e18;
+                                        if (pricePerToken === 0) return '0';
+                                        const multiplier = Math.pow(10, 4);
+                                        const rounded = Math.round(pricePerToken * multiplier) / multiplier;
+                                        let result = rounded.toFixed(4);
+                                        result = result.replace(/\.?0+$/, '');
+                                        return result;
+                                      })()} {offer.currency?.symbol || 'TOKEN'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-400">Expires</p>
+                                    <p className="text-white font-semibold">
+                                      {(() => {
+                                        try {
+                                          // expirationTimestamp might be ISO string or Unix timestamp in seconds
+                                          const timestamp = offer.expirationTimestamp || offer.expirationTime;
+                                          const date = new Date(timestamp);
+
+                                          // If invalid, try parsing as Unix timestamp (seconds)
+                                          if (isNaN(date.getTime())) {
+                                            const unixTimestamp = Number(timestamp);
+                                            return new Date(unixTimestamp * 1000).toLocaleDateString();
+                                          }
+
+                                          return date.toLocaleDateString();
+                                        } catch {
+                                          return 'N/A';
+                                        }
+                                      })()}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {(isTokenOwner || isOfferMaker) && (
+                                  <div className="flex gap-2 pt-3 border-t border-dark-border">
+                                    {isTokenOwner && onAcceptOffer && (
+                                      <button
+                                        onClick={() => onAcceptOffer(offer)}
+                                        disabled={processingOfferId === offer.id}
+                                        className="flex-1 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {processingOfferId === offer.id ? 'Processing...' : 'Accept Offer'}
+                                      </button>
+                                    )}
+                                    {isOfferMaker && onCancelOffer && (
+                                      <button
+                                        onClick={() => onCancelOffer(offer)}
+                                        className="flex-1 px-4 py-2 bg-dark-bg hover:bg-gray-700 text-white rounded-lg text-sm font-semibold border border-dark-border transition-colors"
+                                      >
+                                        Cancel Offer
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-400">
+                        No active offers
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {activeTab === 'activity' && (
-                  <div className="text-center py-12 text-gray-400">
-                    No activity yet
+                  <div className="space-y-3">
+                    {isLoadingHistory ? (
+                      <div className="text-center py-12 text-gray-400">
+                        Loading activity...
+                      </div>
+                    ) : purchaseHistory.length > 0 ? (
+                      <>
+                        <h4 className="text-sm font-semibold text-white mb-3">
+                          Transaction History ({purchaseHistory.length})
+                        </h4>
+                        {purchaseHistory.map((history) => {
+                          const isBuyer = address && history.buyer.id.toLowerCase() === address.toLowerCase();
+                          const isSeller = address && history.seller.id.toLowerCase() === address.toLowerCase();
+
+                          return (
+                            <div
+                              key={history.id}
+                              className="bg-dark-card rounded-lg p-4 border border-dark-border hover:border-primary-500/50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant={
+                                      history.tradeType === 'LISTING' ? 'primary' :
+                                      history.tradeType === 'OFFER' ? 'secondary' :
+                                      history.tradeType === 'AUCTION' ? 'success' : 'primary'
+                                    }>
+                                      {history.tradeType}
+                                    </Badge>
+                                    {isBuyer && (
+                                      <span className="text-xs text-green-400 font-semibold">You bought</span>
+                                    )}
+                                    {isSeller && (
+                                      <span className="text-xs text-blue-400 font-semibold">You sold</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-400">
+                                    {new Date(history.timestamp).toLocaleString()}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-bold text-primary-400">
+                                    {formatEth(history.totalPrice)}
+                                  </p>
+                                  <p className="text-xs text-gray-400">{history.currency.symbol}</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3 p-3 bg-dark-bg rounded-lg">
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">From</p>
+                                  <p className="text-xs font-mono text-white truncate">
+                                    {history.seller.id.slice(0, 6)}...{history.seller.id.slice(-4)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">To</p>
+                                  <p className="text-xs font-mono text-white truncate">
+                                    {history.buyer.id.slice(0, 6)}...{history.buyer.id.slice(-4)}
+                                  </p>
+                                </div>
+                                {history.quantity !== '1' && (
+                                  <div>
+                                    <p className="text-xs text-gray-400 mb-1">Quantity</p>
+                                    <p className="text-xs font-semibold text-white">
+                                      {history.quantity}
+                                    </p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">Transaction</p>
+                                  <a
+                                    href={`https://sepolia.etherscan.io/tx/${history.transactionHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary-400 hover:text-primary-300 font-mono truncate block"
+                                  >
+                                    {history.transactionHash.slice(0, 6)}...{history.transactionHash.slice(-4)}
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <div className="text-center py-12 text-gray-400">
+                        No transaction history yet
+                      </div>
+                    )}
                   </div>
                 )}
 

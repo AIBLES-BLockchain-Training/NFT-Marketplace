@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import Image from 'next/image';
-import { NFT, Listing, Auction } from '../../types';
+import { NFT, Listing, Auction, Offer } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { AuctionCardCompact } from '../auction/AuctionCardCompact';
+import { OfferCard } from '../marketplace/OfferCard';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { getIpfsGateways, truncateTokenId } from '../../lib/utils/format';
@@ -16,9 +17,13 @@ interface NFTDetailProps {
   isOwner?: boolean;
   activeListings?: Listing[];
   activeAuctions?: Auction[];
+  activeOffers?: Offer[];
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
+  onMakeOffer?: () => void;
+  onAcceptOffer?: (offer: Offer) => void;
+  onCancelOffer?: (offer: Offer) => void;
   onViewAuction?: (auction: Auction) => void;
   onPlaceBid?: (auction: Auction) => void;
   onCancelListing?: (listing: Listing) => void;
@@ -32,9 +37,13 @@ export function NFTDetail({
   isOwner,
   activeListings = [],
   activeAuctions = [],
+  activeOffers = [],
   onBuy,
   onCreateListing,
   onCreateAuction,
+  onMakeOffer,
+  onAcceptOffer,
+  onCancelOffer,
   onViewAuction,
   onPlaceBid,
   onCancelListing,
@@ -58,10 +67,6 @@ export function NFTDetail({
     } else {
       setImageError(true);
     }
-  };
-
-  const handleMakeOffer = () => {
-    toast.info('Make offer feature coming soon');
   };
 
   const getTimeRemaining = (endTimestamp: string) => {
@@ -381,17 +386,62 @@ export function NFTDetail({
             </div>
 
             {/* Make Offer Button (always available for non-owners) */}
-            {!isOwner && (
+            {!isOwner && onMakeOffer && (
               <div className="mt-4 pt-4 border-t border-dark-border">
                 <Button
                   variant="secondary"
-                  onClick={handleMakeOffer}
+                  onClick={onMakeOffer}
                   className="w-full"
                 >
                   Make Offer
                 </Button>
               </div>
             )}
+          </Card>
+        )}
+
+        {/* Offers Section */}
+        {activeOffers.length > 0 && (
+          <Card>
+            <h3 className="text-sm font-semibold text-gray-400 mb-4">
+              Active Offers ({activeOffers.length})
+            </h3>
+            <div className="space-y-3">
+              {activeOffers
+                .sort((a, b) => parseFloat(b.totalPrice) - parseFloat(a.totalPrice))
+                .map((offer) => {
+                  const isMyOffer = address && offer.offeror.id.toLowerCase() === address.toLowerCase();
+                  const isOfferExpired = new Date(offer.expirationTime).getTime() < Date.now();
+
+                  return (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      isTokenOwner={isOwner}
+                      isOfferMaker={isMyOffer}
+                      onAccept={isOwner && !isOfferExpired ? onAcceptOffer : undefined}
+                      onCancel={isMyOffer && !isOfferExpired ? onCancelOffer : undefined}
+                    />
+                  );
+                })}
+            </div>
+          </Card>
+        )}
+
+        {/* Make Offer CTA for non-owners if no listings */}
+        {!isOwner && activeListings.length === 0 && onMakeOffer && (
+          <Card>
+            <h3 className="text-sm font-semibold text-gray-400 mb-4">Interested in this NFT?</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              This NFT is not currently listed for sale, but you can make an offer to the owner.
+            </p>
+            <Button
+              variant="primary"
+              onClick={onMakeOffer}
+              className="w-full"
+            >
+              Make an Offer
+            </Button>
           </Card>
         )}
 
