@@ -371,7 +371,6 @@ export function NFTDetail({
                           ) : (
                             <Button
                               variant="secondary"
-                              onClick={handleMakeOffer}
                               className="whitespace-nowrap"
                               disabled
                             >

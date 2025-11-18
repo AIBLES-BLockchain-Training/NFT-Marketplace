@@ -30,6 +30,7 @@ interface NFTDetailModalProps {
   currentIndex?: number;
   onNavigate?: (index: number) => void;
   isOwner?: boolean;
+  displayOwner?: string; // For ERC1155 split by owner - specific owner address for this card
   activeListings?: Listing[];
   activeAuctions?: Auction[];
   activeOffers?: any[]; // Add offers support
@@ -58,6 +59,7 @@ export function NFTDetailModal({
   currentIndex,
   onNavigate,
   isOwner,
+  displayOwner,
   activeListings = [],
   activeAuctions = [],
   activeOffers = [],
@@ -323,11 +325,14 @@ export function NFTDetailModal({
                   <h1 className="text-4xl font-bold text-white mb-3">{nft.name}</h1>
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-primary-400 text-sm font-semibold">{nft.collection.name}</span>
-                    {nft.owners && nft.owners.length > 0 && (
+                    {(displayOwner || (nft.owners && nft.owners.length > 0)) && (
                       <>
                         <span className="text-gray-500">•</span>
                         <span className="text-gray-400 text-sm">
-                          Owned by {nft.owners[0].ownerAddress.slice(0, 6)}...{nft.owners[0].ownerAddress.slice(-4)}
+                          Owner: {displayOwner
+                            ? `${displayOwner.slice(0, 6)}...${displayOwner.slice(-4)}`
+                            : `${nft.owners[0].ownerAddress.slice(0, 6)}...${nft.owners[0].ownerAddress.slice(-4)}`
+                          }
                         </span>
                       </>
                     )}
@@ -344,43 +349,84 @@ export function NFTDetailModal({
                 </div>
 
                 {/* Stats Grid */}
-                {activeListings.length > 0 && (
-                  <div className="grid grid-cols-4 gap-4 p-4 bg-dark-card rounded-xl border border-dark-border">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">TOP OFFER</p>
-                      <p className="text-sm font-bold text-white">—</p>
+                {activeListings.length > 0 && (() => {
+                  // Calculate top offer
+                  const topOffer = activeOffers && activeOffers.length > 0
+                    ? activeOffers.reduce((max, offer) => {
+                        const maxPrice = BigInt(max.totalPrice || '0');
+                        const offerPrice = BigInt(offer.totalPrice || '0');
+                        return offerPrice > maxPrice ? offer : max;
+                      })
+                    : null;
+
+                  // Get last sale
+                  const lastSale = purchaseHistory && purchaseHistory.length > 0
+                    ? purchaseHistory[0]
+                    : null;
+
+                  // Count traits for rarity
+                  const traitCount = nft.traits?.length || 0;
+
+                  return (
+                    <div className="grid grid-cols-4 gap-4 p-4 bg-dark-card rounded-xl border border-dark-border">
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">TOP OFFER</p>
+                        <p className="text-sm font-bold text-white">
+                          {topOffer ? `${formatEth(topOffer.totalPrice)} ${topOffer.currency?.symbol || 'ETH'}` : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">COLLECTION FLOOR</p>
+                        <p className="text-sm font-bold text-white">
+                          {nft.collection.floorPrice ? `${formatEth(nft.collection.floorPrice)} ETH` : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">TRAITS</p>
+                        <p className="text-sm font-bold text-white">{traitCount > 0 ? traitCount : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">LAST SALE</p>
+                        <p className="text-sm font-bold text-white">
+                          {lastSale ? `${formatEth(lastSale.totalPrice)} ${lastSale.currency?.symbol || 'ETH'}` : '—'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">COLLECTION FLOOR</p>
-                      <p className="text-sm font-bold text-white">
-                        {nft.collection.floorPrice ? formatEth(nft.collection.floorPrice) : '—'} ETH
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">RARITY</p>
-                      <p className="text-sm font-bold text-white">—</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">LAST SALE</p>
-                      <p className="text-sm font-bold text-white">—</p>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Owner Actions - No Listing/Auction */}
                 {isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (
                   <Card>
                     <h3 className="text-sm font-semibold text-gray-400 mb-4">List for Sale</h3>
                     <div className="space-y-3">
-                      {onCreateListing && (
+                      {onCreateListing ? (
                         <Button variant="primary" onClick={onCreateListing} className="w-full">
                           Create Fixed Price Listing
                         </Button>
+                      ) : (
+                        <a
+                          href={`/collection/${nft.collection.id}`}
+                          className="block w-full"
+                        >
+                          <Button variant="primary" className="w-full">
+                            Create Fixed Price Listing
+                          </Button>
+                        </a>
                       )}
-                      {onCreateAuction && (
+                      {onCreateAuction ? (
                         <Button variant="secondary" onClick={onCreateAuction} className="w-full">
                           Create Auction
                         </Button>
+                      ) : (
+                        <a
+                          href={`/collection/${nft.collection.id}`}
+                          className="block w-full"
+                        >
+                          <Button variant="secondary" className="w-full">
+                            Create Auction
+                          </Button>
+                        </a>
                       )}
                     </div>
                     <p className="text-xs text-gray-500 mt-4">
@@ -572,13 +618,23 @@ export function NFTDetailModal({
                                         </div>
                                       )}
                                       {/* Buy Button */}
-                                      <Button
-                                        variant="primary"
-                                        onClick={() => onBuy && onBuy(listing)}
-                                        className="flex-1"
-                                      >
-                                        Buy Now
-                                      </Button>
+                                      {onBuy ? (
+                                        <Button
+                                          variant="primary"
+                                          onClick={() => onBuy(listing)}
+                                          className="flex-1"
+                                        >
+                                          Buy Now
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="secondary"
+                                          disabled
+                                          className="flex-1"
+                                        >
+                                          Connect Wallet to Buy
+                                        </Button>
+                                      )}
                                       {/* Make Offer Button */}
                                       {onMakeOffer && (
                                         <Button
@@ -777,6 +833,27 @@ export function NFTDetailModal({
                             </div>
                           );
                         })}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Non-Owner Actions - No Listing/Auction */}
+                {!isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (
+                  <Card>
+                    <h3 className="text-sm font-semibold text-gray-400 mb-4">Interested in this NFT?</h3>
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-300">
+                        This NFT is not currently listed for sale. You can make an offer to the owner.
+                      </p>
+                      {onMakeOffer ? (
+                        <Button variant="primary" onClick={onMakeOffer} className="w-full">
+                          Make Offer
+                        </Button>
+                      ) : (
+                        <Button variant="secondary" disabled className="w-full">
+                          Connect Wallet to Make Offer
+                        </Button>
+                      )}
                     </div>
                   </Card>
                 )}

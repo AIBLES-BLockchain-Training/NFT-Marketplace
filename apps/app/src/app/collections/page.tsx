@@ -15,14 +15,14 @@ interface CollectionTableData {
   logoUrl?: string;
   description?: string;
   collectionType: string;
-  floorPrice?: string;
+  floorPrice: string;
+  oneDayVolume: string;
   oneDayChange: number;
-  topOffer: string;
   oneDaySales: number;
   owners: number;
 }
 
-type SortField = '1d_change' | 'top_offer' | '1d_sales';
+type SortField = '1d_change' | 'floor_price' | '24h_volume' | '1d_sales';
 type SortOrder = 'asc' | 'desc';
 
 export default function CollectionsPage() {
@@ -40,6 +40,7 @@ export default function CollectionsPage() {
   const calculateMetrics = (rawCollection: any): CollectionTableData => {
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const twoDaysAgo = now - 48 * 60 * 60 * 1000;
 
     // Get all unique owners
     const ownerSet = new Set<string>();
@@ -51,44 +52,47 @@ export default function CollectionsPage() {
       });
     });
 
-    // Get top offer (highest active offer that hasn't expired)
-    let topOfferValue = '0';
+    // Calculate floor price (lowest active listing price)
+    let floorPriceValue = '0';
     rawCollection.nfts?.forEach((nft: any) => {
-      nft.offers?.forEach((offer: any) => {
-        const expirationTime = new Date(offer.expirationTime).getTime();
-        if (expirationTime > now) {
-          const offerPrice = BigInt(offer.totalPrice || '0');
-          const currentTop = BigInt(topOfferValue);
-          if (offerPrice > currentTop) {
-            topOfferValue = offer.totalPrice;
+      nft.listings?.forEach((listing: any) => {
+        if (listing.status === 'CREATED' || listing.status === 'ACTIVE') {
+          const listingPrice = BigInt(listing.pricePerToken || '0');
+          if (listingPrice > BigInt(0)) {
+            const currentFloor = BigInt(floorPriceValue);
+            if (currentFloor === BigInt(0) || listingPrice < currentFloor) {
+              floorPriceValue = listing.pricePerToken;
+            }
           }
         }
       });
     });
 
-    // Calculate 1D sales (purchases in last 24 hours)
+    // Calculate 1D sales and volume
     let oneDaySales = 0;
-    let oneDayVolume = BigInt(0);
-    let previousVolume = BigInt(0);
+    let todayVolume = BigInt(0);  // Last 24 hours
+    let yesterdayVolume = BigInt(0);  // 24-48 hours ago
 
     rawCollection.nfts?.forEach((nft: any) => {
       nft.purchaseHistory?.forEach((purchase: any) => {
         const purchaseTime = new Date(purchase.timestamp).getTime();
         if (purchaseTime >= oneDayAgo) {
+          // Last 24 hours
           oneDaySales++;
-          oneDayVolume += BigInt(purchase.totalPrice || '0');
-        } else {
-          previousVolume += BigInt(purchase.totalPrice || '0');
+          todayVolume += BigInt(purchase.totalPrice || '0');
+        } else if (purchaseTime >= twoDaysAgo) {
+          // 24-48 hours ago
+          yesterdayVolume += BigInt(purchase.totalPrice || '0');
         }
       });
     });
 
-    // Calculate 1D change based on volume change
+    // Calculate 1D change: compare last 24h volume with previous 24h volume
     let oneDayChange = 0;
-    if (previousVolume > BigInt(0)) {
-      const change = Number(oneDayVolume - previousVolume) / Number(previousVolume);
+    if (yesterdayVolume > BigInt(0)) {
+      const change = Number(todayVolume - yesterdayVolume) / Number(yesterdayVolume);
       oneDayChange = change * 100;
-    } else if (oneDayVolume > BigInt(0)) {
+    } else if (todayVolume > BigInt(0)) {
       oneDayChange = 100; // 100% increase if there was 0 before
     }
 
@@ -97,9 +101,9 @@ export default function CollectionsPage() {
       name: rawCollection.name,
       logoUrl: rawCollection.logoUrl,
       collectionType: rawCollection.collectionType || 'ERC721',
-      floorPrice: rawCollection.floorPrice || '0',
+      floorPrice: floorPriceValue,
+      oneDayVolume: todayVolume.toString(),
       oneDayChange: Number(oneDayChange.toFixed(2)),
-      topOffer: topOfferValue,
       oneDaySales,
       owners: ownerSet.size,
     };
@@ -215,9 +219,13 @@ export default function CollectionsPage() {
         aValue = a.oneDayChange;
         bValue = b.oneDayChange;
         break;
-      case 'top_offer':
-        aValue = Number(a.topOffer);
-        bValue = Number(b.topOffer);
+      case 'floor_price':
+        aValue = Number(a.floorPrice);
+        bValue = Number(b.floorPrice);
+        break;
+      case '24h_volume':
+        aValue = Number(a.oneDayVolume);
+        bValue = Number(b.oneDayVolume);
         break;
       case '1d_sales':
         aValue = a.oneDaySales;
@@ -282,12 +290,20 @@ export default function CollectionsPage() {
               </button>
             )}
           </div>
-          {searchQuery && (
-            <p className="text-sm text-gray-400 mt-2">
-              Found {filteredCollections.length} collection{filteredCollections.length !== 1 ? 's' : ''}
-            </p>
-          )}
         </div>
+
+        {/* Results Counter */}
+        {!isLoading && collections.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm text-gray-400">
+              {searchQuery ? (
+                <>Found {filteredCollections.length} of {collections.length} collections</>
+              ) : (
+                <>Showing {collections.length} collections{hasMore ? ' (scroll for more)' : ''}</>
+              )}
+            </p>
+          </div>
+        )}
 
         {isLoading && collections.length === 0 ? (
           <div className="flex justify-center py-20">
@@ -296,30 +312,38 @@ export default function CollectionsPage() {
         ) : (
           <div className="bg-dark-card border border-dark-border rounded-2xl overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-dark-bg border-b border-dark-border text-sm font-semibold text-gray-400">
-              <div className="col-span-4">COLLECTION</div>
+            <div className="grid grid-cols-[50px_minmax(400px,1fr)_200px_200px_200px_160px_160px] gap-12 px-6 py-4 bg-dark-bg border-b border-dark-border text-sm font-semibold text-gray-400">
+              <div className="text-center">#</div>
+              <div>COLLECTION</div>
               <div
-                className="col-span-2 cursor-pointer hover:text-white transition-colors"
+                className="cursor-pointer hover:text-white transition-colors text-center"
                 onClick={() => handleSort('1d_change')}
               >
                 1D CHANGE
                 <SortIcon field="1d_change" active={sortField === '1d_change'} />
               </div>
               <div
-                className="col-span-2 cursor-pointer hover:text-white transition-colors"
-                onClick={() => handleSort('top_offer')}
+                className="cursor-pointer hover:text-white transition-colors text-center"
+                onClick={() => handleSort('floor_price')}
               >
-                TOP OFFER
-                <SortIcon field="top_offer" active={sortField === 'top_offer'} />
+                FLOOR PRICE
+                <SortIcon field="floor_price" active={sortField === 'floor_price'} />
               </div>
               <div
-                className="col-span-2 cursor-pointer hover:text-white transition-colors"
+                className="cursor-pointer hover:text-white transition-colors text-center"
+                onClick={() => handleSort('24h_volume')}
+              >
+                24H VOLUME
+                <SortIcon field="24h_volume" active={sortField === '24h_volume'} />
+              </div>
+              <div
+                className="cursor-pointer hover:text-white transition-colors text-center"
                 onClick={() => handleSort('1d_sales')}
               >
                 1D SALES
                 <SortIcon field="1d_sales" active={sortField === '1d_sales'} />
               </div>
-              <div className="col-span-2">OWNERS</div>
+              <div className="text-center">OWNERS</div>
             </div>
 
             {/* Table Body */}
@@ -348,11 +372,15 @@ export default function CollectionsPage() {
                   <Link
                     key={collection.id}
                     href={`/collection/${collection.id}`}
-                    className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-dark-border hover:bg-dark-bg transition-colors group"
+                    className="grid grid-cols-[50px_minmax(400px,1fr)_200px_200px_200px_160px_160px] gap-12 px-6 py-4 border-b border-dark-border hover:bg-dark-bg transition-colors group"
                   >
+                    {/* Index */}
+                    <div className="flex items-center justify-center">
+                      <span className="text-gray-500 text-sm">{index + 1}</span>
+                    </div>
+
                     {/* Collection */}
-                    <div className="col-span-4 flex items-center gap-3">
-                      <span className="text-gray-500 text-sm w-8">{index + 1}</span>
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark-bg flex-shrink-0 relative">
                         <NFTImage
                           src={collection.logoUrl}
@@ -374,7 +402,7 @@ export default function CollectionsPage() {
                     </div>
 
                     {/* 1D Change */}
-                    <div className="col-span-2 flex items-center">
+                    <div className="flex items-center justify-center">
                       <span
                         className={`font-semibold ${
                           collection.oneDayChange > 0
@@ -389,12 +417,26 @@ export default function CollectionsPage() {
                       </span>
                     </div>
 
-                    {/* Top Offer */}
-                    <div className="col-span-2 flex items-center">
-                      {collection.topOffer !== '0' ? (
+                    {/* Floor Price */}
+                    <div className="flex items-center justify-center">
+                      {collection.floorPrice !== '0' ? (
                         <div className="flex items-baseline gap-1">
                           <span className="text-white font-semibold">
-                            {formatEth(collection.topOffer)}
+                            {formatEth(collection.floorPrice)}
+                          </span>
+                          <span className="text-gray-500 text-sm">ETH</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">—</span>
+                      )}
+                    </div>
+
+                    {/* 24H Volume */}
+                    <div className="flex items-center justify-center">
+                      {collection.oneDayVolume !== '0' ? (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-white font-semibold">
+                            {formatEth(collection.oneDayVolume)}
                           </span>
                           <span className="text-gray-500 text-sm">ETH</span>
                         </div>
@@ -404,14 +446,14 @@ export default function CollectionsPage() {
                     </div>
 
                     {/* 1D Sales */}
-                    <div className="col-span-2 flex items-center">
+                    <div className="flex items-center justify-center">
                       <span className="text-white font-semibold">
                         {collection.oneDaySales}
                       </span>
                     </div>
 
                     {/* Owners */}
-                    <div className="col-span-2 flex items-center">
+                    <div className="flex items-center justify-center">
                       <span className="text-white font-semibold">
                         {collection.owners.toLocaleString()}
                       </span>

@@ -1,10 +1,18 @@
+'use client';
+
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { NFT, Collection } from '../../types';
+import toast from 'react-hot-toast';
+import { NFT, Collection, Listing, Auction } from '../../types';
 import { Card } from './Card';
 import { Badge } from './Badge';
 import { NFTImage } from './NFTImage';
 import { NFTDetailModal } from '../nft/NFTDetailModal';
+import { BuyModal } from '../marketplace/BuyModal';
+import { MakeOfferModal } from '../marketplace/MakeOfferModal';
+import { BidModal } from '../auction/BidModal';
+import { AuctionDetailModal } from '../auction/AuctionDetailModal';
+import { useWallet } from '../../hooks/useWallet';
 
 interface TrendingSectionProps {
   title: string;
@@ -13,11 +21,20 @@ interface TrendingSectionProps {
 }
 
 export function TrendingSection({ title, items, type }: TrendingSectionProps) {
+  const { address } = useWallet();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
   const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
   const [showNFTDetail, setShowNFTDetail] = useState(false);
+
+  // Modals state
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [showMakeOffer, setShowMakeOffer] = useState(false);
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [showAuctionDetail, setShowAuctionDetail] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
@@ -52,7 +69,28 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
 
   const handleCloseNFTDetail = () => {
     setShowNFTDetail(false);
-    setSelectedNFT(null); // Reset selected NFT to avoid modal counter issues
+    setSelectedNFT(null);
+  };
+
+  // Check if current user is owner of the selected NFT
+  const isOwner = selectedNFT && address && selectedNFT.owners
+    ? selectedNFT.owners.some(owner => owner.ownerAddress.toLowerCase() === address.toLowerCase())
+    : false;
+
+  // Handlers
+  const handleBuyClick = (listing: Listing) => {
+    setSelectedListing(listing);
+    setShowBuyModal(true);
+  };
+
+  const handlePlaceBid = (auction: Auction) => {
+    setSelectedAuction(auction);
+    setShowBidModal(true);
+  };
+
+  const handleViewAuctionDetails = (auction: Auction) => {
+    setSelectedAuction(auction);
+    setShowAuctionDetail(true);
   };
 
   return (
@@ -179,6 +217,78 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
           isOpen={showNFTDetail}
           onClose={handleCloseNFTDetail}
           nft={selectedNFT}
+          isOwner={isOwner}
+          activeListings={selectedNFT.listings?.filter(l => l.status === 'CREATED') || []}
+          activeAuctions={selectedNFT.auctions?.filter(a => a.status === 'CREATED' || a.status === 'ACTIVE') || []}
+          activeOffers={selectedNFT.offers?.filter(o => o.status === 'ACTIVE') || []}
+          onBuy={handleBuyClick}
+          onMakeOffer={() => setShowMakeOffer(true)}
+          onPlaceBid={handlePlaceBid}
+          onViewAuctionDetails={handleViewAuctionDetails}
+        />
+      )}
+
+      {/* Buy Modal */}
+      {selectedListing && (
+        <BuyModal
+          isOpen={showBuyModal}
+          onClose={() => {
+            setShowBuyModal(false);
+            setSelectedListing(null);
+          }}
+          listing={selectedListing}
+          onSuccess={() => {
+            setShowBuyModal(false);
+            setSelectedListing(null);
+            setShowNFTDetail(false);
+            toast.success('Purchase successful!');
+          }}
+        />
+      )}
+
+      {/* Make Offer Modal */}
+      {selectedNFT && (
+        <MakeOfferModal
+          isOpen={showMakeOffer}
+          onClose={() => setShowMakeOffer(false)}
+          nft={selectedNFT}
+          onSuccess={() => {
+            setShowMakeOffer(false);
+            toast.success('Offer created successfully!');
+          }}
+        />
+      )}
+
+      {/* Bid Modal */}
+      {selectedAuction && (
+        <BidModal
+          isOpen={showBidModal}
+          onClose={() => {
+            setShowBidModal(false);
+            setSelectedAuction(null);
+          }}
+          auction={selectedAuction}
+          onSuccess={() => {
+            setShowBidModal(false);
+            setSelectedAuction(null);
+            toast.success('Bid placed successfully!');
+          }}
+        />
+      )}
+
+      {/* Auction Detail Modal */}
+      {selectedAuction && (
+        <AuctionDetailModal
+          isOpen={showAuctionDetail}
+          onClose={() => {
+            setShowAuctionDetail(false);
+            setSelectedAuction(null);
+          }}
+          auction={selectedAuction}
+          onPlaceBid={() => {
+            setShowAuctionDetail(false);
+            setShowBidModal(true);
+          }}
         />
       )}
     </div>

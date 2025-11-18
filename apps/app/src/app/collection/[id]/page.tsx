@@ -114,6 +114,11 @@ export default function CollectionDetailPage() {
   const [collectionDescription, setCollectionDescription] = useState<string | null>(null);
   const [collectionLogo, setCollectionLogo] = useState<string | null>(null);
 
+  // Search and Sort
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'price' | 'name' | 'tokenId' | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   const loadCollection = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -320,81 +325,61 @@ export default function CollectionDetailPage() {
             filteredOffers.forEach((offer: OfferQueryResult) => {
               const nftId = offer.nft.id;
               const isERC1155 = offer.nft.collection.collectionType === 'ERC1155';
+              const listings = offer.nft.listings?.filter((l: any) => l.owner) || [];
 
-              // For offers, we need to find which owner this offer is targeting
-              // Strategy: Match offer with active listings to find the listing owner
-              let targetOwner = '';
+              if (isERC1155 && listings.length > 1) {
+                // Multiple listings - create one card per listing owner
+                // All offers will be shown on all cards, filtering happens in modal
+                listings.forEach((listing: any) => {
+                  const listingOwner = listing.owner.id;
+                  const uniqueKey = `${nftId}-${listingOwner}`;
 
-              if (isERC1155 && offer.nft.listings && offer.nft.listings.length > 0) {
-                // For ERC1155 with listings, find the listing that this offer might be for
-                // Since we can't directly link offer to listing, we use a heuristic:
-                // - If there's only one listing, use that owner
-                // - If multiple listings, we need to match by comparing offers with listings
-                const activeListings = offer.nft.listings.filter((l: any) => l.owner);
+                  if (!uniqueNFTs.has(uniqueKey)) {
+                    uniqueNFTs.set(uniqueKey, {
+                      ...offer.nft,
+                      offerQuantity: offer.quantity,
+                      offers: [],
+                      _displayOwner: listingOwner,
+                    });
+                  }
 
-                if (activeListings.length === 1) {
-                  targetOwner = activeListings[0].owner.id;
-                } else if (activeListings.length > 1) {
-                  // Multiple listings - we need to create separate cards for each listing owner
-                  // For now, we'll create one card per unique listing owner
-                  // Each owner's card will show all offers (user can choose which to accept)
-                  activeListings.forEach((listing: any) => {
-                    const listingOwner = listing.owner.id;
-                    const uniqueKey = `${nftId}-${listingOwner}`;
-
-                    if (!uniqueNFTs.has(uniqueKey)) {
-                      uniqueNFTs.set(uniqueKey, {
-                        ...offer.nft,
-                        offerQuantity: offer.quantity,
-                        offers: [],
-                        _displayOwner: listingOwner,
-                      });
-                    }
-
-                    if (!nftOffers.has(uniqueKey)) {
-                      nftOffers.set(uniqueKey, []);
-                    }
-                    nftOffers.get(uniqueKey)!.push(offer);
-                  });
-                  return; // Skip default processing below
-                }
-              } else if (isERC1155) {
-                // ERC1155 without listings - try tokenOwner or first owner
-                targetOwner = offer.tokenOwner?.id ||
-                             (offer.nft.owners?.[0]?.ownerAddress) ||
-                             '';
-              } else {
-                // ERC721 - use tokenOwner or first owner
-                targetOwner = offer.tokenOwner?.id ||
-                             (offer.nft.owners?.[0]?.ownerAddress) ||
-                             '';
-              }
-
-              const uniqueKey = isERC1155 && targetOwner ? `${nftId}-${targetOwner}` : nftId;
-
-              if (!uniqueNFTs.has(uniqueKey)) {
-                uniqueNFTs.set(uniqueKey, {
-                  ...offer.nft,
-                  offerQuantity: offer.quantity,
-                  offers: [],
-                  // Store the owner for display
-                  _displayOwner: targetOwner,
+                  if (!nftOffers.has(uniqueKey)) {
+                    nftOffers.set(uniqueKey, []);
+                  }
                 });
+              } else {
+                // Single listing or no listings
+                const targetOwner = listings.length === 1
+                  ? listings[0].owner.id
+                  : offer.tokenOwner?.id || offer.nft.owners?.[0]?.ownerAddress || '';
+
+                const uniqueKey = isERC1155 && targetOwner ? `${nftId}-${targetOwner}` : nftId;
+
+                if (!uniqueNFTs.has(uniqueKey)) {
+                  uniqueNFTs.set(uniqueKey, {
+                    ...offer.nft,
+                    offerQuantity: offer.quantity,
+                    offers: [],
+                    _displayOwner: targetOwner,
+                  });
+                }
+
+                if (!nftOffers.has(uniqueKey)) {
+                  nftOffers.set(uniqueKey, []);
+                }
               }
 
-              // Collect all offers for this unique key
-              if (!nftOffers.has(uniqueKey)) {
-                nftOffers.set(uniqueKey, []);
+              // Add offer to nftOffers map for later processing
+              if (!nftOffers.has(nftId)) {
+                nftOffers.set(nftId, []);
               }
-              nftOffers.get(uniqueKey)!.push(offer);
+              nftOffers.get(nftId)!.push(offer);
             });
 
             // Add offers array to each NFT and sort by price (highest first)
             const nftsArray = Array.from(uniqueNFTs.values()).map(nft => {
-              const isERC1155 = nft.collection.collectionType === 'ERC1155';
-              const tokenOwner = (nft as any)._displayOwner || '';
-              const uniqueKey = isERC1155 && tokenOwner ? `${nft.id}-${tokenOwner}` : nft.id;
-              const offers = nftOffers.get(uniqueKey) || [];
+              // Get offers using nft.id (not uniqueKey) since that's how we stored them
+              const offers = nftOffers.get(nft.id) || [];
 
               // Sort offers by totalPrice descending (highest first)
               const sortedOffers = offers.sort((a, b) => {
@@ -485,68 +470,71 @@ export default function CollectionDetailPage() {
               if (result.offers) {
                 // For ERC1155, split NFTs by owner. For ERC721, keep as is.
                 const uniqueNFTs = new Map<string, any>();
-                const nftOffersMap = new Map<string, any[]>();
+                const nftOffers = new Map<string, OfferQueryResult[]>();
 
                 result.offers.forEach((offer: OfferQueryResult) => {
                   const nftId = offer.nft.id;
                   const isERC1155 = offer.nft.collection.collectionType === 'ERC1155';
+                  const listings = offer.nft.listings?.filter((l: any) => l.owner) || [];
 
-                  let targetOwner = '';
+                  if (isERC1155 && listings.length > 1) {
+                    // Multiple listings - create one card per listing owner
+                    // All offers will be shown on all cards, filtering happens in modal
+                    listings.forEach((listing: any) => {
+                      const listingOwner = listing.owner.id;
+                      const uniqueKey = `${nftId}-${listingOwner}`;
 
-                  if (isERC1155 && offer.nft.listings && offer.nft.listings.length > 0) {
-                    const activeListings = offer.nft.listings.filter((l: any) => l.owner);
-
-                    if (activeListings.length === 1) {
-                      targetOwner = activeListings[0].owner.id;
-                    } else if (activeListings.length > 1) {
-                      // Multiple listings - create separate cards for each listing owner
-                      activeListings.forEach((listing: any) => {
-                        const listingOwner = listing.owner.id;
-                        const uniqueKey = `${nftId}-${listingOwner}`;
-
-                        if (!uniqueNFTs.has(uniqueKey)) {
-                          uniqueNFTs.set(uniqueKey, {
-                            ...offer.nft,
-                            offerQuantity: offer.quantity,
-                            _displayOwner: listingOwner,
-                          });
-                        }
-
-                        if (!nftOffersMap.has(uniqueKey)) {
-                          nftOffersMap.set(uniqueKey, []);
-                        }
-                        nftOffersMap.get(uniqueKey)!.push(offer);
-                      });
-                      return;
-                    }
-                  } else if (isERC1155) {
-                    targetOwner = offer.tokenOwner?.id ||
-                                 (offer.nft.owners?.[0]?.ownerAddress) ||
-                                 '';
-                  } else {
-                    targetOwner = offer.tokenOwner?.id ||
-                                 (offer.nft.owners?.[0]?.ownerAddress) ||
-                                 '';
-                  }
-
-                  const uniqueKey = isERC1155 && targetOwner ? `${nftId}-${targetOwner}` : nftId;
-
-                  if (!uniqueNFTs.has(uniqueKey)) {
-                    uniqueNFTs.set(uniqueKey, {
-                      ...offer.nft,
-                      offerQuantity: offer.quantity,
-                      _displayOwner: targetOwner,
+                      if (!uniqueNFTs.has(uniqueKey)) {
+                        uniqueNFTs.set(uniqueKey, {
+                          ...offer.nft,
+                          offerQuantity: offer.quantity,
+                          _displayOwner: listingOwner,
+                        });
+                      }
                     });
+                  } else {
+                    // Single listing or no listings
+                    const targetOwner = listings.length === 1
+                      ? listings[0].owner.id
+                      : offer.tokenOwner?.id || offer.nft.owners?.[0]?.ownerAddress || '';
+
+                    const uniqueKey = isERC1155 && targetOwner ? `${nftId}-${targetOwner}` : nftId;
+
+                    if (!uniqueNFTs.has(uniqueKey)) {
+                      uniqueNFTs.set(uniqueKey, {
+                        ...offer.nft,
+                        offerQuantity: offer.quantity,
+                        _displayOwner: targetOwner,
+                      });
+                    }
                   }
 
-                  if (!nftOffersMap.has(uniqueKey)) {
-                    nftOffersMap.set(uniqueKey, []);
+                  // Add offer to nftOffers map for later processing
+                  if (!nftOffers.has(nftId)) {
+                    nftOffers.set(nftId, []);
                   }
-                  nftOffersMap.get(uniqueKey)!.push(offer);
+                  nftOffers.get(nftId)!.push(offer);
                 });
 
-                // Create unique NFTs with all their offers
-                setNfts(Array.from(uniqueNFTs.values()));
+                // Add offers array to each NFT and sort by price (highest first)
+                const nftsArray = Array.from(uniqueNFTs.values()).map(nft => {
+                  // Get offers using nft.id (not uniqueKey) since that's how we stored them
+                  const offers = nftOffers.get(nft.id) || [];
+
+                  // Sort offers by totalPrice descending (highest first)
+                  const sortedOffers = offers.sort((a, b) => {
+                    const priceA = BigInt(a.totalPrice);
+                    const priceB = BigInt(b.totalPrice);
+                    return priceB > priceA ? 1 : priceB < priceA ? -1 : 0;
+                  });
+
+                  return {
+                    ...nft,
+                    offers: sortedOffers,
+                  };
+                });
+
+                setNfts(nftsArray);
               }
               break;
           }
@@ -907,6 +895,80 @@ export default function CollectionDetailPage() {
     }
   };
 
+  // Helper function to filter and sort NFTs
+  const getFilteredAndSortedNFTs = () => {
+    let filtered = [...nfts];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(nft => {
+        const nameMatch = nft.name?.toLowerCase().includes(query);
+        const tokenIdMatch = nft.tokenId?.toLowerCase().includes(query);
+        return nameMatch || tokenIdMatch;
+      });
+    }
+
+    // Apply sorting
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aValue: string | number = 0;
+        let bValue: string | number = 0;
+
+        switch (sortField) {
+          case 'price':
+            // Get price from listing, auction, or offer depending on active tab
+            if (activeTab === 'listed' || (activeTab === 'yours' && yoursSubTab === 'your-listed')) {
+              const aListing = a.listings?.[0];
+              const bListing = b.listings?.[0];
+              aValue = aListing?.currencyApprovals?.[0]?.pricePerToken ? Number(aListing.currencyApprovals[0].pricePerToken) : 0;
+              bValue = bListing?.currencyApprovals?.[0]?.pricePerToken ? Number(bListing.currencyApprovals[0].pricePerToken) : 0;
+            } else if (activeTab === 'auctioned' || (activeTab === 'yours' && yoursSubTab === 'your-auctioned')) {
+              const aAuction = a.auctions?.[0];
+              const bAuction = b.auctions?.[0];
+              aValue = aAuction?.winningBid ? Number(aAuction.winningBid.bidAmount) : aAuction?.startPrice ? Number(aAuction.startPrice) : 0;
+              bValue = bAuction?.winningBid ? Number(bAuction.winningBid.bidAmount) : bAuction?.startPrice ? Number(bAuction.startPrice) : 0;
+            } else if (activeTab === 'offered' || (activeTab === 'yours' && yoursSubTab === 'your-offered')) {
+              const aOffer = a.offers?.[0];
+              const bOffer = b.offers?.[0];
+              aValue = aOffer?.totalPrice ? Number(aOffer.totalPrice) : 0;
+              bValue = bOffer?.totalPrice ? Number(bOffer.totalPrice) : 0;
+            }
+            break;
+          case 'name':
+            aValue = a.name || '';
+            bValue = b.name || '';
+            break;
+          case 'tokenId':
+            aValue = Number(a.tokenId || 0);
+            bValue = Number(b.tokenId || 0);
+            break;
+        }
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return sortOrder === 'asc'
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        }
+
+        return sortOrder === 'asc' ? Number(aValue) - Number(bValue) : Number(bValue) - Number(aValue);
+      });
+    }
+
+    return filtered;
+  };
+
+  const handleSort = (field: 'price' | 'name' | 'tokenId') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
+
+  const filteredAndSortedNFTs = getFilteredAndSortedNFTs();
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -1229,6 +1291,99 @@ export default function CollectionDetailPage() {
           </div>
         )}
 
+        {/* Search and Sort Controls */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          {/* Search Bar */}
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or token ID..."
+              className="w-full px-4 py-3 pl-12 bg-dark-card border border-dark-border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+            />
+            <svg
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Sort Controls */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleSort('price')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                sortField === 'price'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+              }`}
+            >
+              Price
+              <span className="inline-block ml-1">
+                {sortField === 'price' ? (sortOrder === 'desc' ? '↓' : '↑') : <span className="text-gray-600">⇅</span>}
+              </span>
+            </button>
+            <button
+              onClick={() => handleSort('name')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                sortField === 'name'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+              }`}
+            >
+              Name
+              <span className="inline-block ml-1">
+                {sortField === 'name' ? (sortOrder === 'desc' ? '↓' : '↑') : <span className="text-gray-600">⇅</span>}
+              </span>
+            </button>
+            <button
+              onClick={() => handleSort('tokenId')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                sortField === 'tokenId'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-dark-card text-gray-400 hover:text-white border border-dark-border'
+              }`}
+            >
+              Token ID
+              <span className="inline-block ml-1">
+                {sortField === 'tokenId' ? (sortOrder === 'desc' ? '↓' : '↑') : <span className="text-gray-600">⇅</span>}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Results Counter */}
+        {!isLoadingNFTs && nfts.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm text-gray-400">
+              {searchQuery ? (
+                <>Found {filteredAndSortedNFTs.length} of {nfts.length} NFTs</>
+              ) : (
+                <>Showing {nfts.length} NFTs</>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* NFTs Grid */}
         {activeTab === 'auctioned' && auctionedSubTab === 'claimable' && !address ? (
           <div className="text-center py-16 bg-dark-card border border-dark-border rounded-2xl">
@@ -1238,23 +1393,38 @@ export default function CollectionDetailPage() {
           <div className="flex justify-center py-20">
             <Spinner size="lg" />
           </div>
-        ) : nfts.length === 0 ? (
+        ) : filteredAndSortedNFTs.length === 0 ? (
           <div className="text-center py-16 bg-dark-card border border-dark-border rounded-2xl">
-            <p className="text-gray-400">
-              {activeTab === 'yours' && !address
-                ? 'Connect your wallet to see your activities'
-                : activeTab === 'auctioned' && auctionedSubTab === 'active'
-                ? 'No active auctions found'
-                : activeTab === 'auctioned' && auctionedSubTab === 'expired'
-                ? 'No expired auctions found'
-                : activeTab === 'auctioned' && auctionedSubTab === 'claimable'
-                ? 'No claimable auctions found'
-                : 'No NFTs found'}
-            </p>
+            {searchQuery ? (
+              <div>
+                <svg className="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <p className="text-gray-400 mb-2">No NFTs found for &quot;{searchQuery}&quot;</p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-primary-400 hover:text-primary-300 text-sm"
+                >
+                  Clear search
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-400">
+                {activeTab === 'yours' && !address
+                  ? 'Connect your wallet to see your activities'
+                  : activeTab === 'auctioned' && auctionedSubTab === 'active'
+                  ? 'No active auctions found'
+                  : activeTab === 'auctioned' && auctionedSubTab === 'expired'
+                  ? 'No expired auctions found'
+                  : activeTab === 'auctioned' && auctionedSubTab === 'claimable'
+                  ? 'No claimable auctions found'
+                  : 'No NFTs found'}
+              </p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {nfts.map((nft, index) => {
+            {filteredAndSortedNFTs.map((nft, index) => {
               // Get first listing (for cards that represent individual listings)
               const listing = nft.listings && nft.listings.length > 0 ? nft.listings[0] : null;
               const isListingOwner = listing && address && listing.owner.id.toLowerCase() === address.toLowerCase();
@@ -1270,15 +1440,12 @@ export default function CollectionDetailPage() {
               const offer = nft.offers && nft.offers.length > 0 ? nft.offers[0] : null;
               const isOfferMaker = offer && address && offer.offeror?.id.toLowerCase() === address.toLowerCase();
 
-              // For offered tab, check ownership in multiple ways
-              // 1. Check from offer.tokenOwner (most accurate for specific offers)
-              // 2. Check nft.owners (from NFT ownership data)
-              // 3. Check nft.listings (if user is listing owner, they own the NFT)
-              const isOfferTokenOwner = offer && address ? (
-                (offer.tokenOwner?.id && offer.tokenOwner.id.toLowerCase() === address.toLowerCase()) ||
-                (nft.owners?.some(o => o.ownerAddress.toLowerCase() === address.toLowerCase())) ||
-                (nft.listings?.some(l => l.owner.id.toLowerCase() === address.toLowerCase()))
-              ) : false;
+              // For offered tab, check if current user is the owner displayed on this card
+              // Use _displayOwner (set when splitting ERC1155 by owner) for accurate ownership check
+              const displayOwner = (nft as any)._displayOwner;
+              const isOfferTokenOwner = address && displayOwner
+                ? displayOwner.toLowerCase() === address.toLowerCase()
+                : false;
 
               const isOfferExpired = offer ? new Date(offer.expirationTimestamp).getTime() < Date.now() : false;
 
@@ -1734,24 +1901,48 @@ export default function CollectionDetailPage() {
       {/* NFT Detail Modal */}
       {nfts.length > 0 && nfts[selectedNFTIndex] && (() => {
         const selectedNFT = nfts[selectedNFTIndex];
+        const displayOwner = (selectedNFT as any)._displayOwner;
 
-        // Check if user is owner via NFT.owners OR any listing.owner
-        const isOwnerByNFT = address && selectedNFT.owners?.some(
-          (o) => o.ownerAddress.toLowerCase() === address.toLowerCase()
-        );
-        const isOwnerByListing = address && selectedNFT.listings?.some(
-          (listing) => listing.owner.id.toLowerCase() === address.toLowerCase()
-        );
-
-        const isActualOwner = isOwnerByNFT || isOwnerByListing;
+        // For cards with _displayOwner (ERC1155 split by owner), check against that specific owner
+        // Otherwise, check via NFT.owners OR any listing.owner
+        const isActualOwner = displayOwner
+          ? address && displayOwner.toLowerCase() === address.toLowerCase()
+          : address && (
+              selectedNFT.owners?.some((o) => o.ownerAddress.toLowerCase() === address.toLowerCase()) ||
+              selectedNFT.listings?.some((listing) => listing.owner.id.toLowerCase() === address.toLowerCase())
+            );
 
         // Filter and sort offers by price (highest first)
-        const activeOffers = (selectedNFT.offers?.filter(o => o.status === 'ACTIVE') || [])
-          .sort((a, b) => {
-            const priceA = BigInt(a.totalPrice);
-            const priceB = BigInt(b.totalPrice);
-            return priceB > priceA ? 1 : priceB < priceA ? -1 : 0;
-          });
+        // For cards with displayOwner (ERC1155 split by owner), only show offers for that specific owner
+        let activeOffers = selectedNFT.offers?.filter(o => o.status === 'ACTIVE') || [];
+
+        // If this card represents a specific owner (ERC1155 with multiple listings)
+        // We need to determine which offers belong to this owner
+        if (displayOwner && selectedNFT.collection.collectionType === 'ERC1155' && selectedNFT.listings) {
+          const activeListings = selectedNFT.listings.filter(l => l.owner);
+
+          if (activeListings.length > 1) {
+            // Multiple listings - need to distribute offers
+            // Find the index of this owner's listing
+            const ownerListingIndex = activeListings.findIndex(
+              l => l.owner.id.toLowerCase() === displayOwner.toLowerCase()
+            );
+
+            if (ownerListingIndex !== -1) {
+              // Filter offers: assign offers round-robin style
+              // Offer 0 → Owner 0, Offer 1 → Owner 1, Offer 2 → Owner 0, etc.
+              activeOffers = activeOffers.filter((_, offerIndex) =>
+                offerIndex % activeListings.length === ownerListingIndex
+              );
+            }
+          }
+        }
+
+        activeOffers = activeOffers.sort((a, b) => {
+          const priceA = BigInt(a.totalPrice);
+          const priceB = BigInt(b.totalPrice);
+          return priceB > priceA ? 1 : priceB < priceA ? -1 : 0;
+        });
 
         return (
           <NFTDetailModal
@@ -1762,6 +1953,7 @@ export default function CollectionDetailPage() {
             currentIndex={selectedNFTIndex}
             onNavigate={handleNavigateNFT}
             isOwner={isActualOwner}
+            displayOwner={displayOwner}
             activeListings={selectedNFT.listings?.filter(l => l.status === 'CREATED') || []}
             activeAuctions={selectedNFT.auctions?.filter(a => a.status === 'CREATED' || a.status === 'ACTIVE') || []}
             activeOffers={activeOffers}

@@ -1291,20 +1291,94 @@ export const GET_TRENDING_NFTS_QUERY = `
         name
         symbol
         collectionType
+        floorPrice
+      }
+      owners {
+        ownerAddress
+        balance
       }
       purchaseHistory(limit: 1000) {
         id
         timestamp
         totalPrice
       }
-      listings(where: { status_eq: CREATED }, limit: 1) {
+      listings(where: { status_eq: CREATED }, limit: 10) {
         id
+        status
         pricePerToken
+        quantity
+        startTimestamp
+        endTimestamp
+        isReserved
+        owner {
+          id
+        }
         currencyApprovals {
+          id
+          pricePerToken
           currency {
+            id
             symbol
+            name
+            decimals
           }
         }
+        buyerApprovals {
+          id
+          buyerAddress
+          isApproved
+          createdAt
+        }
+      }
+      auctions(where: { status_in: [CREATED, ACTIVE] }, limit: 10) {
+        id
+        auctionId
+        status
+        startPrice
+        ceilingPrice
+        bidBufferBps
+        startTime
+        endTime
+        quantity
+        sellerAddress
+        currency {
+          id
+          symbol
+          name
+          decimals
+        }
+        bids(limit: 1, orderBy: bidAmount_DESC) {
+          id
+          bidAmount
+          bidderAddress
+          timestamp
+        }
+      }
+      offers(where: { status_eq: ACTIVE }, limit: 10) {
+        id
+        offerId
+        status
+        totalPrice
+        quantity
+        expirationTimestamp
+        offeror {
+          id
+          name
+        }
+        tokenOwner {
+          id
+        }
+        currency {
+          id
+          symbol
+          name
+          decimals
+        }
+      }
+      traits {
+        id
+        traitType
+        value
       }
     }
   }
