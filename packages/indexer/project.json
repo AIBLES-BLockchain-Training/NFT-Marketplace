@@ -19,7 +19,7 @@
       }
     },
     "build": {
-      "command": "rm -rf  && tsc",
+      "command": "rm -rf lib && tsc",
       "options": {
         "cwd": "packages/indexer"
       }
