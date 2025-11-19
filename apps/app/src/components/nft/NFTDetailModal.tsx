@@ -348,8 +348,8 @@ export function NFTDetailModal({
                   </div>
                 </div>
 
-                {/* Stats Grid */}
-                {activeListings.length > 0 && (() => {
+                {/* Stats Grid - Always show */}
+                {(() => {
                   // Calculate top offer
                   const topOffer = activeOffers && activeOffers.length > 0
                     ? activeOffers.reduce((max, offer) => {
@@ -396,37 +396,20 @@ export function NFTDetailModal({
                 })()}
 
                 {/* Owner Actions - No Listing/Auction */}
-                {isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (
+                {/* Only show if we have the create functions (i.e., from Profile page, not Collection page) */}
+                {isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (onCreateListing || onCreateAuction) && (
                   <Card>
                     <h3 className="text-sm font-semibold text-gray-400 mb-4">List for Sale</h3>
                     <div className="space-y-3">
-                      {onCreateListing ? (
+                      {onCreateListing && (
                         <Button variant="primary" onClick={onCreateListing} className="w-full">
                           Create Fixed Price Listing
                         </Button>
-                      ) : (
-                        <a
-                          href={`/collection/${nft.collection.id}`}
-                          className="block w-full"
-                        >
-                          <Button variant="primary" className="w-full">
-                            Create Fixed Price Listing
-                          </Button>
-                        </a>
                       )}
-                      {onCreateAuction ? (
+                      {onCreateAuction && (
                         <Button variant="secondary" onClick={onCreateAuction} className="w-full">
                           Create Auction
                         </Button>
-                      ) : (
-                        <a
-                          href={`/collection/${nft.collection.id}`}
-                          className="block w-full"
-                        >
-                          <Button variant="secondary" className="w-full">
-                            Create Auction
-                          </Button>
-                        </a>
                       )}
                     </div>
                     <p className="text-xs text-gray-500 mt-4">

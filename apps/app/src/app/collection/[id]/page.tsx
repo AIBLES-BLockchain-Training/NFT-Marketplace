@@ -119,6 +119,51 @@ export default function CollectionDetailPage() {
   const [sortField, setSortField] = useState<'price' | 'name' | 'tokenId' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+  // Floor Price (calculated from active listings)
+  const [calculatedFloorPrice, setCalculatedFloorPrice] = useState<string>('0');
+  const [calculatedFloorCurrency, setCalculatedFloorCurrency] = useState<string>('ETH');
+
+  // Calculate floor price from current NFTs - LOWEST price (floor)
+  // When comparing across currencies, prefer the one with higher numeric value for display
+  useEffect(() => {
+    let floorPrice = '0';
+    let floorCurrency = 'ETH';
+    let hasFoundListing = false;
+
+    nfts.forEach((nft) => {
+      if (nft.listing) {
+        const price = BigInt(nft.listing.pricePerToken || '0');
+        if (price > BigInt(0)) {
+          if (!hasFoundListing) {
+            floorPrice = nft.listing.pricePerToken;
+            floorCurrency = nft.listing.currency || 'ETH';
+            hasFoundListing = true;
+          } else {
+            const currentFloor = BigInt(floorPrice);
+            const currentCurrency = floorCurrency;
+            const newCurrency = nft.listing.currency || 'ETH';
+
+            if (currentCurrency === newCurrency) {
+              // Same currency - take the lower price (floor)
+              if (price < currentFloor) {
+                floorPrice = nft.listing.pricePerToken;
+              }
+            } else {
+              // Different currencies - take the one with higher numeric value for better display
+              if (price > currentFloor) {
+                floorPrice = nft.listing.pricePerToken;
+                floorCurrency = newCurrency;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    setCalculatedFloorPrice(floorPrice);
+    setCalculatedFloorCurrency(floorCurrency);
+  }, [nfts]);
+
   const loadCollection = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -1049,7 +1094,13 @@ export default function CollectionDetailPage() {
                       <div className="w-1 h-1 rounded-full bg-gray-400"></div>
                       <div className="flex items-center gap-2">
                         <span className="text-gray-300 font-medium">Floor Price:</span>
-                        <span className="font-bold text-white [text-shadow:_1px_1px_4px_rgb(0_0_0_/_60%)]">{collection.floorPrice ? formatEth(collection.floorPrice) : 'N/A'}</span>
+                        {calculatedFloorPrice !== '0' ? (
+                          <span className="font-bold text-white [text-shadow:_1px_1px_4px_rgb(0_0_0_/_60%)]">
+                            {formatEth(calculatedFloorPrice)} {calculatedFloorCurrency}
+                          </span>
+                        ) : (
+                          <span className="font-bold text-white [text-shadow:_1px_1px_4px_rgb(0_0_0_/_60%)]">N/A</span>
+                        )}
                       </div>
 
                       {/* Options Menu - Only for Owner */}

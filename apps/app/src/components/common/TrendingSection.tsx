@@ -12,6 +12,8 @@ import { BuyModal } from '../marketplace/BuyModal';
 import { MakeOfferModal } from '../marketplace/MakeOfferModal';
 import { BidModal } from '../auction/BidModal';
 import { AuctionDetailModal } from '../auction/AuctionDetailModal';
+import { CreateListingModal } from '../marketplace/CreateListingModal';
+import { CreateAuctionModal } from '../marketplace/CreateAuctionModal';
 import { useWallet } from '../../hooks/useWallet';
 
 interface TrendingSectionProps {
@@ -33,6 +35,8 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
   const [showMakeOffer, setShowMakeOffer] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
   const [showAuctionDetail, setShowAuctionDetail] = useState(false);
+  const [showCreateListing, setShowCreateListing] = useState(false);
+  const [showCreateAuction, setShowCreateAuction] = useState(false);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
 
@@ -225,6 +229,8 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
           onMakeOffer={() => setShowMakeOffer(true)}
           onPlaceBid={handlePlaceBid}
           onViewAuctionDetails={handleViewAuctionDetails}
+          onCreateListing={() => setShowCreateListing(true)}
+          onCreateAuction={() => setShowCreateAuction(true)}
         />
       )}
 
@@ -288,6 +294,34 @@ export function TrendingSection({ title, items, type }: TrendingSectionProps) {
           onPlaceBid={() => {
             setShowAuctionDetail(false);
             setShowBidModal(true);
+          }}
+        />
+      )}
+
+      {/* Create Listing Modal */}
+      {selectedNFT && (
+        <CreateListingModal
+          isOpen={showCreateListing}
+          onClose={() => setShowCreateListing(false)}
+          nft={selectedNFT}
+          onSuccess={() => {
+            setShowCreateListing(false);
+            setShowNFTDetail(false);
+            toast.success('Listing created successfully!');
+          }}
+        />
+      )}
+
+      {/* Create Auction Modal */}
+      {selectedNFT && (
+        <CreateAuctionModal
+          isOpen={showCreateAuction}
+          onClose={() => setShowCreateAuction(false)}
+          nft={selectedNFT}
+          onSuccess={() => {
+            setShowCreateAuction(false);
+            setShowNFTDetail(false);
+            toast.success('Auction created successfully!');
           }}
         />
       )}

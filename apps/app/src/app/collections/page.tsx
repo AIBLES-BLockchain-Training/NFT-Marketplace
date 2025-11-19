@@ -16,6 +16,7 @@ interface CollectionTableData {
   description?: string;
   collectionType: string;
   floorPrice: string;
+  floorPriceCurrency: string;
   oneDayVolume: string;
   oneDayChange: number;
   oneDaySales: number;
@@ -52,16 +53,41 @@ export default function CollectionsPage() {
       });
     });
 
-    // Calculate floor price (lowest active listing price)
+    // Calculate floor price (LOWEST active listing price)
+    // When comparing across currencies, take the one with highest numeric value for display
     let floorPriceValue = '0';
+    let floorPriceCurrency = 'ETH';
+    let hasFoundListing = false;
+
     rawCollection.nfts?.forEach((nft: any) => {
       nft.listings?.forEach((listing: any) => {
         if (listing.status === 'CREATED' || listing.status === 'ACTIVE') {
           const listingPrice = BigInt(listing.pricePerToken || '0');
           if (listingPrice > BigInt(0)) {
-            const currentFloor = BigInt(floorPriceValue);
-            if (currentFloor === BigInt(0) || listingPrice < currentFloor) {
+            if (!hasFoundListing) {
+              // First listing found
               floorPriceValue = listing.pricePerToken;
+              floorPriceCurrency = listing.currency || 'ETH';
+              hasFoundListing = true;
+            } else {
+              const currentFloor = BigInt(floorPriceValue);
+              // Take LOWEST price (floor)
+              // If comparing different currencies, prefer the one with higher numeric value
+              const currentCurrency = floorPriceCurrency;
+              const newCurrency = listing.currency || 'ETH';
+
+              if (currentCurrency === newCurrency) {
+                // Same currency - take the lower price
+                if (listingPrice < currentFloor) {
+                  floorPriceValue = listing.pricePerToken;
+                }
+              } else {
+                // Different currencies - take the one with higher numeric value for better display
+                if (listingPrice > currentFloor) {
+                  floorPriceValue = listing.pricePerToken;
+                  floorPriceCurrency = newCurrency;
+                }
+              }
             }
           }
         }
@@ -88,13 +114,32 @@ export default function CollectionsPage() {
     });
 
     // Calculate 1D change: compare last 24h volume with previous 24h volume
+    // Only show meaningful % when there's enough data
     let oneDayChange = 0;
-    if (yesterdayVolume > BigInt(0)) {
+    const MIN_SALES_FOR_CHANGE = 2; // Need at least 2 sales in each period for meaningful %
+
+    // Count sales in each period
+    let todaySalesCount = 0;
+    let yesterdaySalesCount = 0;
+    rawCollection.nfts?.forEach((nft: any) => {
+      nft.purchaseHistory?.forEach((purchase: any) => {
+        const purchaseTime = new Date(purchase.timestamp).getTime();
+        if (purchaseTime >= oneDayAgo) {
+          todaySalesCount++;
+        } else if (purchaseTime >= twoDaysAgo) {
+          yesterdaySalesCount++;
+        }
+      });
+    });
+
+    // Only calculate % if both periods have enough sales
+    if (todaySalesCount >= MIN_SALES_FOR_CHANGE && yesterdaySalesCount >= MIN_SALES_FOR_CHANGE && yesterdayVolume > BigInt(0)) {
       const change = Number(todayVolume - yesterdayVolume) / Number(yesterdayVolume);
-      oneDayChange = change * 100;
-    } else if (todayVolume > BigInt(0)) {
-      oneDayChange = 100; // 100% increase if there was 0 before
+      // Cap the change at reasonable limits (-99% to +500%)
+      const cappedChange = Math.max(-99, Math.min(500, change * 100));
+      oneDayChange = cappedChange;
     }
+    // If not enough data, leave as 0 (will show as "--" in UI)
 
     return {
       id: rawCollection.id,
@@ -102,6 +147,7 @@ export default function CollectionsPage() {
       logoUrl: rawCollection.logoUrl,
       collectionType: rawCollection.collectionType || 'ERC721',
       floorPrice: floorPriceValue,
+      floorPriceCurrency: floorPriceCurrency,
       oneDayVolume: todayVolume.toString(),
       oneDayChange: Number(oneDayChange.toFixed(2)),
       oneDaySales,
@@ -403,18 +449,20 @@ export default function CollectionsPage() {
 
                     {/* 1D Change */}
                     <div className="flex items-center justify-center">
-                      <span
-                        className={`font-semibold ${
-                          collection.oneDayChange > 0
-                            ? 'text-green-500'
-                            : collection.oneDayChange < 0
-                            ? 'text-red-500'
-                            : 'text-gray-400'
-                        }`}
-                      >
-                        {collection.oneDayChange > 0 ? '+' : ''}
-                        {collection.oneDayChange.toFixed(2)}%
-                      </span>
+                      {collection.oneDayChange === 0 ? (
+                        <span className="text-gray-500">—</span>
+                      ) : (
+                        <span
+                          className={`font-semibold ${
+                            collection.oneDayChange > 0
+                              ? 'text-green-500'
+                              : 'text-red-500'
+                          }`}
+                        >
+                          {collection.oneDayChange > 0 ? '+' : ''}
+                          {collection.oneDayChange.toFixed(2)}%
+                        </span>
+                      )}
                     </div>
 
                     {/* Floor Price */}
@@ -424,7 +472,7 @@ export default function CollectionsPage() {
                           <span className="text-white font-semibold">
                             {formatEth(collection.floorPrice)}
                           </span>
-                          <span className="text-gray-500 text-sm">ETH</span>
+                          <span className="text-gray-500 text-sm">{collection.floorPriceCurrency}</span>
                         </div>
                       ) : (
                         <span className="text-gray-500">—</span>

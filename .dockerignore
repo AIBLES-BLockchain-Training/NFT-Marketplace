@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+dist
+lib
+.next
+build
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+
+# Temp files
+tmp
+temp
+*.tmp
+
+# Documentation (not needed in container)
+*.md
+!packages/indexer/schema.graphql
+
+# Apps (only need indexer)
+apps/
+
+# Contracts (not needed in indexer container)
+packages/contracts/
+
+# Database
+packages/indexer/db/migrations/*.js.map
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github
+.husky
