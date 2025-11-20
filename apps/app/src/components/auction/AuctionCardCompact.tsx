@@ -8,7 +8,7 @@ import { Auction } from '../../types';
 
 export interface AuctionCardCompactProps {
   auction: Auction;
-  onViewDetails: (auction: Auction) => void;
+  onViewDetails?: (auction: Auction) => void;
   onPlaceBid?: (auction: Auction) => void;
   isOwner?: boolean;
 }
@@ -43,7 +43,7 @@ export function AuctionCardCompact({
             <Badge variant={statusVariant}>{statusText}</Badge>
           </div>
           <button
-            onClick={() => onViewDetails(auction)}
+            onClick={() => onViewDetails?.(auction)}
             className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
           >
             View Full Details →
@@ -109,7 +109,7 @@ export function AuctionCardCompact({
               Place Bid
             </Button>
             <Button
-              onClick={() => onViewDetails(auction)}
+              onClick={() => onViewDetails?.(auction)}
               variant="secondary"
             >
               Details
@@ -120,7 +120,7 @@ export function AuctionCardCompact({
         {isActive && isOwner && (
           <div className="pt-2 border-t border-dark-border">
             <Button
-              onClick={() => onViewDetails(auction)}
+              onClick={() => onViewDetails?.(auction)}
               variant="secondary"
               fullWidth
             >
@@ -132,7 +132,7 @@ export function AuctionCardCompact({
         {!isActive && (
           <div className="pt-2 border-t border-dark-border">
             <Button
-              onClick={() => onViewDetails(auction)}
+              onClick={() => onViewDetails?.(auction)}
               variant="secondary"
               fullWidth
             >
