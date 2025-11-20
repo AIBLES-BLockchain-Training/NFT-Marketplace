@@ -80,8 +80,9 @@ export function WithdrawFeeForm() {
         : 'fees';
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, `Successfully withdrew ${formattedAmount}!`);

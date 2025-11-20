@@ -130,10 +130,10 @@ export function AdminList() {
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      <Badge variant="info">{admin.subject.subjectType}</Badge>
+                      <Badge variant="secondary">{admin.subject.subjectType}</Badge>
                     </td>
                     <td className="px-4 py-4">
-                      <Badge variant="danger">MANAGEMENT_ROLE</Badge>
+                      <Badge variant="error">MANAGEMENT_ROLE</Badge>
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-gray-400">

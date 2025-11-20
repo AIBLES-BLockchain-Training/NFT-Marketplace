@@ -199,6 +199,7 @@ export function UserRoleRequests() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, `Successfully approved ${addresses.length} user(s)`);

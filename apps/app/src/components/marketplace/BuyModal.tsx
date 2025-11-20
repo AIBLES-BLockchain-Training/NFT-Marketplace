@@ -43,21 +43,23 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
 
   if (hasApprovedCurrencies) {
     // Use the selected approved currency
-    const approvedCurrency = listing.currencyApprovals[selectedCurrencyIndex];
-    const dbCurrencyAddress = approvedCurrency.currency.id.toLowerCase();
+    const approvedCurrency = listing.currencyApprovals?.[selectedCurrencyIndex];
+    if (approvedCurrency) {
+      const dbCurrencyAddress = approvedCurrency.currency.id.toLowerCase();
 
-    // Normalize: Both 0x0000...0000 and 0xEeee...EEeE represent native ETH
-    // Always use 0x0000...0000 (ZERO_ADDRESS) for contract calls
-    const isNativeToken = dbCurrencyAddress === ZERO_ADDRESS.toLowerCase() ||
-                          dbCurrencyAddress === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+      // Normalize: Both 0x0000...0000 and 0xEeee...EEeE represent native ETH
+      // Always use 0x0000...0000 (ZERO_ADDRESS) for contract calls
+      const isNativeToken = dbCurrencyAddress === ZERO_ADDRESS.toLowerCase() ||
+                            dbCurrencyAddress === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
-    currencyAddress = isNativeToken ? ZERO_ADDRESS : approvedCurrency.currency.id;
-    pricePerToken = BigInt(approvedCurrency.pricePerToken);
+      currencyAddress = isNativeToken ? ZERO_ADDRESS : approvedCurrency.currency.id;
+      pricePerToken = BigInt(approvedCurrency.pricePerToken);
 
-    // Display symbol: Show 'ETH' for native tokens or UNKNOWN symbols
-    displaySymbol = (isNativeToken || approvedCurrency.currency.symbol === 'UNKNOWN')
-      ? 'ETH'
-      : approvedCurrency.currency.symbol;
+      // Display symbol: Show 'ETH' for native tokens or UNKNOWN symbols
+      displaySymbol = (isNativeToken || approvedCurrency.currency.symbol === 'UNKNOWN')
+        ? 'ETH'
+        : approvedCurrency.currency.symbol;
+    }
   }
 
   // Calculate total price using decimal quantity for display

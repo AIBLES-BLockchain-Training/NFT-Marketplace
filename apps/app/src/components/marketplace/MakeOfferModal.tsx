@@ -134,7 +134,7 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
     : (erc20Balance ?? 0n);
 
   // Validation
-  const hasSufficientBalance = currentBalance >= totalPriceWei;
+  const hasSufficientBalance = BigInt(currentBalance) >= totalPriceWei;
   const isValidAmount = totalPriceWei > 0n;
   const isValidQuantity = quantityBigInt > 0n;
   const canSubmit = isValidAmount && isValidQuantity && hasSufficientBalance && !isLoading && !isApproving;
@@ -170,8 +170,8 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
 
         try {
           const { hasAllowance } = await checkERC20Allowance(
-            selectedCurrency,
-            address,
+            selectedCurrency as `0x${string}`,
+            address as `0x${string}`,
             ROUTER_ADDRESS,
             totalPriceWei
           );
@@ -180,7 +180,7 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
             toast.loading('Approving token...', { id: 'approval' });
 
             // Request approval
-            const approved = await approveERC20(selectedCurrency, ROUTER_ADDRESS);
+            const approved = await approveERC20(selectedCurrency as `0x${string}`, ROUTER_ADDRESS);
 
             if (!approved) {
               toast.error('Token approval failed', { id: 'approval' });
@@ -216,7 +216,7 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
         assetContract: nft.collection.id,
         tokenId: tokenIdBigInt,
         quantity: quantityBigInt,
-        currency: selectedCurrency,
+        currency: selectedCurrency as `0x${string}`,
         totalPrice: totalPriceWei,
         expirationTimestamp: expirationTime,
       });

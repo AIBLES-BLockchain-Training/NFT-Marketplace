@@ -10,7 +10,6 @@ import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { getIpfsGateways, truncateTokenId } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
-import toast from 'react-hot-toast';
 
 interface NFTDetailProps {
   nft: NFT;
@@ -231,7 +230,7 @@ export function NFTDetail({
                   auction={auction}
                   isOwner={isOwner}
                   onViewDetails={onViewAuction || undefined}
-                  onPlaceBid={onPlaceBid}
+                  onPlaceBid={onPlaceBid || undefined}
                 />
               ))}
             </div>
@@ -417,7 +416,7 @@ export function NFTDetail({
                       key={offer.id}
                       offer={offer}
                       isTokenOwner={isOwner}
-                      isOfferMaker={isMyOffer}
+                      isOfferMaker={!!isMyOffer}
                       onAccept={isOwner && !isOfferExpired ? onAcceptOffer : undefined}
                       onCancel={isMyOffer && !isOfferExpired ? onCancelOffer : undefined}
                     />

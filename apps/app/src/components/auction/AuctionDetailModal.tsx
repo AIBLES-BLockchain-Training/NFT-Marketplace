@@ -21,6 +21,7 @@ export interface AuctionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRefresh?: () => void;
+  onPlaceBid?: () => void;
 }
 
 /**
@@ -32,6 +33,7 @@ export function AuctionDetailModal({
   isOpen,
   onClose,
   onRefresh,
+  onPlaceBid,
 }: AuctionDetailModalProps) {
   const { address } = useWallet();
   const [showBidModal, setShowBidModal] = useState(false);

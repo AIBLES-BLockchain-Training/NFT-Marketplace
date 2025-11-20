@@ -24,8 +24,8 @@ export function AuctionCollectionButtons({
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const { address } = useWallet();
 
-  const payoutCheck = canCollectPayout(auction, address);
-  const nftCheck = canCollectNFT(auction, address);
+  const payoutCheck = canCollectPayout(auction, address || undefined);
+  const nftCheck = canCollectNFT(auction, address || undefined);
 
   // Check if user participated but lost
   const userBids = address && auction.bids
@@ -234,8 +234,8 @@ export function CompactAuctionCollectionButtons({
   const { sendTransaction, isLoading } = useTransactionModal();
   const { address } = useWallet();
 
-  const payoutCheck = canCollectPayout(auction, address);
-  const nftCheck = canCollectNFT(auction, address);
+  const payoutCheck = canCollectPayout(auction, address || undefined);
+  const nftCheck = canCollectNFT(auction, address || undefined);
 
   if (!payoutCheck.canCollect && !nftCheck.canCollect) {
     return null;

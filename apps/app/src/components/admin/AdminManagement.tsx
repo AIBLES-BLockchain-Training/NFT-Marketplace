@@ -36,6 +36,7 @@ export function AdminManagement() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, `Successfully assigned MANAGEMENT_ROLE to ${addresses.length} address(es)`);
@@ -72,6 +73,7 @@ export function AdminManagement() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, `Successfully revoked MANAGEMENT_ROLE from ${addresses.length} address(es)`);

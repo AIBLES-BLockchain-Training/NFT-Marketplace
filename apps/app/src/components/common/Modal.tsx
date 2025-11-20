@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { JSX } from 'react';
 import clsx from 'clsx';
 
 interface ModalProps {
@@ -17,7 +18,7 @@ interface ModalProps {
 // Global counter to track number of open modals
 let openModalsCount = 0;
 
-export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 'z-50', hideBackdrop = false }: ModalProps) {
+export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 'z-50', hideBackdrop = false }: ModalProps): JSX.Element | null {
   useEffect(() => {
     if (isOpen) {
       // Increment counter when modal opens

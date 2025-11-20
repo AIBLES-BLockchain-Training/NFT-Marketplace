@@ -27,7 +27,7 @@ export function useCancelAuction(
   const { address } = useWallet();
   const [isCancelling, setIsCancelling] = useState(false);
 
-  const cancelCheck = auction ? canCancelAuction(auction, address) : { canCancel: false };
+  const cancelCheck = auction ? canCancelAuction(auction, address || undefined) : { canCancel: false };
 
   const cancelAuction = async (auctionToCancel: Auction) => {
     if (!address) {

@@ -48,25 +48,76 @@ type OfferedSubTab = 'active' | 'expired';
 
 interface NFTWithListing extends NFT {
   listing?: Listing;
+  totalListedQuantity?: string;
+  auctionQuantity?: string;
+  offerQuantity?: string;
+  _displayOwner?: string;
 }
 
 interface ListingQueryResult {
   nft: NFT;
   id: string;
+  listingId: string;
   quantity: string;
-  [key: string]: unknown;
+  pricePerToken: string;
+  currency: string;
+  startTimestamp: string;
+  endTimestamp: string;
+  endTime?: string;
+  isReserved: boolean;
+  status: string;
+  owner: any;
+  listingCreator: any;
+  currencyApprovals?: any[];
+  buyerApprovals?: any[];
+  createdAt: string;
+  updatedAt?: string;
+  transactionHash?: string;
 }
 
 interface AuctionQueryResult {
   nft: NFT;
+  id: string;
+  auctionId: string;
   quantity: string;
-  [key: string]: unknown;
+  sellerAddress: string;
+  seller: any;
+  minimumBidAmount: string;
+  startPrice: string;
+  stepAmount: string;
+  ceilingPrice?: string;
+  bidBufferBps: string;
+  startTime: string;
+  endTime: string;
+  timeBufferInSeconds: number;
+  tokenType: string;
+  status: string;
+  bids?: any[];
+  winningBidder?: any;
+  winningBid?: any;
+  currency: any;
+  isPayoutCollected?: boolean;
+  isTokenCollected?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface OfferQueryResult {
   nft: NFT;
+  id: string;
+  offerId: string;
   quantity: string;
-  [key: string]: unknown;
+  totalPrice: string;
+  expirationTime: string;
+  expirationTimestamp: string;
+  status: string;
+  offeror: any;
+  tokenOwner?: any;
+  currency: any;
+  createdAt: string;
+  updatedAt?: string;
+  transactionHash?: string;
+  blockNumber?: number;
 }
 
 export default function CollectionDetailPage() {
@@ -203,7 +254,7 @@ export default function CollectionDetailPage() {
           if (result.listings) {
             // Filter based on sub-tab and 7-day rule
             result.listings = result.listings.filter((listing: ListingQueryResult) => {
-              const endTime = new Date(listing.endTimestamp || listing.endTime).getTime();
+              const endTime = new Date(listing.endTimestamp || listing.endTime || listing.startTimestamp).getTime();
               const isExpired = endTime < now;
               const daysSinceExpired = (now - endTime) / SEVEN_DAYS_MS;
 
@@ -233,10 +284,10 @@ export default function CollectionDetailPage() {
                 // Create unique ID by combining nft.id and listing.id
                 id: `${listing.nft.id}-listing-${listing.id}`,
                 originalNftId: listing.nft.id,
-                listings: [listing], // Only this one listing
+                listings: [listing as any], // Only this one listing
                 totalListedQuantity: listing.quantity,
               }));
-              setNfts(nftsArray);
+              setNfts(nftsArray as any);
             } else {
               // For ERC-721: Group all listings by NFT (original behavior)
               const nftMap = new Map<string, NFT>();
@@ -246,7 +297,7 @@ export default function CollectionDetailPage() {
               result.listings.forEach((listing: ListingQueryResult) => {
                 const nftId = listing.nft.id;
                 const currentQty = totalListedQty.get(nftId) || BigInt(0);
-                const listingQty = BigInt(listing.quantity || '1');
+                const listingQty = BigInt(String(listing.quantity || '1'));
                 totalListedQty.set(nftId, currentQty + listingQty);
 
                 // Store NFT data (first occurrence)
@@ -258,17 +309,17 @@ export default function CollectionDetailPage() {
                 if (!nftListingsMap.has(nftId)) {
                   nftListingsMap.set(nftId, []);
                 }
-                nftListingsMap.get(nftId).push(listing);
+                nftListingsMap.get(nftId)?.push(listing);
               });
 
               // Build final NFT array with all listings
               const nftsArray = Array.from(nftMap.values()).map(nft => ({
                 ...nft,
-                listings: nftListingsMap.get(nft.id) || [],
+                listings: (nftListingsMap.get(nft.id) || []) as any,
                 totalListedQuantity: totalListedQty.get(nft.id)?.toString() || '1',
               }));
 
-              setNfts(nftsArray);
+              setNfts(nftsArray as any);
             }
           }
           break;
@@ -329,10 +380,10 @@ export default function CollectionDetailPage() {
             const nftsWithAuctions = transformedAuctions.map((auction: AuctionQueryResult) => ({
               ...auction.nft,
               auctionQuantity: auction.quantity,
-              auctions: [auction], // Attach the transformed auction object
+              auctions: [auction as any], // Attach the transformed auction object
             }));
 
-            setNfts(nftsWithAuctions);
+            setNfts(nftsWithAuctions as any);
           }
           break;
         }
@@ -345,7 +396,7 @@ export default function CollectionDetailPage() {
           if (result.offers) {
             // Filter based on sub-tab and 7-day rule
             const filteredOffers = result.offers.filter((offer: OfferQueryResult) => {
-              const expirationTime = new Date(offer.expirationTimestamp || offer.expirationTime).getTime();
+              const expirationTime = new Date(offer.expirationTimestamp || offer.expirationTime || offer.createdAt).getTime();
               const isExpired = expirationTime < now;
               const daysSinceExpired = (now - expirationTime) / SEVEN_DAYS_MS;
 
@@ -428,14 +479,14 @@ export default function CollectionDetailPage() {
 
               // Sort offers by totalPrice descending (highest first)
               const sortedOffers = offers.sort((a, b) => {
-                const priceA = BigInt(a.totalPrice);
-                const priceB = BigInt(b.totalPrice);
+                const priceA = BigInt(String(a.totalPrice));
+                const priceB = BigInt(String(b.totalPrice));
                 return priceB > priceA ? 1 : priceB < priceA ? -1 : 0;
               });
 
               return {
                 ...nft,
-                offers: sortedOffers,
+                offers: sortedOffers as any,
               };
             });
 
@@ -479,7 +530,7 @@ export default function CollectionDetailPage() {
                   if (!nftListingsMap.has(nftId)) {
                     nftListingsMap.set(nftId, []);
                   }
-                  nftListingsMap.get(nftId).push(listing);
+                  nftListingsMap.get(nftId)?.push(listing);
                 });
 
                 // Build final NFT array with all listings
@@ -489,7 +540,7 @@ export default function CollectionDetailPage() {
                   totalListedQuantity: totalListedQty.get(nft.id)?.toString() || '1',
                 }));
 
-                setNfts(nftsArray);
+                setNfts(nftsArray as any);
               }
               break;
 
@@ -502,8 +553,8 @@ export default function CollectionDetailPage() {
                 setNfts(result.auctions.map((auction: AuctionQueryResult) => ({
                   ...auction.nft,
                   auctionQuantity: auction.quantity,
-                  auctions: [auction], // Attach the full auction object
-                })));
+                  auctions: [auction as any], // Attach the full auction object
+                })) as any);
               }
               break;
 
@@ -579,7 +630,7 @@ export default function CollectionDetailPage() {
                   };
                 });
 
-                setNfts(nftsArray);
+                setNfts(nftsArray as any);
               }
               break;
           }
@@ -918,7 +969,7 @@ export default function CollectionDetailPage() {
     try {
       const tx = encodeApproveBuyerForListing(
         BigInt(selectedListing.id),
-        buyerAddress,
+        buyerAddress as `0x${string}`,
         approve
       );
       const receipt = await sendTransaction(
@@ -2003,7 +2054,7 @@ export default function CollectionDetailPage() {
             allNFTs={nfts}
             currentIndex={selectedNFTIndex}
             onNavigate={handleNavigateNFT}
-            isOwner={isActualOwner}
+            isOwner={isActualOwner || false}
             displayOwner={displayOwner}
             activeListings={selectedNFT.listings?.filter(l => l.status === 'CREATED') || []}
             activeAuctions={selectedNFT.auctions?.filter(a => a.status === 'CREATED' || a.status === 'ACTIVE') || []}

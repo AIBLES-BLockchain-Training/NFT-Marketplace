@@ -48,9 +48,9 @@ export function ActivityTable({ activities }: ActivityTableProps) {
       case 'NFT_WHITELISTED':
         return `NFT: ${activity.metadata?.nftContract ? formatAddress(activity.metadata.nftContract as string) : 'Unknown'}`;
       case 'FEE_WITHDRAWN':
-        return `${formatEth(activity.metadata?.amount)} ${activity.metadata?.currency?.symbol || ''}`;
+        return `${formatEth(activity.metadata?.amount as string)} ${(activity.metadata?.currency as any)?.symbol || ''}`;
       default:
-        return activity.metadata?.price ? `${formatEth(activity.metadata.price)} ETH` : '';
+        return activity.metadata?.price ? `${formatEth(activity.metadata.price as string)} ETH` : '';
     }
   };
 

@@ -1,7 +1,7 @@
 manifestVersion: subsquid.io/v0.1
-name: my-squid-name
+name: nft-marketplace-indexer
 version: 1
-description: 'The very first evm squid from manifest  '
+description: 'NFT Marketplace Subsquid Indexer'
 build: 
 deploy:
   addons:

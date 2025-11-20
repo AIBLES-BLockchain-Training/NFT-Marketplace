@@ -172,7 +172,7 @@ export async function approveNFT(
 
       // Cache the approval status if successful
       if (success) {
-        const cacheKey = getCacheKey(nftContract, ownerAddress);
+        const cacheKey = getCacheKey(nftContract as `0x${string}`, ownerAddress as `0x${string}`);
         approvalCache.set(cacheKey, true);
       }
 
@@ -187,7 +187,7 @@ export async function approveNFT(
 
       // Cache the approval status if successful
       if (success) {
-        const cacheKey = getCacheKey(nftContract, ownerAddress);
+        const cacheKey = getCacheKey(nftContract as `0x${string}`, ownerAddress as `0x${string}`);
         approvalCache.set(cacheKey, true);
       }
 
@@ -294,7 +294,7 @@ export async function approveERC20(
 
     // Update cache if successful
     if (success) {
-      const cacheKey = getERC20CacheKey(tokenAddress, ownerAddress, spenderAddress);
+      const cacheKey = getERC20CacheKey(tokenAddress as `0x${string}`, ownerAddress as `0x${string}`, spenderAddress as `0x${string}`);
       erc20AllowanceCache.set(cacheKey, approvalAmount);
     }
 
