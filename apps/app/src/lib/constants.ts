@@ -19,6 +19,7 @@ export const DEFAULT_AUCTION_BID_BUFFER = BID_BUFFER_BPS.MEDIUM;
 
 // Listing/Auction duration options (in days)
 export const DURATION_OPTIONS = [
+  { value: '0.00694', label: '10 Minutes (Test)' }, // 10 minutes = 600 seconds / 86400
   { value: '1', label: '1 Day' },
   { value: '3', label: '3 Days' },
   { value: '7', label: '7 Days' },

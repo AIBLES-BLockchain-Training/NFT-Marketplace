@@ -206,20 +206,20 @@ class CombinedIndexer {
       }
 
       // Process offer events
-      // if (offerLogs.length > 0) {
-      //   console.log(`Processing ${offerLogs.length} offer events`)
-      //   await processOfferEvents(
-      //     offerLogs,
-      //     ctx,
-      //     CONTRACT_ADDRESSES.router.toLowerCase(),
-      //     offerMap,
-      //     subjectMap,
-      //     collectionMap,
-      //     nftMap,
-      //     currencyMap,
-      //     purchaseHistories
-      //   )
-      // }
+      if (offerLogs.length > 0) {
+        console.log(`Processing ${offerLogs.length} offer events`)
+        await processOfferEvents(
+          offerLogs,
+          ctx,
+          CONTRACT_ADDRESSES.router.toLowerCase(),
+          offerMap,
+          subjectMap,
+          collectionMap,
+          nftMap,
+          currencyMap,
+          purchaseHistories
+        )
+      }
 
       // Process auction events
       if (auctionLogs.length > 0) {

@@ -139,6 +139,29 @@
     scrollbar-color: theme('colors.dark.border') transparent;
   }
 
+  /* Extra thin scrollbar for nested scrollable areas */
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 2px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+  }
+
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 transparent;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.3s ease-in-out;
   }

@@ -21,7 +21,7 @@ export class PurchaseHistory {
 
     @Index_()
     @ManyToOne_(() => NFT, {nullable: true})
-    nft!: NFT
+    nft!: NFT | undefined | null
 
     @Index_()
     @ManyToOne_(() => Subject, {nullable: true})

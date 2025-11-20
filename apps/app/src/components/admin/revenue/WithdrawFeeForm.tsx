@@ -52,8 +52,7 @@ export function WithdrawFeeForm() {
 
     setIsLoadingAmount(true);
     try {
-      const routerAddress = process.env.NEXT_PUBLIC_ROUTER_ADDRESS!;
-      const amount = await getAccumulatedFees(extension, selectedCurrency, routerAddress);
+      const amount = await getAccumulatedFees(extension, selectedCurrency);
       setAvailableAmount(amount);
     } catch (error) {
       console.error('Failed to load available amount:', error);
@@ -81,7 +80,7 @@ export function WithdrawFeeForm() {
         : 'fees';
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
         data,
       };
 
@@ -118,9 +117,7 @@ export function WithdrawFeeForm() {
             className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="listing">Listing</option>
-            <option value="auction" disabled>
-              Auction (Coming Soon)
-            </option>
+            <option value="auction">Auction</option>
             <option value="offer" disabled>
               Offer (Coming Soon)
             </option>

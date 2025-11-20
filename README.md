@@ -40,9 +40,18 @@ npx nx run-many -t <target1> <target2> -p <proj1> <proj2>
 
 Targets can be defined in the `package.json` or `projects.json`. Learn more [in the docs](https://nx.dev/features/run-tasks).
 
+## Installation
+
+Install dependencies:
+```bash
+yarn install
+```
+
 ## Run Hardhat
 
+```bash
 yarn nx run contracts:hardhat compile
+```
 
 ## Set up CI!
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { NFT, Listing } from '../../types';
+import { NFT, Listing, Auction, PurchaseHistory } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -10,6 +10,17 @@ import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { truncateTokenId } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
+import { useCancelAuction } from '../../hooks/useCancelAuction';
+import {
+  isAuctionActive,
+  getAuctionStatusText,
+  getAuctionStatusVariant,
+  hasAuctionEnded,
+  canCollectNFT
+} from '../../lib/auction/status';
+import { CompactCountdownTimer } from '../auction/CountdownTimer';
+import { graphqlClient } from '../../lib/graphql/client';
+import { GET_PURCHASE_HISTORY_QUERY } from '../../lib/graphql/queries';
 
 interface NFTDetailModalProps {
   isOpen: boolean;
@@ -19,14 +30,25 @@ interface NFTDetailModalProps {
   currentIndex?: number;
   onNavigate?: (index: number) => void;
   isOwner?: boolean;
+  displayOwner?: string; // For ERC1155 split by owner - specific owner address for this card
   activeListings?: Listing[];
+  activeAuctions?: Auction[];
+  activeOffers?: any[]; // Add offers support
+  initialTab?: 'details' | 'orders' | 'activity' | 'approved';
   onBuy?: (listing: Listing) => void;
   onCreateListing?: () => void;
   onCreateAuction?: () => void;
+  onMakeOffer?: () => void;
   onCancelListing?: (listing: Listing) => void;
   onUpdateListing?: (listing: Listing) => void;
   onAddCurrency?: (listing: Listing) => void;
   onApproveBuyer?: (listing: Listing) => void;
+  onPlaceBid?: (auction: Auction) => void;
+  onViewAuctionDetails?: (auction: Auction) => void;
+  onAcceptOffer?: (offer: any) => void;
+  onCancelOffer?: (offer: any) => void;
+  onRefresh?: () => void;
+  processingOfferId?: string | null;
 }
 
 export function NFTDetailModal({
@@ -37,19 +59,69 @@ export function NFTDetailModal({
   currentIndex,
   onNavigate,
   isOwner,
+  displayOwner,
   activeListings = [],
+  activeAuctions = [],
+  activeOffers = [],
+  initialTab = 'details',
   onBuy,
   onCreateListing,
   onCreateAuction,
+  onMakeOffer,
   onCancelListing,
   onUpdateListing,
   onAddCurrency,
   onApproveBuyer,
+  onPlaceBid,
+  onViewAuctionDetails,
+  onAcceptOffer,
+  onCancelOffer,
+  onRefresh,
+  processingOfferId,
 }: NFTDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity' | 'approved'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'activity' | 'approved'>(initialTab);
   const hasReservedListing = activeListings.some(l => l.isReserved);
   const [listingQuantities, setListingQuantities] = useState<{[listingId: string]: number}>({});
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { address } = useWallet();
+
+  // Update active tab when initialTab changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
+  // Fetch purchase history for this NFT
+  useEffect(() => {
+    const loadPurchaseHistory = async () => {
+      if (!isOpen || !nft?.id) return;
+
+      setIsLoadingHistory(true);
+      try {
+        const result = await graphqlClient.query(GET_PURCHASE_HISTORY_QUERY, {
+          limit: 50,
+          offset: 0,
+          where: {
+            nft: {
+              id_eq: nft.id
+            }
+          }
+        });
+
+        if (result.purchaseHistories) {
+          setPurchaseHistory(result.purchaseHistories);
+        }
+      } catch (error) {
+        console.error('Failed to load purchase history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadPurchaseHistory();
+  }, [isOpen, nft?.id]);
 
   // Initialize quantities for each listing
   useEffect(() => {
@@ -253,11 +325,14 @@ export function NFTDetailModal({
                   <h1 className="text-4xl font-bold text-white mb-3">{nft.name}</h1>
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-primary-400 text-sm font-semibold">{nft.collection.name}</span>
-                    {nft.owners && nft.owners.length > 0 && (
+                    {(displayOwner || (nft.owners && nft.owners.length > 0)) && (
                       <>
                         <span className="text-gray-500">•</span>
                         <span className="text-gray-400 text-sm">
-                          Owned by {nft.owners[0].ownerAddress.slice(0, 6)}...{nft.owners[0].ownerAddress.slice(-4)}
+                          Owner: {displayOwner
+                            ? `${displayOwner.slice(0, 6)}...${displayOwner.slice(-4)}`
+                            : `${nft.owners[0].ownerAddress.slice(0, 6)}...${nft.owners[0].ownerAddress.slice(-4)}`
+                          }
                         </span>
                       </>
                     )}
@@ -273,32 +348,56 @@ export function NFTDetailModal({
                   </div>
                 </div>
 
-                {/* Stats Grid */}
-                {activeListings.length > 0 && (
-                  <div className="grid grid-cols-4 gap-4 p-4 bg-dark-card rounded-xl border border-dark-border">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">TOP OFFER</p>
-                      <p className="text-sm font-bold text-white">—</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">COLLECTION FLOOR</p>
-                      <p className="text-sm font-bold text-white">
-                        {nft.collection.floorPrice ? formatEth(nft.collection.floorPrice) : '—'} ETH
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">RARITY</p>
-                      <p className="text-sm font-bold text-white">—</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">LAST SALE</p>
-                      <p className="text-sm font-bold text-white">—</p>
-                    </div>
-                  </div>
-                )}
+                {/* Stats Grid - Always show */}
+                {(() => {
+                  // Calculate top offer
+                  const topOffer = activeOffers && activeOffers.length > 0
+                    ? activeOffers.reduce((max, offer) => {
+                        const maxPrice = BigInt(max.totalPrice || '0');
+                        const offerPrice = BigInt(offer.totalPrice || '0');
+                        return offerPrice > maxPrice ? offer : max;
+                      })
+                    : null;
 
-                {/* Owner Actions - No Listing */}
-                {isOwner && activeListings.length === 0 && (
+                  // Get last sale
+                  const lastSale = purchaseHistory && purchaseHistory.length > 0
+                    ? purchaseHistory[0]
+                    : null;
+
+                  // Count traits for rarity
+                  const traitCount = nft.traits?.length || 0;
+
+                  return (
+                    <div className="grid grid-cols-4 gap-4 p-4 bg-dark-card rounded-xl border border-dark-border">
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">TOP OFFER</p>
+                        <p className="text-sm font-bold text-white">
+                          {topOffer ? `${formatEth(topOffer.totalPrice)} ${topOffer.currency?.symbol || 'ETH'}` : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">COLLECTION FLOOR</p>
+                        <p className="text-sm font-bold text-white">
+                          {nft.collection.floorPrice ? `${formatEth(nft.collection.floorPrice)} ETH` : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">TRAITS</p>
+                        <p className="text-sm font-bold text-white">{traitCount > 0 ? traitCount : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">LAST SALE</p>
+                        <p className="text-sm font-bold text-white">
+                          {lastSale ? `${formatEth(lastSale.totalPrice)} ${lastSale.currency?.symbol || 'ETH'}` : '—'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Owner Actions - No Listing/Auction */}
+                {/* Only show if we have the create functions (i.e., from Profile page, not Collection page) */}
+                {isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (onCreateListing || onCreateAuction) && (
                   <Card>
                     <h3 className="text-sm font-semibold text-gray-400 mb-4">List for Sale</h3>
                     <div className="space-y-3">
@@ -502,24 +601,49 @@ export function NFTDetailModal({
                                         </div>
                                       )}
                                       {/* Buy Button */}
-                                      <Button
-                                        variant="primary"
-                                        onClick={() => onBuy && onBuy(listing)}
-                                        className="flex-1"
-                                      >
-                                        Buy Now
-                                      </Button>
+                                      {onBuy ? (
+                                        <Button
+                                          variant="primary"
+                                          onClick={() => onBuy(listing)}
+                                          className="flex-1"
+                                        >
+                                          Buy Now
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="secondary"
+                                          disabled
+                                          className="flex-1"
+                                        >
+                                          Connect Wallet to Buy
+                                        </Button>
+                                      )}
                                       {/* Make Offer Button */}
-                                      <Button
-                                        variant="secondary"
-                                        className="flex-1"
-                                      >
-                                        Make Offer
-                                      </Button>
+                                      {onMakeOffer && (
+                                        <Button
+                                          variant="secondary"
+                                          onClick={onMakeOffer}
+                                          className="flex-1"
+                                        >
+                                          Make Offer
+                                        </Button>
+                                      )}
                                     </div>
                                   ) : (
-                                    <div className="text-center py-2 border-t border-dark-border">
-                                      <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
+                                    <div className="border-t border-dark-border pt-3">
+                                      <div className="text-center mb-3">
+                                        <span className="text-sm text-red-400 font-semibold">Listing Expired</span>
+                                      </div>
+                                      {/* Only show Make Offer button if user is NOT the listing owner */}
+                                      {!isMyListing && onMakeOffer && (
+                                        <Button
+                                          variant="primary"
+                                          onClick={onMakeOffer}
+                                          className="w-full"
+                                        >
+                                          Make Offer
+                                        </Button>
+                                      )}
                                     </div>
                                   )}
                                 </>
@@ -527,6 +651,192 @@ export function NFTDetailModal({
                             </div>
                           );
                         })}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Auctions Section */}
+                {activeAuctions.length > 0 && (
+                  <Card>
+                    <h3 className="text-sm font-semibold text-gray-400 mb-4">
+                      Active Auctions ({activeAuctions.length})
+                    </h3>
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {activeAuctions
+                        .filter(auction => isAuctionActive(auction) || !hasAuctionEnded(auction.endTime))
+                        .map((auction) => {
+                          const isMyAuction = address && auction.sellerAddress.toLowerCase() === address.toLowerCase();
+                          const currentBid = auction.bids && auction.bids.length > 0
+                            ? BigInt(auction.bids[0].bidAmount)
+                            : BigInt(auction.startPrice);
+                          const statusText = getAuctionStatusText(auction);
+                          const statusVariant = getAuctionStatusVariant(auction);
+                          const auctionActive = isAuctionActive(auction);
+
+                          return (
+                            <div
+                              key={auction.id}
+                              className="p-4 bg-dark-bg rounded-lg border border-dark-border hover:border-primary-500 transition-colors"
+                            >
+                              {/* Auction Header */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-sm font-semibold text-white">Auction #{auction.auctionId}</h4>
+                                  <Badge variant={statusVariant} size="sm">{statusText}</Badge>
+                                </div>
+                                {onViewAuctionDetails && (
+                                  <button
+                                    onClick={() => onViewAuctionDetails(auction)}
+                                    className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                                  >
+                                    View Full Details →
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Current Bid Info */}
+                              <div className="grid grid-cols-2 gap-4 mb-3">
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">Current Bid</p>
+                                  <div className="flex items-baseline gap-2">
+                                    <p className="text-lg font-bold text-primary-400">
+                                      {formatEth(currentBid)}
+                                    </p>
+                                    <p className="text-xs text-gray-400">{auction.currency.symbol}</p>
+                                  </div>
+                                  {auction.bids && auction.bids.length > 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {auction.bids.length} bid{auction.bids.length !== 1 ? 's' : ''}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">
+                                    {auctionActive ? 'Ends In' : 'Ended'}
+                                  </p>
+                                  {auctionActive ? (
+                                    <CompactCountdownTimer endTime={auction.endTime} />
+                                  ) : (
+                                    <p className="text-sm font-semibold text-gray-500">Auction Ended</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Auction Details */}
+                              <div className="grid grid-cols-3 gap-2 p-3 bg-dark-card rounded-lg mb-3">
+                                <div>
+                                  <p className="text-xs text-gray-400">Start Price</p>
+                                  <p className="text-xs font-semibold text-white">
+                                    {formatEth(BigInt(auction.startPrice))}
+                                  </p>
+                                </div>
+                                {auction.ceilingPrice && (
+                                  <div>
+                                    <p className="text-xs text-gray-400">Buyout</p>
+                                    <p className="text-xs font-semibold text-primary-400">
+                                      {formatEth(BigInt(auction.ceilingPrice))}
+                                    </p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs text-gray-400">Min Step</p>
+                                  <p className="text-xs font-semibold text-white">
+                                    +{(Number(auction.bidBufferBps) / 100).toFixed(1)}%
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              {auctionActive && (
+                                <>
+                                  {isMyAuction ? (
+                                    <AuctionOwnerActions auction={auction} onRefresh={onRefresh} />
+                                  ) : (
+                                    <div className="flex gap-2">
+                                      {onPlaceBid && (
+                                        <Button
+                                          onClick={() => onPlaceBid(auction)}
+                                          variant="primary"
+                                          className="flex-1"
+                                          size="sm"
+                                        >
+                                          Place Bid
+                                        </Button>
+                                      )}
+                                      {onViewAuctionDetails && (
+                                        <Button
+                                          onClick={() => onViewAuctionDetails(auction)}
+                                          variant="secondary"
+                                          size="sm"
+                                        >
+                                          Details
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
+                              {!auctionActive && (
+                                <>
+                                  {(() => {
+                                    // Check if current user can collect NFT (is winner)
+                                    const nftCheck = address ? canCollectNFT(auction, address) : { canCollect: false };
+                                    const isWinner = nftCheck.canCollect;
+
+                                    return (
+                                      <div className="flex gap-2">
+                                        {onViewAuctionDetails && (
+                                          <Button
+                                            onClick={() => onViewAuctionDetails(auction)}
+                                            variant="secondary"
+                                            size="sm"
+                                            className="flex-1"
+                                          >
+                                            View Details
+                                          </Button>
+                                        )}
+                                        {/* Show Make Offer for everyone except winner and auction owner */}
+                                        {!isWinner && !isMyAuction && onMakeOffer && (
+                                          <Button
+                                            onClick={onMakeOffer}
+                                            variant="primary"
+                                            size="sm"
+                                            className="flex-1"
+                                          >
+                                            Make Offer
+                                          </Button>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Non-Owner Actions - No Listing/Auction */}
+                {!isOwner && activeListings.length === 0 && activeAuctions.length === 0 && (
+                  <Card>
+                    <h3 className="text-sm font-semibold text-gray-400 mb-4">Interested in this NFT?</h3>
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-300">
+                        This NFT is not currently listed for sale. You can make an offer to the owner.
+                      </p>
+                      {onMakeOffer ? (
+                        <Button variant="primary" onClick={onMakeOffer} className="w-full">
+                          Make Offer
+                        </Button>
+                      ) : (
+                        <Button variant="secondary" disabled className="w-full">
+                          Connect Wallet to Make Offer
+                        </Button>
+                      )}
                     </div>
                   </Card>
                 )}
@@ -640,14 +950,226 @@ export function NFTDetailModal({
                 )}
 
                 {activeTab === 'orders' && (
-                  <div className="text-center py-12 text-gray-400">
-                    No active orders
+                  <div className="space-y-4">
+                    {activeOffers && activeOffers.length > 0 ? (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-white mb-3">Active Offers ({activeOffers.length})</h4>
+                        {activeOffers.map((offer: any) => {
+                          const isOfferMaker = address && offer.offeror?.id.toLowerCase() === address.toLowerCase();
+                          // Check if current user is the token owner
+                          // 1. From offer.tokenOwner (most accurate for specific offers)
+                          // 2. Fallback to isOwner prop (from nft.owners)
+                          const isTokenOwner = address ? (
+                            (offer.tokenOwner?.id && offer.tokenOwner.id.toLowerCase() === address.toLowerCase()) ||
+                            isOwner
+                          ) : false;
+
+                          return (
+                            <div key={offer.id} className="bg-dark-card rounded-lg p-4 border border-dark-border">
+                              <div className="space-y-3">
+                                {/* Offer Header with Price */}
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-semibold text-white">
+                                    Offer #{offer.offerId}
+                                  </p>
+                                  <div className="text-right">
+                                    <p className="text-lg font-bold text-primary-400">
+                                      {(() => {
+                                        const price = Number(offer.totalPrice) / 1e18;
+                                        if (price === 0) return '0';
+                                        const multiplier = Math.pow(10, 4);
+                                        const rounded = Math.round(price * multiplier) / multiplier;
+                                        let result = rounded.toFixed(4);
+                                        result = result.replace(/\.?0+$/, '');
+                                        return result;
+                                      })()} {offer.currency?.symbol || 'TOKEN'}
+                                    </p>
+                                    <p className="text-xs text-gray-400">
+                                      Qty: {offer.quantity}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Offered by section */}
+                                <div className="pt-2 border-t border-dark-border">
+                                  <p className="text-xs text-gray-400 mb-2">Offered by</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex-shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-semibold text-white truncate">
+                                        {offer.offeror?.name || 'Unknown'}
+                                      </p>
+                                      <p className="text-xs font-mono text-gray-400 truncate">
+                                        {offer.offeror?.id.slice(0, 6)}...{offer.offeror?.id.slice(-4)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <p className="text-gray-400">Price per Token</p>
+                                    <p className="text-white font-semibold">
+                                      {(() => {
+                                        const pricePerToken = Number(offer.totalPrice) / Number(offer.quantity) / 1e18;
+                                        if (pricePerToken === 0) return '0';
+                                        const multiplier = Math.pow(10, 4);
+                                        const rounded = Math.round(pricePerToken * multiplier) / multiplier;
+                                        let result = rounded.toFixed(4);
+                                        result = result.replace(/\.?0+$/, '');
+                                        return result;
+                                      })()} {offer.currency?.symbol || 'TOKEN'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-400">Expires</p>
+                                    <p className="text-white font-semibold">
+                                      {(() => {
+                                        try {
+                                          // expirationTimestamp might be ISO string or Unix timestamp in seconds
+                                          const timestamp = offer.expirationTimestamp || offer.expirationTime;
+                                          const date = new Date(timestamp);
+
+                                          // If invalid, try parsing as Unix timestamp (seconds)
+                                          if (isNaN(date.getTime())) {
+                                            const unixTimestamp = Number(timestamp);
+                                            return new Date(unixTimestamp * 1000).toLocaleDateString();
+                                          }
+
+                                          return date.toLocaleDateString();
+                                        } catch {
+                                          return 'N/A';
+                                        }
+                                      })()}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {(isTokenOwner || isOfferMaker) && (
+                                  <div className="flex gap-2 pt-3 border-t border-dark-border">
+                                    {isTokenOwner && onAcceptOffer && (
+                                      <button
+                                        onClick={() => onAcceptOffer(offer)}
+                                        disabled={processingOfferId === offer.id}
+                                        className="flex-1 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {processingOfferId === offer.id ? 'Processing...' : 'Accept Offer'}
+                                      </button>
+                                    )}
+                                    {isOfferMaker && onCancelOffer && (
+                                      <button
+                                        onClick={() => onCancelOffer(offer)}
+                                        className="flex-1 px-4 py-2 bg-dark-bg hover:bg-gray-700 text-white rounded-lg text-sm font-semibold border border-dark-border transition-colors"
+                                      >
+                                        Cancel Offer
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-400">
+                        No active offers
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {activeTab === 'activity' && (
-                  <div className="text-center py-12 text-gray-400">
-                    No activity yet
+                  <div className="space-y-3">
+                    {isLoadingHistory ? (
+                      <div className="text-center py-12 text-gray-400">
+                        Loading activity...
+                      </div>
+                    ) : purchaseHistory.length > 0 ? (
+                      <>
+                        <h4 className="text-sm font-semibold text-white mb-3">
+                          Transaction History ({purchaseHistory.length})
+                        </h4>
+                        {purchaseHistory.map((history) => {
+                          const isBuyer = address && history.buyer.id.toLowerCase() === address.toLowerCase();
+                          const isSeller = address && history.seller.id.toLowerCase() === address.toLowerCase();
+
+                          return (
+                            <div
+                              key={history.id}
+                              className="bg-dark-card rounded-lg p-4 border border-dark-border hover:border-primary-500/50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant={
+                                      history.tradeType === 'LISTING' ? 'primary' :
+                                      history.tradeType === 'OFFER' ? 'secondary' :
+                                      history.tradeType === 'AUCTION' ? 'success' : 'primary'
+                                    }>
+                                      {history.tradeType}
+                                    </Badge>
+                                    {isBuyer && (
+                                      <span className="text-xs text-green-400 font-semibold">You bought</span>
+                                    )}
+                                    {isSeller && (
+                                      <span className="text-xs text-blue-400 font-semibold">You sold</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-400">
+                                    {new Date(history.timestamp).toLocaleString()}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-bold text-primary-400">
+                                    {formatEth(history.totalPrice)}
+                                  </p>
+                                  <p className="text-xs text-gray-400">{history.currency.symbol}</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3 p-3 bg-dark-bg rounded-lg">
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">From</p>
+                                  <p className="text-xs font-mono text-white truncate">
+                                    {history.seller.id.slice(0, 6)}...{history.seller.id.slice(-4)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">To</p>
+                                  <p className="text-xs font-mono text-white truncate">
+                                    {history.buyer.id.slice(0, 6)}...{history.buyer.id.slice(-4)}
+                                  </p>
+                                </div>
+                                {history.quantity !== '1' && (
+                                  <div>
+                                    <p className="text-xs text-gray-400 mb-1">Quantity</p>
+                                    <p className="text-xs font-semibold text-white">
+                                      {history.quantity}
+                                    </p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-1">Transaction</p>
+                                  <a
+                                    href={`https://sepolia.etherscan.io/tx/${history.transactionHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary-400 hover:text-primary-300 font-mono truncate block"
+                                  >
+                                    {history.transactionHash.slice(0, 6)}...{history.transactionHash.slice(-4)}
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <div className="text-center py-12 text-gray-400">
+                        No transaction history yet
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -734,5 +1256,48 @@ export function NFTDetailModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Auction Owner Actions Component
+ * Shows cancel button for auction owners
+ */
+function AuctionOwnerActions({ auction, onRefresh }: { auction: Auction; onRefresh?: () => void }) {
+  const { cancelAuction, isCancelling, canCancel, cancelReason } = useCancelAuction(auction, onRefresh);
+
+  if (canCancel) {
+    return (
+      <Button
+        onClick={() => cancelAuction(auction)}
+        variant="secondary"
+        size="sm"
+        fullWidth
+        isLoading={isCancelling}
+      >
+        Cancel Auction
+      </Button>
+    );
+  }
+
+  if (cancelReason) {
+    return (
+      <div className="p-2 bg-dark-card border border-dark-border rounded-lg">
+        <p className="text-xs text-gray-400 text-center">
+          {cancelReason}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      fullWidth
+      disabled
+    >
+      Manage Auction
+    </Button>
   );
 }

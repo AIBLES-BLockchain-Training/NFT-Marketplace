@@ -41,7 +41,7 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
         quantity: BigInt(quantity),
         currency: ZERO_ADDRESS, // Contract uses address(0) for native ETH
         totalPrice: totalPriceWei,
-        expirationTime: expirationTime,
+        expirationTimestamp: expirationTime,
       });
 
       await sendTransaction(tx, 'Offer made successfully!');
@@ -126,7 +126,7 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
 
         <div className="bg-dark-bg rounded-lg p-4 border border-amber-500/30">
           <p className="text-xs text-amber-400">
-            ℹ️ Your offer can be accepted by the NFT owner at any time before expiration.
+            INFO: Your offer can be accepted by the NFT owner at any time before expiration.
             Make sure you have sufficient ETH in your wallet.
           </p>
         </div>

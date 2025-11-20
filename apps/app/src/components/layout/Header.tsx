@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminCheck } from '../../hooks/useAdminCheck';
 import { Button } from '../common/Button';
+import { UserAvatar } from '../common/UserAvatar';
 import { formatAddress } from '../../lib/web3/utils';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -69,7 +70,7 @@ export function Header() {
                   href={`/profile/${address}`}
                   className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-card border border-dark-border hover:border-primary-500 transition-colors"
                 >
-                  <div className="h-6 w-6 rounded-full bg-gradient-to-br from-primary-500 to-accent-500" />
+                  <UserAvatar address={address} size="sm" />
                   <span className="text-sm font-medium">{formatAddress(address)}</span>
                 </Link>
                 <Button variant="ghost" size="sm" onClick={disconnect}>

@@ -3,9 +3,14 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
+import { useQuery } from '@tanstack/react-query';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { Badge } from '../../../components/common/Badge';
+import { Button } from '../../../components/common/Button';
 import { NFTImage } from '../../../components/common/NFTImage';
+import { UserAvatar } from '../../../components/common/UserAvatar';
+import { EditProfileModal } from '../../../components/profile/EditProfileModal';
 import { getNFTsByAddress, MoralisNFT } from '../../../lib/moralis/client';
 import { useWallet } from '../../../hooks/useWallet';
 import { NFT } from '../../../types';
@@ -43,7 +48,23 @@ export default function ProfilePage() {
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreateAuction, setShowCreateAuction] = useState(false);
 
+  // Edit Profile Modal state
+  const [showEditProfile, setShowEditProfile] = useState(false);
+
   const isOwnProfile = connectedAddress?.toLowerCase() === profileAddress?.toLowerCase();
+
+  // Fetch user profile
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile', profileAddress],
+    queryFn: async () => {
+      const response = await fetch(`/api/user/profile?address=${profileAddress}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.exists ? data.data : null;
+    },
+    enabled: !!profileAddress,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Group NFTs by collection (calculate available amounts) - for My NFTs tab
   const groupedNFTs = useMemo(() => {
@@ -348,18 +369,30 @@ export default function ProfilePage() {
         {/* Profile Header */}
         <div className="bg-dark-card border border-dark-border rounded-2xl p-8 mb-8">
           <div className="flex items-start gap-6">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center">
-              <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
+            {/* Avatar */}
+            <UserAvatar address={profileAddress} size="xl" />
 
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-white">
-                  {isOwnProfile ? 'My Profile' : 'User Profile'}
-                </h1>
-                {isOwnProfile && <Badge variant="primary">You</Badge>}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl font-bold text-white">
+                    {userProfile?.name || (isOwnProfile ? 'My Profile' : 'User Profile')}
+                  </h1>
+                  {isOwnProfile && <Badge variant="primary">You</Badge>}
+                </div>
+
+                {isOwnProfile && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowEditProfile(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Profile
+                  </Button>
+                )}
               </div>
 
               <p className="text-gray-400 font-mono text-sm mb-4">
@@ -492,6 +525,17 @@ export default function ProfilePage() {
           nft={flatNFTs[selectedNFTIndex]}
         />
       )}
+
+      {/* Edit Profile Modal */}
+      {isOwnProfile && (
+        <EditProfileModal
+          isOpen={showEditProfile}
+          onClose={() => setShowEditProfile(false)}
+          address={profileAddress}
+          currentName={userProfile?.name}
+          currentAvatarUrl={userProfile?.avatarUrl}
+        />
+      )}
     </MainLayout>
   );
 }
@@ -592,11 +636,9 @@ function CollectionsGrid({
   hasMore: boolean;
 }) {
   const [collectionsMetadata, setCollectionsMetadata] = useState<Record<string, { bannerURI?: string }>>({});
-  const [loadingMetadata, setLoadingMetadata] = useState(true);
 
   useEffect(() => {
     const loadAllCollectionMetadata = async () => {
-      setLoadingMetadata(true);
       const metadata: Record<string, { bannerURI?: string }> = {};
 
       const collectionIds = Object.keys(groupedNFTs);
@@ -615,13 +657,10 @@ function CollectionsGrid({
       );
 
       setCollectionsMetadata(metadata);
-      setLoadingMetadata(false);
     };
 
     if (Object.keys(groupedNFTs).length > 0) {
       loadAllCollectionMetadata();
-    } else {
-      setLoadingMetadata(false);
     }
   }, [groupedNFTs]);
 
@@ -661,10 +700,11 @@ function CollectionsGrid({
               {/* Collection Banner */}
               <div className="h-32 bg-gradient-to-br from-primary-500/20 to-accent-500/20 relative overflow-hidden">
                 {bannerUrl ? (
-                  <img
+                  <Image
                     src={bannerUrl}
                     alt={collection.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">

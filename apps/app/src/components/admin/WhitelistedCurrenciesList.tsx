@@ -123,7 +123,6 @@ export function WhitelistedCurrenciesList() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-400">Symbol</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-400">Address</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-400">Decimals</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-400">Fee %</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-400">Status</th>
                 </tr>
               </thead>
@@ -148,9 +147,6 @@ export function WhitelistedCurrenciesList() {
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-gray-400">{currency.decimals}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-gray-400">{currency.feePercentage}%</span>
                     </td>
                     <td className="px-4 py-4">
                       <Badge variant={currency.isActive ? 'success' : 'default'}>

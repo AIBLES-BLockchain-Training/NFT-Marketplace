@@ -10,8 +10,32 @@ export function formatTokenAmount(amount: string | bigint, decimals: number): st
   return ethers.formatUnits(amount, decimals);
 }
 
-export function formatEth(amount: string | bigint): string {
-  return ethers.formatEther(amount);
+export function formatEth(amount: string | bigint | null | undefined, maxDecimals = 4): string {
+  if (amount === null || amount === undefined) return '0';
+  try {
+    const formatted = ethers.formatEther(amount);
+    const num = parseFloat(formatted);
+
+    if (num === 0) return '0';
+
+    // Round to maxDecimals places
+    const multiplier = Math.pow(10, maxDecimals);
+    const rounded = Math.round(num * multiplier) / multiplier;
+
+    // If rounded to 0 but original is not 0, keep exact value
+    if (rounded === 0 && num !== 0) {
+      // Return exact value, removing trailing zeros
+      return formatted.replace(/\.?0+$/, '');
+    }
+
+    // Convert to string and remove unnecessary trailing zeros
+    let result = rounded.toFixed(maxDecimals);
+    result = result.replace(/\.?0+$/, '');
+
+    return result;
+  } catch {
+    return '0';
+  }
 }
 
 export function parseTokenAmount(amount: string, decimals: number): bigint {

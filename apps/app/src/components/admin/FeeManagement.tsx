@@ -32,7 +32,7 @@ export function FeeManagement() {
       const data = iface.encodeFunctionData('setCurrencyFee', [currency, fee]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
         data,
       };
 
@@ -55,7 +55,7 @@ export function FeeManagement() {
       const data = iface.encodeFunctionData('withdrawFees', [withdrawCurrency]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
         data,
       };
 

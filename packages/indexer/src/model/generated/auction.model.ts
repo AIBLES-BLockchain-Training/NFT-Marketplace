@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, BigIntColumn as BigIntColumn_, Index as Index_, ManyToOne as ManyToOne_, StringColumn as StringColumn_, DateTimeColumn as DateTimeColumn_, IntColumn as IntColumn_, BooleanColumn as BooleanColumn_, OneToMany as OneToMany_} from "@subsquid/typeorm-store"
 import {NFT} from "./nft.model"
 import {Subject} from "./subject.model"
 import {SupportedCurrency} from "./supportedCurrency.model"
@@ -16,12 +16,20 @@ export class Auction {
     id!: string
 
     @Index_()
+    @BigIntColumn_({nullable: false})
+    auctionId!: bigint
+
+    @Index_()
     @ManyToOne_(() => NFT, {nullable: true})
     nft!: NFT
 
     @Index_()
     @ManyToOne_(() => Subject, {nullable: true})
     seller!: Subject
+
+    @Index_()
+    @StringColumn_({nullable: false})
+    sellerAddress!: string
 
     @Index_()
     @ManyToOne_(() => Subject, {nullable: true})
@@ -34,6 +42,9 @@ export class Auction {
     @ManyToOne_(() => SupportedCurrency, {nullable: true})
     currency!: SupportedCurrency
 
+    @BigIntColumn_({nullable: false})
+    minimumBidAmount!: bigint
+
     @Index_()
     @BigIntColumn_({nullable: false})
     startPrice!: bigint
@@ -41,6 +52,9 @@ export class Auction {
     @Index_()
     @BigIntColumn_({nullable: false})
     stepAmount!: bigint
+
+    @BigIntColumn_({nullable: false})
+    bidBufferBps!: bigint
 
     @Index_()
     @BigIntColumn_({nullable: true})
@@ -55,6 +69,9 @@ export class Auction {
     @IntColumn_({nullable: false})
     timeBufferInSeconds!: number
 
+    @StringColumn_({nullable: false})
+    tokenType!: string
+
     @Column_("varchar", {length: 9, nullable: false})
     status!: AuctionStatus
 
@@ -63,6 +80,13 @@ export class Auction {
 
     @BooleanColumn_({nullable: false})
     isTokenCollected!: boolean
+
+    @Index_()
+    @DateTimeColumn_({nullable: false})
+    createdAt!: Date
+
+    @DateTimeColumn_({nullable: true})
+    updatedAt!: Date | undefined | null
 
     @OneToMany_(() => Bid, e => e.auction)
     bids!: Bid[]

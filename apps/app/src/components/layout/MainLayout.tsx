@@ -1,6 +1,5 @@
 import { ReactNode } from 'react';
 import { Header } from './Header';
-import { Footer } from './Footer';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminRedirect } from '../../hooks/useAdminRedirect';
 
@@ -18,7 +17,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     <div className="flex flex-col min-h-screen">
       <Header />
       <main className="flex-1">{children}</main>
-      <Footer />
     </div>
   );
 }

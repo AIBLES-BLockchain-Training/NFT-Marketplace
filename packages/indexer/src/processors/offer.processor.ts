@@ -68,9 +68,9 @@ export async function processOfferEvents(
         id: collectionId,
         name: `Collection ${contractAddress.slice(0, 6)}`,
         symbol: 'NFT',
-        description: undefined,
-        logoUrl: undefined,
-        bannerUrl: undefined,
+        // description: undefined,
+        // logoUrl: undefined,
+        // bannerUrl: undefined,
         collectionType: CollectionType.ERC721,
         creator: creator,
         totalSupply: BigInt(0),
@@ -84,7 +84,7 @@ export async function processOfferEvents(
     collectionMap.set(collectionId, collection)
     return collection
   }
-
+// 6 lệnh của nó để restart indexer là: docker compose down -v, docker conpose up -d, npx tsc, npx squid-typeorm-codegen, npx squid-typeorm-migration generate, npx squid-typeorm-migration apply, node -r dotenv/config lib/main.js
   async function getOrCreateNFT(contractAddress: string, tokenId: bigint, owner?: Subject): Promise<NFT> {
     const nftId = `${contractAddress.toLowerCase()}-${tokenId.toString()}`
     if (nftMap.has(nftId)) {
@@ -161,22 +161,42 @@ export async function processOfferEvents(
           currency, totalPrice, expirationTimestamp
         } = OfferABI.events.OfferCreated.decode(log)
 
-        const offerIdStr = offerId.toString()
+        const offerIdStr = `${contractAddress.toLowerCase()}-${offerId.toString()}`
         const offerorSubject = await getOrCreateSubject(offeror)
         const nft = await getOrCreateNFT(assetContract, tokenId, offerorSubject)
         const currencyEntity = await getOrCreateCurrency(currency)
+
+        // Try to get NFT owner at time of offer creation
+        let tokenOwner: Subject | undefined = undefined
+        try {
+          if (nft.owners && nft.owners.length > 0) {
+            const ownerSubject = nft.owners[0]
+            if (ownerSubject && ownerSubject.id) {
+              tokenOwner = await getOrCreateSubject(ownerSubject.id)
+            }
+          }
+        } catch (error) {
+          // Leave tokenOwner as undefined if we can't determine it
+        }
 
         let offer = await getOffer(offerIdStr)
         if (!offer) {
           offer = new Offer({
             id: offerIdStr,
-            buyerAddress: offerorSubject.id,
-            nftId: nft,
+            offerId: offerId.toString(),
+            offeror: offerorSubject,
+            tokenOwner: tokenOwner,
+            nft: nft,
             quantity: quantity,
             totalPrice: totalPrice,
             currency: currencyEntity,
             expirationTime: new Date(Number(expirationTimestamp) * 1000),
-            status: OfferStatus.ACTIVE
+            expirationTimestamp: expirationTimestamp,
+            status: OfferStatus.ACTIVE,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            transactionHash: transactionHash,
+            blockNumber: blockNumber
           })
           offerMap.set(offerIdStr, offer)
         }
@@ -185,10 +205,11 @@ export async function processOfferEvents(
       // OfferCancelled event
       else if (topic0 === OfferABI.events.OfferCancelled?.topic) {
         const { offerId, offeror } = OfferABI.events.OfferCancelled.decode(log)
-        const offerIdStr = offerId.toString()
+        const offerIdStr = `${contractAddress.toLowerCase()}-${offerId.toString()}`
         let offer = await getOffer(offerIdStr)
         if (offer) {
           offer.status = OfferStatus.CANCELLED
+          offer.updatedAt = timestamp
         }
       }
 
@@ -199,11 +220,12 @@ export async function processOfferEvents(
           tokenId, quantity, currency, totalPrice
         } = OfferABI.events.OfferAccepted.decode(log)
 
-        const offerIdStr = offerId.toString()
+        const offerIdStr = `${contractAddress.toLowerCase()}-${offerId.toString()}`
         let offer = await getOffer(offerIdStr)
 
         if (offer) {
           offer.status = OfferStatus.COMPLETED
+          offer.updatedAt = timestamp
 
           const offerorSubject = await getOrCreateSubject(offeror)
           const assetOwnerSubject = await getOrCreateSubject(assetOwner)
@@ -220,7 +242,7 @@ export async function processOfferEvents(
             quantity: quantity,
             currency: currencyEntity,
             totalPrice: totalPrice,
-            tradeType: TradeType.LISTING, // Using LISTING as there's no OFFER type in schema
+            tradeType: TradeType.OFFER,
             timestamp: timestamp,
             blockNumber: blockNumber,
             auction: undefined,

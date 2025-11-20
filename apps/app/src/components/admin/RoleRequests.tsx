@@ -101,7 +101,7 @@ export function RoleRequests() {
       const data = iface.encodeFunctionData('assignNFTRole', [[request.nftAddress]]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
         data,
       };
 

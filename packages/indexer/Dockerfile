@@ -1,24 +1,53 @@
-FROM node:20-alpine
-
-RUN apk add --no-cache libc6-compat
+# Stage 1: Build
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY ../../package*.json ./
+# Install dependencies for native modules
+RUN apk add --no-cache libc6-compat python3 make g++
 
-RUN npm install 
+# Copy root package files
+COPY package.json yarn.lock .yarnrc ./
+COPY .yarn ./.yarn
+COPY nx.json ./
+COPY tsconfig.base.json ./
 
-COPY . .
+# Copy indexer source
+COPY packages/indexer ./packages/indexer
 
-RUN npx nx reset && npm run build
- 
-COPY packages/indexer/schema.graphql /app/schema.graphql
-COPY packages/indexer/squid.yaml /app/squid.yaml
-COPY packages/indexer/tsconfig.json /app/tsconfig.json
+# Install dependencies with yarn
+# Note: Not using --frozen-lockfile to allow lockfile updates during build
+RUN yarn install --production=false
 
-EXPOSE 4000
+# Build indexer
+WORKDIR /app/packages/indexer
+RUN npx tsc
 
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Stage 2: Production
+FROM node:20-alpine
 
-CMD ["/app/entrypoint.sh"]
+WORKDIR /app
+
+# Install dependencies for running
+RUN apk add --no-cache libc6-compat
+
+# Copy built files from builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/indexer/lib ./lib
+COPY --from=builder /app/packages/indexer/schema.graphql ./schema.graphql
+COPY --from=builder /app/packages/indexer/squid.yaml ./squid.yaml
+COPY --from=builder /app/packages/indexer/db ./db
+
+# Copy entrypoint script
+COPY packages/indexer/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+# Expose GraphQL port
+EXPOSE 4001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:4001/graphql', (r) => {if(r.statusCode !== 200) throw new Error(r.statusCode)})"
+
+# Start both processor and GraphQL server
+CMD ["./entrypoint.sh"]

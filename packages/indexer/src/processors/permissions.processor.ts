@@ -11,6 +11,7 @@ import {
   RequestStatus
 } from '../model'
 import * as PermissionsABI from '../abi/Permissions'
+import { fetchTokenInfo } from '../utils/erc20'
 
 export function getPermissionsTopics(): string[] {
   return [
@@ -214,18 +215,21 @@ export async function processPermissionsEvents(
         let currency = await getOrCreateCurrency(currencyAddress)
         if (!currency) {
           const currencyId = currencyAddress.toLowerCase()
-          const isNativeToken = currencyId === '0x0000000000000000000000000000000000000000'
+
+          // Fetch real token info from ERC-20 contract
+          const tokenInfo = await fetchTokenInfo(ctx, log.block, currencyId);
 
           currency = new SupportedCurrency({
             id: currencyId,
-            name: isNativeToken ? 'ETH' : `Currency_${currencyAddress.slice(0, 6)}`,
-            symbol: isNativeToken ? 'ETH' : 'UNKNOWN',
-            decimals: 18,
+            name: tokenInfo.name,
+            symbol: tokenInfo.symbol,
+            decimals: tokenInfo.decimals,
             isActive: true,
             feePercentage: 0,
             totalAmountFee: BigInt(0),
-            currencyApprovals: [],
-            purchaseHistory: []
+            // Do NOT set @derivedFrom fields - they are auto-populated
+            // currencyApprovals: [],
+            // purchaseHistory: []
           })
           currencyMap.set(currency.id, currency)
         } else {

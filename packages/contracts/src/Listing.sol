@@ -59,8 +59,6 @@ error UserNotAuthorizedToCreateListing(address user);
 error NFTNotWhitelistedForListing(address nftContract);
 error CurrencyNotSupportedForListing(address currency);
 
-error OnlyCallableViaRouter();
-error InvalidRouterAddress();
 error OnlyFeeReceiver();
 error InvalidFeeReceiverAddress();
 error FeeReceiverNotSet();
@@ -97,7 +95,6 @@ contract Listing is ReentrancyGuard {
         ApprovalData approvals;
         FeeData fees;
         mapping(address => mapping(address => mapping(uint256 => uint256))) listedQuantity;
-        address router;
         address feeReceiver;
     }
     
@@ -200,35 +197,29 @@ contract Listing is ReentrancyGuard {
     event FeeWithdrawn(address indexed receiver, address indexed currency, uint256 amount);
     event CurrencyFeeUpdated(address indexed currency, uint256 fee);
     event PermissionContractUpdated(address indexed oldPermission, address indexed newPermission);
-    event RouterSet(address indexed router);
     event FeeReceiverUpdated(address indexed oldReceiver, address indexed newReceiver);
 
     // ============= INITIALIZATION =============
 
     /**
-     * @notice Initialize Listing contract with Router and Fee Receiver
+     * @notice Initialize Listing contract with Permission and Fee Receiver
      * @param _permissionContract Permission contract address
-     * @param _router Router contract address (can be updated later by MANAGEMENT_ROLE)
      * @param _feeReceiver Fee receiver address - Multisig Wallet (can only be updated by itself)
      */
     function initializeListing(
         address _permissionContract,
-        address _router,
         address _feeReceiver
     ) external {
         ListingStorage storage s = _listingStorage();
         require(!s.core.initialized, "Already initialized");
-        if (_router == address(0)) revert InvalidRouterAddress();
         if (_feeReceiver == address(0)) revert InvalidFeeReceiverAddress();
 
         s.core.listingCounter = 0;
         s.core.decimal = 10000;
         s.core.permissionContract = IPermission(_permissionContract);
-        s.router = _router;
         s.feeReceiver = _feeReceiver;
         s.core.initialized = true;
 
-        emit RouterSet(_router);
         emit FeeReceiverUpdated(address(0), _feeReceiver);
     }
 
@@ -304,11 +295,6 @@ contract Listing is ReentrancyGuard {
         _;
     }
 
-    modifier onlyRouter() {
-        ListingStorage storage s = _listingStorage();
-        if (s.router != address(0) && address(this) != s.router) revert OnlyCallableViaRouter();
-        _;
-    }
 
     modifier onlyFeeReceiver() {
         ListingStorage storage s = _listingStorage();
@@ -334,15 +320,6 @@ contract Listing is ReentrancyGuard {
         emit CurrencyFeeUpdated(currency, fee);
     }
 
-    function setRouter(address _router) external {
-        _checkManagementPermission();
-        if (_router == address(0)) revert InvalidRouterAddress();
-
-        ListingStorage storage s = _listingStorage();
-        s.router = _router;
-        emit RouterSet(_router);
-    }
-
     function setFeeReceiver(address _feeReceiver) external onlyFeeReceiver {
         if (_feeReceiver == address(0)) revert InvalidFeeReceiverAddress();
 
@@ -351,10 +328,6 @@ contract Listing is ReentrancyGuard {
 
         s.feeReceiver = _feeReceiver;
         emit FeeReceiverUpdated(oldReceiver, _feeReceiver);
-    }
-
-    function router() external view returns (address) {
-        return _listingStorage().router;
     }
 
     function feeReceiver() external view returns (address) {
@@ -433,7 +406,6 @@ contract Listing is ReentrancyGuard {
 
     function createListing(ListingParameters memory params)
         external
-        onlyRouter
         validParams(params)
         onlyAuthorizedSeller()
         onlyWhitelistedNFT(params.assetContract)
@@ -514,7 +486,7 @@ contract Listing is ReentrancyGuard {
     function updateListing(
         uint256 listingId,
         ListingParameters memory params
-    ) external onlyRouter validParams(params) listingExists(listingId) onlySupportedCurrency(params.currency) nonReentrant { 
+    ) external validParams(params) listingExists(listingId) onlySupportedCurrency(params.currency) nonReentrant { 
         ListingStorage storage s = _listingStorage();
         NFTListing storage listing = s.listings.listings[listingId];
 
@@ -572,7 +544,7 @@ contract Listing is ReentrancyGuard {
         emit CurrencyApproved(listingId, params.currency, params.pricePerToken);
     }
 
-    function cancelListing(uint256 listingId) external onlyRouter listingExists(listingId) nonReentrant {
+    function cancelListing(uint256 listingId) external listingExists(listingId) nonReentrant {
         ListingStorage storage s = _listingStorage();
         NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
@@ -594,7 +566,7 @@ contract Listing is ReentrancyGuard {
         uint256 listingId,
         address buyer,
         bool toApprove
-    ) external onlyRouter listingExists(listingId) nonReentrant {
+    ) external listingExists(listingId) nonReentrant {
         ListingStorage storage s = _listingStorage();
         NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
@@ -609,7 +581,7 @@ contract Listing is ReentrancyGuard {
         uint256 listingId,
         address currency,
         uint256 pricePerTokenInCurrency
-    ) external onlyRouter listingExists(listingId) onlySupportedCurrency(currency) nonReentrant {  
+    ) external listingExists(listingId) onlySupportedCurrency(currency) nonReentrant {  
         ListingStorage storage s = _listingStorage();
         NFTListing storage listing = s.listings.listings[listingId];
         if (listing.owner != msg.sender) revert OnlyOwner(msg.sender, listing.owner);
@@ -629,7 +601,7 @@ contract Listing is ReentrancyGuard {
         uint256 quantity,
         address currency,
         uint256 expectedTotalPrice
-    ) external payable onlyRouter listingExists(listingId) nonReentrant {
+    ) external payable listingExists(listingId) nonReentrant {
         ListingStorage storage s = _listingStorage();
         NFTListing storage listing = s.listings.listings[listingId];
 
