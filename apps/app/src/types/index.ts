@@ -26,6 +26,7 @@ export enum AuctionStatus {
 
 export enum OfferStatus {
   UNSET = 'UNSET',
+  CREATED = 'CREATED',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',

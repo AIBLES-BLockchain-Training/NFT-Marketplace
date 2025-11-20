@@ -11,7 +11,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { address, isConnected } = useWallet();
 
   // Auto-redirect admin to dashboard (with protection against infinite loop)
-  useAdminRedirect(address, isConnected);
+  useAdminRedirect(address || undefined, isConnected);
 
   return (
     <div className="flex flex-col min-h-screen">

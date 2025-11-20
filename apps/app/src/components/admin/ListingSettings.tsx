@@ -62,8 +62,9 @@ export function ListingSettings() {
       const data = iface.encodeFunctionData('setCurrencyFee', [currency, fee]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, `Listing fee set to ${feePercentage}% successfully!`);

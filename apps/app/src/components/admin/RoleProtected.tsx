@@ -12,7 +12,7 @@ interface RoleProtectedProps {
 export function RoleProtected({ children }: RoleProtectedProps) {
   const router = useRouter();
   const { address } = useWallet();
-  const { isAdmin, isChecking } = useAdminRole(address);
+  const { isAdmin, isChecking } = useAdminRole(address || undefined);
   const hasShownError = useRef(false);
 
   useEffect(() => {

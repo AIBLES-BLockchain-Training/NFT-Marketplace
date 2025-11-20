@@ -68,8 +68,9 @@ export function AuctionSettings() {
       const data = iface.encodeFunctionData('setCurrencyFee', [currency, fee]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, `Auction fee set to ${feePercentage}% successfully!`);
@@ -102,8 +103,9 @@ export function AuctionSettings() {
       const data = iface.encodeFunctionData('setMinTimeAuction', [seconds]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, `Minimum auction time set to ${minutes} minute${minutes > 1 ? 's' : ''} successfully!`);

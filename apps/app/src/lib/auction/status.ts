@@ -58,7 +58,7 @@ export function isAuctionActive(auction: Auction): boolean {
  * @returns True if auction has bids
  */
 export function hasAuctionBids(auction: Auction): boolean {
-  return auction.bids && auction.bids.length > 0;
+  return Boolean(auction.bids && auction.bids.length > 0);
 }
 
 /**

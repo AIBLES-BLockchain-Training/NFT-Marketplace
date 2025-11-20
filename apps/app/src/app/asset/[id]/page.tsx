@@ -99,14 +99,14 @@ export default function AssetPage() {
           description: metadata.description,
           metadataUri: moralisNFT.token_uri,
           collection: {
-            id: contractAddress.toLowerCase(),
+            id: contractAddress.toLowerCase() as `0x${string}`,
             name: moralisNFT.name || 'Unknown Collection',
             symbol: moralisNFT.symbol || 'NFT',
-            collectionType: moralisNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            collectionType: (moralisNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155') as any,
             creator: {
-              id: contractAddress.toLowerCase(),
+              id: contractAddress.toLowerCase() as `0x${string}`,
               name: moralisNFT.name || 'Unknown',
-              subjectType: 'CONTRACT' as const,
+              subjectType: 'CONTRACT' as any,
               createdAt: new Date().toISOString(),
             },
             totalSupply: '0',
@@ -239,7 +239,7 @@ export default function AssetPage() {
     try {
       const tx = encodeApproveBuyerForListing(
         BigInt(selectedListing.id),
-        buyerAddress,
+        buyerAddress as `0x${string}`,
         approve
       );
       const receipt = await sendTransaction(
@@ -264,7 +264,7 @@ export default function AssetPage() {
     }
 
     try {
-      const tx = encodeCancelListing(BigInt(listing.id)); // listing.id is the listingId from contract
+      const tx = encodeCancelListing(BigInt(listing.listingId || listing.id)); // listing.listingId is the listingId from contract
       const receipt = await sendTransaction(tx, 'Listing cancelled successfully!');
 
       if (receipt?.status === 1) {
@@ -410,7 +410,6 @@ export default function AssetPage() {
         {/* Update Listing Modal */}
         {selectedListing && (
           <UpdateListingModal
-            nft={nft}
             listing={selectedListing}
             isOpen={showUpdateListing}
             onClose={() => {

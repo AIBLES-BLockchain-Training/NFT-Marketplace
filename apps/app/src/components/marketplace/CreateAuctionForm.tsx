@@ -55,6 +55,7 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
         ceilingPrice: buyoutBidWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
+        timeBufferInSeconds: BigInt(300), // 5 minutes default
       });
 
       const receipt = await sendTransaction(tx);
@@ -165,7 +166,7 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
           </label>
           <select
             value={bidBuffer}
-            onChange={(e) => setBidBuffer(e.target.value)}
+            onChange={(e) => setBidBuffer(e.target.value as typeof BID_BUFFER_BPS.MEDIUM)}
             className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
           >
             <option value={BID_BUFFER_BPS.LOW}>2.5%</option>

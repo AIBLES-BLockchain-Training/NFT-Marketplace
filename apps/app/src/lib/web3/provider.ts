@@ -58,6 +58,9 @@ export function getRpcProvider(): ethers.JsonRpcProvider {
   return new ethers.JsonRpcProvider(CHAIN_CONFIG.rpcEndpoint);
 }
 
+// Legacy alias for backward compatibility
+export const getProvider = getRpcProvider;
+
 export async function switchNetwork(chainId: number): Promise<boolean> {
   const provider = getEthereumProvider();
   if (!provider) return false;

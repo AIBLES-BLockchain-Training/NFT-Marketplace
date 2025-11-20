@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { BidHistory, BidHistoryProps } from './BidHistory';
+import { BidHistory } from './BidHistory';
 
 /**
  * Memoized BidHistory Component
@@ -9,7 +9,7 @@ export const BidHistoryOptimized = memo(BidHistory, (prevProps, nextProps) => {
   // Only re-render if bids array changed
   return (
     prevProps.bids.length === nextProps.bids.length &&
-    prevProps.currency.id === nextProps.currency.id &&
+    prevProps.currency.symbol === nextProps.currency.symbol &&
     prevProps.startPrice === nextProps.startPrice
   );
 });

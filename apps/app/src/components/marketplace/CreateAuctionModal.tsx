@@ -7,7 +7,6 @@ import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
 import { encodeCreateAuction } from '../../lib/web3/encoding';
-import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import {
   SECONDS_PER_DAY,
   BID_BUFFER_BPS,
@@ -351,7 +350,7 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
               </label>
               <select
                 value={bidBuffer}
-                onChange={(e) => setBidBuffer(parseInt(e.target.value))}
+                onChange={(e) => setBidBuffer(e.target.value as typeof BID_BUFFER_BPS.MEDIUM)}
                 className="w-full px-4 py-2 bg-dark-card border border-dark-border rounded-lg text-white focus:outline-none focus:border-primary-500"
               >
                 <option value={BID_BUFFER_BPS.LOW}>Low (5% minimum increase)</option>

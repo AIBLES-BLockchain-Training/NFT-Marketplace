@@ -134,6 +134,7 @@ export function RequestRoles() {
       const tx = {
         to: PERMISSIONS_ADDRESS,  // Call Permissions contract directly
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'Role requests submitted successfully!');
@@ -164,6 +165,7 @@ export function RequestRoles() {
       const tx = {
         to: PERMISSIONS_ADDRESS,  // Call Permissions contract directly
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'NFT whitelist request submitted successfully!');
@@ -202,7 +204,7 @@ export function RequestRoles() {
   };
 
   const renderPageNumbers = () => {
-    const pages = [];
+    const pages: React.ReactElement[] = [];
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);

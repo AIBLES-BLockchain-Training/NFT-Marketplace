@@ -52,8 +52,9 @@ export function PermissionsSettings() {
       const data = iface.encodeFunctionData('setPermissionContract', [listingPermissionContract]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, 'Listing permission contract updated successfully!');
@@ -76,8 +77,9 @@ export function PermissionsSettings() {
       const data = iface.encodeFunctionData('setFeeReceiver', [listingFeeReceiver]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, 'Listing fee receiver updated successfully!');
@@ -100,8 +102,9 @@ export function PermissionsSettings() {
       const data = iface.encodeFunctionData('setPermissionsContract', [auctionPermissionContract]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, 'Auction permission contract updated successfully!');
@@ -124,8 +127,9 @@ export function PermissionsSettings() {
       const data = iface.encodeFunctionData('setFeeReceiver', [auctionFeeReceiver]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, 'Auction fee receiver updated successfully!');
@@ -148,8 +152,9 @@ export function PermissionsSettings() {
       const data = iface.encodeFunctionData('setFeeRecipient', [offerFeeRecipient]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, 'Offer fee recipient updated successfully!');

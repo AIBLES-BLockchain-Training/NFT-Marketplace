@@ -105,7 +105,7 @@ export function CreateListingForm({ nft, onSuccess, onCancel }: CreateListingFor
         assetContract: nft.collection.id,
         tokenId: BigInt(nft.tokenId),
         quantity: BigInt(quantity),
-        currency: selectedCurrency, // Use selected currency
+        currency: selectedCurrency as `0x${string}`, // Use selected currency
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,

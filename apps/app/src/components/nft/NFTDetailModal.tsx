@@ -331,7 +331,7 @@ export function NFTDetailModal({
                         <span className="text-gray-400 text-sm">
                           Owner: {displayOwner
                             ? `${displayOwner.slice(0, 6)}...${displayOwner.slice(-4)}`
-                            : `${nft.owners[0].ownerAddress.slice(0, 6)}...${nft.owners[0].ownerAddress.slice(-4)}`
+                            : `${nft.owners?.[0]?.ownerAddress.slice(0, 6)}...${nft.owners?.[0]?.ownerAddress.slice(-4)}`
                           }
                         </span>
                       </>
@@ -1104,8 +1104,7 @@ export function NFTDetailModal({
                                   <div className="flex items-center gap-2 mb-1">
                                     <Badge variant={
                                       history.tradeType === 'LISTING' ? 'primary' :
-                                      history.tradeType === 'OFFER' ? 'secondary' :
-                                      history.tradeType === 'AUCTION' ? 'success' : 'primary'
+                                      history.tradeType === 'AUCTION' ? 'success' : 'secondary'
                                     }>
                                       {history.tradeType}
                                     </Badge>
