@@ -17405,6 +17405,13 @@ styled-jsx@5.1.1:
   dependencies:
     client-only "0.0.1"
 
+styled-jsx@^5.1.7:
+  version "5.1.7"
+  resolved "https://registry.yarnpkg.com/styled-jsx/-/styled-jsx-5.1.7.tgz#b37bbf924630e811bc36b87e25754427f51ee385"
+  integrity sha512-HPLmEIYprxCeWDMLYiaaAhsV3yGfIlCqzuVOybE6fjF3SUJmH67nCoMDO+nAvHNHo46OfvpCNu4Rcue82dMNFg==
+  dependencies:
+    client-only "0.0.1"
+
 stylehacks@^6.1.1:
   version "6.1.1"
   resolved "https://registry.npmjs.org/stylehacks/-/stylehacks-6.1.1.tgz#543f91c10d17d00a440430362d419f79c25545a6"
