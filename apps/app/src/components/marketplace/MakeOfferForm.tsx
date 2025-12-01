@@ -9,6 +9,7 @@ import { encodeMakeOffer } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 interface MakeOfferFormProps {
   nft: NFT;
@@ -32,7 +33,14 @@ export function MakeOfferForm({ nft, tokenOwner, onSuccess, onCancel }: MakeOffe
         return;
       }
 
-      const totalPriceWei = BigInt(Math.floor(parseFloat(totalPrice) * 1e18));
+      const totalPriceWei = (() => {
+        try {
+          return ethers.parseEther(totalPrice.toString());
+        } catch (error) {
+          console.warn('Invalid total price:', totalPrice);
+          return 0n;
+        }
+      })();
       const expirationTime = BigInt(Math.floor(Date.now() / 1000) + parseInt(duration) * SECONDS_PER_DAY);
 
       const tx = encodeMakeOffer({

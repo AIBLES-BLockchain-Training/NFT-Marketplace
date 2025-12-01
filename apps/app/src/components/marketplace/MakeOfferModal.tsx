@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -118,7 +119,15 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
   }, [selectedCurrency, address]);
 
   // Calculate values
-  const totalPriceWei = offerAmount ? BigInt(Math.floor(parseFloat(offerAmount) * 1e18)) : 0n;
+  const totalPriceWei = (() => {
+    if (!offerAmount || offerAmount.trim() === '') return 0n;
+    try {
+      return ethers.parseEther(offerAmount.toString());
+    } catch (error) {
+      console.warn('Invalid offer amount:', offerAmount);
+      return 0n;
+    }
+  })();
   const quantityBigInt = BigInt(quantity || 1);
   const pricePerToken = quantityBigInt > 0n ? totalPriceWei / quantityBigInt : 0n;
   const expirationTime = BigInt(Math.floor(Date.now() / 1000) + parseInt(duration) * SECONDS_PER_DAY);
@@ -134,7 +143,7 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
     : (erc20Balance ?? 0n);
 
   // Validation
-  const hasSufficientBalance = BigInt(currentBalance) >= totalPriceWei;
+  const hasSufficientBalance = currentBalance >= totalPriceWei;
   const isValidAmount = totalPriceWei > 0n;
   const isValidQuantity = quantityBigInt > 0n;
   const canSubmit = isValidAmount && isValidQuantity && hasSufficientBalance && !isLoading && !isApproving;
@@ -264,9 +273,11 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
           {/* NFT Info */}
           <div className="flex items-center gap-4 p-4 bg-dark-bg rounded-lg border border-dark-border">
             {nft.imageUrl && (
-              <img
+              <Image
                 src={nft.imageUrl}
                 alt={nft.name}
+                width={64}
+                height={64}
                 className="w-16 h-16 rounded-lg object-cover"
               />
             )}

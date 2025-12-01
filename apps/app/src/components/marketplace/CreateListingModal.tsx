@@ -13,6 +13,7 @@ import { checkNFTApproval, approveNFT, isNFTCollectionWhitelisted } from '../../
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_WHITELISTED_CURRENCIES_QUERY } from '../../lib/graphql/queries';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 interface WhitelistedCurrency {
   id: string;
@@ -157,7 +158,14 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
         }
       }
 
-      const priceWei = BigInt(Math.floor(parseFloat(pricePerToken) * 1e18));
+      const priceWei = (() => {
+        try {
+          return ethers.parseEther(pricePerToken.toString());
+        } catch (error) {
+          console.warn('Invalid price per token:', pricePerToken);
+          return 0n;
+        }
+      })();
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 

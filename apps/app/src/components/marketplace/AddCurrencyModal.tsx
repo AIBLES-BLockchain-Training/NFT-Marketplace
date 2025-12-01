@@ -10,6 +10,7 @@ import { GET_SUPPORTED_CURRENCIES_QUERY } from '../../lib/graphql/queries';
 import { SupportedCurrency } from '../../types';
 import { truncate } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 interface AddCurrencyModalProps {
   listingId: string;
@@ -62,7 +63,14 @@ export function AddCurrencyModal({ listingId, isOpen, onClose, onSuccess }: AddC
 
     try {
       // Convert price to wei based on currency decimals
-      const priceWei = BigInt(Math.floor(parseFloat(pricePerToken) * Math.pow(10, selectedCurrency.decimals)));
+      const priceWei = (() => {
+        try {
+          return ethers.parseUnits(pricePerToken.toString(), selectedCurrency.decimals);
+        } catch (error) {
+          console.warn('Invalid price per token:', pricePerToken);
+          return 0n;
+        }
+      })();
 
       const tx = encodeApproveCurrencyForListing(
         BigInt(listingId),

@@ -18,7 +18,7 @@ import { RoleAssignmentsList } from '../../components/admin/RoleAssignmentsList'
 import { WhitelistedNFTList } from '../../components/admin/WhitelistedNFTList';
 import { WhitelistedCurrenciesList } from '../../components/admin/WhitelistedCurrenciesList';
 import { RevenueStats } from '../../components/admin/revenue/RevenueStats';
-import { FeePoolsTable } from '../../components/admin/revenue/FeePoolsTable';
+// import { FeePoolsTable } from '../../components/admin/revenue/FeePoolsTable';
 import { WithdrawFeeForm } from '../../components/admin/revenue/WithdrawFeeForm';
 import { WithdrawalHistory } from '../../components/admin/revenue/WithdrawalHistory';
 import { Spinner } from '../../components/common/Spinner';
@@ -139,7 +139,7 @@ export default function AdminDashboard() {
       ),
       subItems: [
         { id: 'revenue-stats', label: 'Revenue Stats' },
-        { id: 'revenue-pools', label: 'Fee Pools' },
+        // { id: 'revenue-pools', label: 'Fee Pools' },
         { id: 'revenue-withdraw', label: 'Withdraw' },
         { id: 'revenue-history', label: 'History' },
       ],
@@ -598,23 +598,23 @@ export default function AdminDashboard() {
           </div>
         );
       }
-      if (activeSubMenu === 'revenue-pools') {
-        return (
-          <div className="space-y-6">
-            {renderPageHeader(
-              'Fee Pools',
-              'View accumulated fees by extension and currency',
-              <svg className="w-7 h-7 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>,
-              { parent: 'Revenue & Withdrawal', current: 'Fee Pools' }
-            )}
-            <div className="bg-dark-card border border-dark-border rounded-xl p-6">
-              <FeePoolsTable />
-            </div>
-          </div>
-        );
-      }
+      // if (activeSubMenu === 'revenue-pools') {
+      //   return (
+      //     <div className="space-y-6">
+      //       {renderPageHeader(
+      //         'Fee Pools',
+      //         'View accumulated fees by extension and currency',
+      //         <svg className="w-7 h-7 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      //           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      //         </svg>,
+      //         { parent: 'Revenue & Withdrawal', current: 'Fee Pools' }
+      //       )}
+      //       <div className="bg-dark-card border border-dark-border rounded-xl p-6">
+      //         <FeePoolsTable />
+      //       </div>
+      //     </div>
+      //   );
+      // }
       if (activeSubMenu === 'revenue-withdraw') {
         return (
           <div className="space-y-6">

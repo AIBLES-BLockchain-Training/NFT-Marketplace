@@ -6,9 +6,7 @@ import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { AuctionCardCompact } from '../auction/AuctionCardCompact';
 import { OfferCard } from '../marketplace/OfferCard';
-import { formatEth } from '../../lib/web3/utils';
-import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
-import { getIpfsGateways, truncateTokenId } from '../../lib/utils/format';
+import { getIpfsGateways, truncateTokenId, formatUSDCWithSymbol, isUSDCCurrency } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
 
 interface NFTDetailProps {
@@ -237,30 +235,37 @@ export function NFTDetail({
           </div>
         )}
 
-        {/* Listings Section */}
-        {activeListings.length > 0 && (
+        {/* Listings Section - USDC Only */}
+        {activeListings.filter(listing => {
+          // Only show USDC listings
+          if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
+            return isUSDCCurrency(listing.currencyApprovals[0].currency.id);
+          }
+          return isUSDCCurrency(listing.currency?.id || '');
+        }).length > 0 && (
           <Card>
             <h3 className="text-sm font-semibold text-gray-400 mb-4">
-              Available Listings ({activeListings.length})
+              Available Listings ({activeListings.filter(listing => {
+                if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
+                  return isUSDCCurrency(listing.currencyApprovals[0].currency.id);
+                }
+                return isUSDCCurrency(listing.currency?.id || '');
+              }).length})
             </h3>
             <div className="space-y-3">
               {activeListings
+                .filter(listing => {
+                  // Only show USDC listings
+                  if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
+                    return isUSDCCurrency(listing.currencyApprovals[0].currency.id);
+                  }
+                  return isUSDCCurrency(listing.currency?.id || '');
+                })
                 .sort((a, b) => parseFloat(a.pricePerToken) - parseFloat(b.pricePerToken))
                 .map((listing) => {
                   const price = listing.currencyApprovals && listing.currencyApprovals.length > 0
                     ? listing.currencyApprovals[0].pricePerToken
                     : listing.pricePerToken;
-
-                  const currencySymbol = (() => {
-                    if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
-                      const currency = listing.currencyApprovals[0].currency;
-                      const currencyId = currency.id.toLowerCase();
-                      const isNativeToken = currencyId === ZERO_ADDRESS.toLowerCase() ||
-                                            currencyId === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-                      return (isNativeToken || currency.symbol === 'UNKNOWN') ? 'ETH' : currency.symbol;
-                    }
-                    return 'ETH';
-                  })();
 
                   const isExpired = isListingExpired(listing.endTimestamp);
                   const isMyListing = address && listing.owner.id.toLowerCase() === address.toLowerCase();
@@ -283,7 +288,7 @@ export function NFTDetail({
                         <div className="flex-1">
                           <p className="text-xs text-gray-500">Price</p>
                           <p className="text-lg text-white font-bold">
-                            {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                            {formatUSDCWithSymbol(price)}
                           </p>
                         </div>
 
