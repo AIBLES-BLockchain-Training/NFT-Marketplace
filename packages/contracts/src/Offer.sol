@@ -21,9 +21,14 @@ contract NFTOffer is ReentrancyGuard {
         mapping(uint256 => Offer) offers;
     }
 
+    struct FeeData {
+        mapping(address => uint256) accumulatedFees;
+    }
+
     struct OfferStorage {
         CoreStorage coreStorage;
         OfferData offerData;
+        FeeData feeData;
     }
 
     // ============= UNSTRUCTURED STORAGE SLOT =============
@@ -108,6 +113,10 @@ contract NFTOffer is ReentrancyGuard {
     error NFTNotWhitelisted();
     error CurrencyNotSupported();
     error ZeroAddress();
+    error NoFeesToWithdraw();
+    error ETHWithdrawalFailed();
+    error FeeWithdrawalFailed();
+    error IncorrectTotalPrice(uint256 expected, uint256 actual);
 
     // ============= EVENTS =============
     event OfferCreated(
@@ -133,6 +142,8 @@ contract NFTOffer is ReentrancyGuard {
         address currency,
         uint256 totalPrice
     );
+
+    event FeeWithdrawn(address indexed admin, address indexed currency, uint256 amount);
 
     // ============= CONSTRUCTOR (for standalone deployment) =============
     constructor(address _feeRecipient, uint256 _feePercentage, address _permissions) {
@@ -171,7 +182,7 @@ contract NFTOffer is ReentrancyGuard {
     }
 
     // ============= MAIN FUNCTIONS =============
-    function makeOffer(OfferParams memory params) external nonReentrant onlyOfferRole returns (uint256 offerId) {
+    function makeOffer(OfferParams memory params) external payable nonReentrant onlyOfferRole returns (uint256 offerId) {
         OfferStorage storage s = _offerStorage();
 
         if (!s.coreStorage.permissions.hasRole(NFT_ROLE(), params.assetContract)) revert NFTNotWhitelisted();
@@ -194,9 +205,17 @@ contract NFTOffer is ReentrancyGuard {
             revert AssetMustBeERC721OrERC1155();
         }
 
-        IERC20 currency = IERC20(params.currency);
-        if (currency.balanceOf(msg.sender) < params.totalPrice) revert InsufficientCurrencyBalance();
-        if (currency.allowance(msg.sender, address(this)) < params.totalPrice) revert InsufficientCurrencyAllowance();
+        // Check balance and allowance for Native Token (ETH) or ERC20
+        if (params.currency == address(0)) {
+            // Native Token (ETH) - user must send ETH with this transaction (escrow model)
+            if (msg.value != params.totalPrice) revert IncorrectTotalPrice(params.totalPrice, msg.value);
+        } else {
+            // ERC20 Token - check balance and allowance
+            if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
+            IERC20 currency = IERC20(params.currency);
+            if (currency.balanceOf(msg.sender) < params.totalPrice) revert InsufficientCurrencyBalance();
+            if (currency.allowance(msg.sender, address(this)) < params.totalPrice) revert InsufficientCurrencyAllowance();
+        }
 
         s.coreStorage.offerIdCounter++;
         offerId = s.coreStorage.offerIdCounter;
@@ -238,10 +257,16 @@ contract NFTOffer is ReentrancyGuard {
 
         offer.status = Status.CANCELLED;
 
+        // Refund escrowed ETH if offer was made with Native Token
+        if (offer.currency == address(0)) {
+            (bool success, ) = msg.sender.call{value: offer.totalPrice}("");
+            if (!success) revert ETHWithdrawalFailed();
+        }
+
         emit OfferCancelled(offerId, msg.sender);
     }
 
-    function acceptOffer(uint256 offerId) external nonReentrant {
+    function acceptOffer(uint256 offerId) external payable nonReentrant {
         OfferStorage storage s = _offerStorage();
         Offer storage offer = s.offerData.offers[offerId];
 
@@ -249,34 +274,67 @@ contract NFTOffer is ReentrancyGuard {
         if (offer.status != Status.ACTIVE) revert OfferNotActive();
         if (offer.expirationTimestamp < block.timestamp) revert OfferExpired();
 
-        IERC20 currency = IERC20(offer.currency);
-        if (currency.balanceOf(offer.offeror) < offer.totalPrice) revert InsufficientCurrencyBalance();
-        if (currency.allowance(offer.offeror, address(this)) < offer.totalPrice) revert InsufficientCurrencyAllowance();
+        // Check offeror's balance and allowance (only for ERC20, ETH is already escrowed)
+        if (offer.currency != address(0)) {
+            IERC20 currency = IERC20(offer.currency);
+            if (currency.balanceOf(offer.offeror) < offer.totalPrice) revert InsufficientCurrencyBalance();
+            if (currency.allowance(offer.offeror, address(this)) < offer.totalPrice) revert InsufficientCurrencyAllowance();
+        }
 
+        // Check NFT ownership and approval (CEI pattern - Checks)
         if (offer.tokenType == TokenType.ERC721) {
             IERC721 nft = IERC721(offer.assetContract);
             if (nft.ownerOf(offer.tokenId) != msg.sender) revert NotOwnerOfNFT();
             if (!nft.isApprovedForAll(msg.sender, address(this)) && nft.getApproved(offer.tokenId) != address(this))
                 revert MarketplaceNotApprovedForNFT();
-
-            nft.safeTransferFrom(msg.sender, offer.offeror, offer.tokenId);
         } else {
             IERC1155 nft = IERC1155(offer.assetContract);
             if (nft.balanceOf(msg.sender, offer.tokenId) < offer.quantity) revert InsufficientNFTBalance();
             if (!nft.isApprovedForAll(msg.sender, address(this))) revert MarketplaceNotApprovedForNFT();
-
-            nft.safeTransferFrom(msg.sender, offer.offeror, offer.tokenId, offer.quantity, "");
         }
 
+        // Calculate fee and sellerAmount
         uint256 platformFee = (offer.totalPrice * s.coreStorage.feePercentage) / BASIS_POINTS;
         uint256 sellerAmount = offer.totalPrice - platformFee;
 
-        if (platformFee > 0) {
-            currency.transferFrom(offer.offeror, s.coreStorage.feeRecipient, platformFee);
-        }
-        currency.transferFrom(offer.offeror, msg.sender, sellerAmount);
-
+        // Update state before external calls (CEI pattern - Effects)
         offer.status = Status.COMPLETED;
+
+        // Transfer NFT to offeror (CEI pattern - Interactions)
+        if (offer.tokenType == TokenType.ERC721) {
+            IERC721(offer.assetContract).safeTransferFrom(msg.sender, offer.offeror, offer.tokenId);
+        } else {
+            IERC1155(offer.assetContract).safeTransferFrom(msg.sender, offer.offeror, offer.tokenId, offer.quantity, "");
+        }
+
+        // Handle payment based on currency type
+        if (offer.currency == address(0)) {
+            // Native Token (ETH) - ETH is already escrowed in contract
+            if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
+
+            // Accumulate fee
+            s.feeData.accumulatedFees[offer.currency] += platformFee;
+
+            // Transfer sellerAmount from contract to asset owner (msg.sender)
+            (bool success, ) = msg.sender.call{value: sellerAmount}("");
+            if (!success) revert ETHWithdrawalFailed();
+        } else {
+            // ERC20 Token
+            if (msg.value != 0) revert IncorrectTotalPrice(0, msg.value);
+
+            IERC20 currency = IERC20(offer.currency);
+
+            // Accumulate fee
+            s.feeData.accumulatedFees[offer.currency] += platformFee;
+
+            // Transfer sellerAmount to asset owner (msg.sender)
+            if (!currency.transferFrom(offer.offeror, msg.sender, sellerAmount)) revert FeeWithdrawalFailed();
+
+            // Transfer fee to contract
+            if (platformFee > 0) {
+                if (!currency.transferFrom(offer.offeror, address(this), platformFee)) revert FeeWithdrawalFailed();
+            }
+        }
 
         emit OfferAccepted(
             offer.offerId,
@@ -348,6 +406,12 @@ contract NFTOffer is ReentrancyGuard {
             return false;
         }
 
+        // For Native Token (ETH), funds are already escrowed, so always valid if status is ACTIVE
+        if (offer.currency == address(0)) {
+            return true;
+        }
+
+        // For ERC20, check balance and allowance
         IERC20 currency = IERC20(offer.currency);
         return (currency.balanceOf(offer.offeror) >= offer.totalPrice &&
             currency.allowance(offer.offeror, address(this)) >= offer.totalPrice);
@@ -365,6 +429,10 @@ contract NFTOffer is ReentrancyGuard {
         return _offerStorage().coreStorage.feePercentage;
     }
 
+    function accumulatedFees(address currency) external view returns (uint256) {
+        return _offerStorage().feeData.accumulatedFees[currency];
+    }
+
     // ============= ADMIN FUNCTIONS =============
     function setFeeRecipient(address _feeRecipient) external {
         OfferStorage storage s = _offerStorage();
@@ -379,4 +447,28 @@ contract NFTOffer is ReentrancyGuard {
         require(_feePercentage <= 1000, "Fee too high");
         s.coreStorage.feePercentage = _feePercentage;
     }
+
+    function withdrawFees(address currency) external {
+        OfferStorage storage s = _offerStorage();
+        if (!s.coreStorage.permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
+
+        uint256 amount = s.feeData.accumulatedFees[currency];
+        if (amount == 0) revert NoFeesToWithdraw();
+
+        // Reset to 0 before transfer (CEI pattern - Checks-Effects-Interactions)
+        s.feeData.accumulatedFees[currency] = 0;
+
+        if (currency == address(0)) {
+            // Native Token (ETH)
+            (bool success, ) = msg.sender.call{value: amount}("");
+            if (!success) revert ETHWithdrawalFailed();
+        } else {
+            // ERC20 Token
+            if (!IERC20(currency).transfer(msg.sender, amount)) revert FeeWithdrawalFailed();
+        }
+
+        emit FeeWithdrawn(msg.sender, currency, amount);
+    }
+
+    receive() external payable {}
 }

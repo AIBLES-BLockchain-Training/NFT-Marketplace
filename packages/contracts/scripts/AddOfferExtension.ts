@@ -36,7 +36,9 @@ function getOfferFunctions(): OfferFunction[] {
     { selector: "0xe74b981b", signature: "setFeeRecipient(address)" },
     { selector: "0xae06c1b7", signature: "setFeePercentage(uint256)" },
     { selector: "0x56d331c2", signature: "initializeOffer(address,address,uint256)" },
-    { selector: "0xab8c71c0", signature: "permissions()" }
+    { selector: "0xab8c71c0", signature: "permissions()" },
+    { selector: "0xa221e161", signature: "withdrawFees(address)" },
+    { selector: "0xd6c083d5", signature: "accumulatedFees(address)" }
   ];
 }
 

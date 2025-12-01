@@ -48,7 +48,7 @@ describe('NFTOffer', function () {
     const NFT_ROLE = ethers.keccak256(ethers.toUtf8Bytes('NFT_ROLE'));
     await permissions.assignRole(OFFER_ROLE, [offeror.address]);
     await permissions.assignNFTRole([await mockNFT.getAddress(), await mockERC1155.getAddress()]);
-    await permissions.addCurrency([await mockERC20.getAddress()]);
+    await permissions.addCurrency([await mockERC20.getAddress(), ethers.ZeroAddress]); // Add Native Token (ETH)
 
     // Mint tokens
     await mockNFT.connect(owner).mint(nftOwner.address, TOKEN_ID);
@@ -283,7 +283,7 @@ describe('NFTOffer', function () {
       const OFFER_ROLE = ethers.keccak256(ethers.toUtf8Bytes('OFFER_ROLE'));
       await permissions.assignRole(OFFER_ROLE, [newOfferor.address]);
       await mockERC20.connect(owner).mint(newOfferor.address, OFFER_PRICE);
-      
+
       const currentTime = await time.latest();
       const expirationTime = currentTime + 1800; // 30 minutes
       const params = {
@@ -297,6 +297,64 @@ describe('NFTOffer', function () {
 
       await expect(nftOffer.connect(newOfferor).makeOffer(params))
         .to.be.revertedWithCustomError(nftOffer, 'InsufficientCurrencyAllowance');
+    });
+
+    it('should create ETH offer successfully (Native Token)', async function () {
+      const currentTime = await time.latest();
+      const expirationTime = currentTime + 1800;
+      const params = {
+        assetContract: await mockNFT.getAddress(),
+        tokenId: TOKEN_ID,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        totalPrice: OFFER_PRICE,
+        expirationTimestamp: expirationTime
+      };
+
+      const contractBalanceBefore = await ethers.provider.getBalance(await nftOffer.getAddress());
+
+      await expect(nftOffer.connect(offeror).makeOffer(params, { value: OFFER_PRICE }))
+        .to.emit(nftOffer, 'OfferCreated')
+        .withArgs(1, offeror.address, await mockNFT.getAddress(), TOKEN_ID, 1, ethers.ZeroAddress, OFFER_PRICE, expirationTime);
+
+      // Check ETH was escrowed
+      expect(await ethers.provider.getBalance(await nftOffer.getAddress())).to.equal(contractBalanceBefore + OFFER_PRICE);
+
+      const offer = await nftOffer.getOffer(1);
+      expect(offer.currency).to.equal(ethers.ZeroAddress);
+      expect(offer.status).to.equal(1); // ACTIVE
+    });
+
+    it('should revert when ETH sent does not match totalPrice', async function () {
+      const currentTime = await time.latest();
+      const expirationTime = currentTime + 1800;
+      const params = {
+        assetContract: await mockNFT.getAddress(),
+        tokenId: TOKEN_ID,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        totalPrice: OFFER_PRICE,
+        expirationTimestamp: expirationTime
+      };
+
+      await expect(nftOffer.connect(offeror).makeOffer(params, { value: OFFER_PRICE / BigInt(2) }))
+        .to.be.revertedWithCustomError(nftOffer, 'IncorrectTotalPrice');
+    });
+
+    it('should revert when ETH sent with ERC20 offer', async function () {
+      const currentTime = await time.latest();
+      const expirationTime = currentTime + 1800;
+      const params = {
+        assetContract: await mockNFT.getAddress(),
+        tokenId: TOKEN_ID,
+        quantity: 1,
+        currency: await mockERC20.getAddress(),
+        totalPrice: OFFER_PRICE,
+        expirationTimestamp: expirationTime
+      };
+
+      await expect(nftOffer.connect(offeror).makeOffer(params, { value: OFFER_PRICE }))
+        .to.be.revertedWithCustomError(nftOffer, 'IncorrectTotalPrice');
     });
   });
 
@@ -341,6 +399,46 @@ describe('NFTOffer', function () {
       await expect(nftOffer.connect(offeror).cancelOffer(1))
         .to.be.revertedWithCustomError(nftOffer, 'OfferNotActive');
     });
+
+    it('should refund ETH when cancelling ETH offer', async function () {
+      const currentTime = await time.latest();
+      const expirationTime = currentTime + 1800;
+      const params = {
+        assetContract: await mockNFT.getAddress(),
+        tokenId: TOKEN_ID,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        totalPrice: OFFER_PRICE,
+        expirationTimestamp: expirationTime
+      };
+
+      const totalOffersBefore = await nftOffer.totalOffers();
+      await nftOffer.connect(offeror).makeOffer(params, { value: OFFER_PRICE });
+      const ethOfferId = totalOffersBefore + BigInt(1);
+
+      const balanceBefore = await ethers.provider.getBalance(offeror.address);
+
+      const tx = await nftOffer.connect(offeror).cancelOffer(ethOfferId);
+      const receipt = await tx.wait();
+      const gasUsed = BigInt(receipt!.gasUsed) * BigInt(receipt!.gasPrice);
+
+      const balanceAfter = await ethers.provider.getBalance(offeror.address);
+      const expectedBalance = balanceBefore + OFFER_PRICE - gasUsed;
+      expect(balanceAfter).to.be.closeTo(expectedBalance, ethers.parseEther('0.01')); // Increased tolerance for gas
+
+      const offer = await nftOffer.getOffer(ethOfferId);
+      expect(offer.status).to.equal(3); // CANCELLED
+    });
+
+    it('should not refund anything when cancelling ERC20 offer', async function () {
+      // ERC20 offer was already created in beforeEach
+      const balanceBefore = await mockERC20.balanceOf(offeror.address);
+
+      await nftOffer.connect(offeror).cancelOffer(1);
+
+      // Balance should not change (no escrow for ERC20)
+      expect(await mockERC20.balanceOf(offeror.address)).to.equal(balanceBefore);
+    });
   });
 
   describe('acceptOffer', function () {
@@ -363,7 +461,7 @@ describe('NFTOffer', function () {
     it('should accept ERC721 offer successfully', async function () {
       const offerorTokenBefore = await mockERC20.balanceOf(offeror.address);
       const nftOwnerTokenBefore = await mockERC20.balanceOf(nftOwner.address);
-      const feeRecipientBefore = await mockERC20.balanceOf(feeRecipient.address);
+      const contractTokenBefore = await mockERC20.balanceOf(await nftOffer.getAddress());
 
       await expect(nftOffer.connect(nftOwner).acceptOffer(1))
         .to.emit(nftOffer, 'OfferAccepted');
@@ -377,7 +475,10 @@ describe('NFTOffer', function () {
 
       expect(await mockERC20.balanceOf(offeror.address)).to.equal(offerorTokenBefore - OFFER_PRICE);
       expect(await mockERC20.balanceOf(nftOwner.address)).to.equal(nftOwnerTokenBefore + sellerAmount);
-      expect(await mockERC20.balanceOf(feeRecipient.address)).to.equal(feeRecipientBefore + fee);
+      expect(await mockERC20.balanceOf(await nftOffer.getAddress())).to.equal(contractTokenBefore + fee);
+
+      // Check accumulated fees
+      expect(await nftOffer.accumulatedFees(await mockERC20.getAddress())).to.equal(fee);
 
       const offer = await nftOffer.getOffer(1);
       expect(offer.status).to.equal(2); // COMPLETED
@@ -465,7 +566,7 @@ describe('NFTOffer', function () {
     it('should revert when ERC1155 owner has insufficient balance', async function () {
       const currentTime = await time.latest();
       const expirationTime = currentTime + 1800; // 30 minutes
-      
+
       const params = {
         assetContract: await mockERC1155.getAddress(),
         tokenId: TOKEN_ID,
@@ -476,9 +577,56 @@ describe('NFTOffer', function () {
       };
 
       await nftOffer.connect(offeror).makeOffer(params);
-      
+
       await expect(nftOffer.connect(nftOwner).acceptOffer(2))
         .to.be.revertedWithCustomError(nftOffer, 'InsufficientNFTBalance');
+    });
+
+    it('should accept ETH offer successfully', async function () {
+      const currentTime = await time.latest();
+      const expirationTime = currentTime + 1800;
+      const params = {
+        assetContract: await mockNFT.getAddress(),
+        tokenId: TOKEN_ID,
+        quantity: 1,
+        currency: ethers.ZeroAddress,
+        totalPrice: OFFER_PRICE,
+        expirationTimestamp: expirationTime
+      };
+
+      const totalOffersBefore = await nftOffer.totalOffers();
+      await nftOffer.connect(offeror).makeOffer(params, { value: OFFER_PRICE });
+      const ethOfferId = totalOffersBefore + BigInt(1);
+
+      const nftOwnerBalanceBefore = await ethers.provider.getBalance(nftOwner.address);
+      const contractBalanceBefore = await ethers.provider.getBalance(await nftOffer.getAddress());
+
+      const tx = await nftOffer.connect(nftOwner).acceptOffer(ethOfferId);
+      const receipt = await tx.wait();
+      const gasUsed = BigInt(receipt!.gasUsed) * BigInt(receipt!.gasPrice);
+
+      // Check NFT transfer
+      expect(await mockNFT.ownerOf(TOKEN_ID)).to.equal(offeror.address);
+
+      // Check ETH transfers
+      const fee = OFFER_PRICE * BigInt(250) / BigInt(10000);
+      const sellerAmount = OFFER_PRICE - fee;
+
+      const nftOwnerBalanceAfter = await ethers.provider.getBalance(nftOwner.address);
+      const expectedBalance = nftOwnerBalanceBefore + sellerAmount - gasUsed;
+      expect(nftOwnerBalanceAfter).to.be.closeTo(expectedBalance, ethers.parseEther('0.01')); // Increased tolerance for gas
+
+      // Fee should stay in contract
+      expect(await ethers.provider.getBalance(await nftOffer.getAddress())).to.equal(contractBalanceBefore - sellerAmount);
+      expect(await nftOffer.accumulatedFees(ethers.ZeroAddress)).to.equal(fee);
+
+      const offer = await nftOffer.getOffer(ethOfferId);
+      expect(offer.status).to.equal(2); // COMPLETED
+    });
+
+    it('should revert when sending ETH to acceptOffer', async function () {
+      await expect(nftOffer.connect(nftOwner).acceptOffer(1, { value: ethers.parseEther('0.1') }))
+        .to.be.revertedWithCustomError(nftOffer, 'IncorrectTotalPrice');
     });
   });
 
@@ -597,6 +745,129 @@ describe('NFTOffer', function () {
       it('should revert when fee percentage is too high', async function () {
         await expect(nftOffer.connect(owner).setFeePercentage(1001))
           .to.be.revertedWith('Fee too high');
+      });
+    });
+
+    describe('withdrawFees', function () {
+      it('should withdraw ERC20 fees successfully', async function () {
+        // Create and accept an offer to accumulate fees
+        const currentTime = await time.latest();
+        const expirationTime = currentTime + 1800;
+        const params = {
+          assetContract: await mockNFT.getAddress(),
+          tokenId: TOKEN_ID,
+          quantity: 1,
+          currency: await mockERC20.getAddress(),
+          totalPrice: OFFER_PRICE,
+          expirationTimestamp: expirationTime
+        };
+
+        await nftOffer.connect(offeror).makeOffer(params);
+        await nftOffer.connect(nftOwner).acceptOffer(1);
+
+        const fee = OFFER_PRICE * BigInt(250) / BigInt(10000);
+        expect(await nftOffer.accumulatedFees(await mockERC20.getAddress())).to.equal(fee);
+
+        const adminBalanceBefore = await mockERC20.balanceOf(owner.address);
+
+        await expect(nftOffer.connect(owner).withdrawFees(await mockERC20.getAddress()))
+          .to.emit(nftOffer, 'FeeWithdrawn')
+          .withArgs(owner.address, await mockERC20.getAddress(), fee);
+
+        expect(await mockERC20.balanceOf(owner.address)).to.equal(adminBalanceBefore + fee);
+        expect(await nftOffer.accumulatedFees(await mockERC20.getAddress())).to.equal(0);
+      });
+
+      it('should withdraw ETH fees successfully', async function () {
+        // Create and accept an ETH offer to accumulate fees
+        const currentTime = await time.latest();
+        const expirationTime = currentTime + 1800;
+        const params = {
+          assetContract: await mockNFT.getAddress(),
+          tokenId: TOKEN_ID,
+          quantity: 1,
+          currency: ethers.ZeroAddress,
+          totalPrice: OFFER_PRICE,
+          expirationTimestamp: expirationTime
+        };
+
+        await nftOffer.connect(offeror).makeOffer(params, { value: OFFER_PRICE });
+        await nftOffer.connect(nftOwner).acceptOffer(1);
+
+        const fee = OFFER_PRICE * BigInt(250) / BigInt(10000);
+        expect(await nftOffer.accumulatedFees(ethers.ZeroAddress)).to.equal(fee);
+
+        const adminBalanceBefore = await ethers.provider.getBalance(owner.address);
+
+        const tx = await nftOffer.connect(owner).withdrawFees(ethers.ZeroAddress);
+        const receipt = await tx.wait();
+        const gasUsed = BigInt(receipt!.gasUsed) * BigInt(receipt!.gasPrice);
+
+        const expectedAdminBalance = adminBalanceBefore + fee - gasUsed;
+        expect(await ethers.provider.getBalance(owner.address)).to.be.closeTo(expectedAdminBalance, ethers.parseEther('0.01')); // Increased tolerance
+        expect(await nftOffer.accumulatedFees(ethers.ZeroAddress)).to.equal(0);
+      });
+
+      it('should revert when caller does not have management role', async function () {
+        await expect(nftOffer.connect(otherUser).withdrawFees(await mockERC20.getAddress()))
+          .to.be.revertedWithCustomError(nftOffer, 'CallerDoesNotHaveManagementRole');
+      });
+
+      it('should revert when there are no fees to withdraw', async function () {
+        await expect(nftOffer.connect(owner).withdrawFees(await mockERC20.getAddress()))
+          .to.be.revertedWithCustomError(nftOffer, 'NoFeesToWithdraw');
+      });
+
+      it('should reset accumulated fees to zero after withdrawal', async function () {
+        // Create and accept an offer
+        const currentTime = await time.latest();
+        const expirationTime = currentTime + 1800;
+        const params = {
+          assetContract: await mockNFT.getAddress(),
+          tokenId: TOKEN_ID,
+          quantity: 1,
+          currency: await mockERC20.getAddress(),
+          totalPrice: OFFER_PRICE,
+          expirationTimestamp: expirationTime
+        };
+
+        await nftOffer.connect(offeror).makeOffer(params);
+        await nftOffer.connect(nftOwner).acceptOffer(1);
+
+        await nftOffer.connect(owner).withdrawFees(await mockERC20.getAddress());
+
+        // Try to withdraw again - should fail
+        await expect(nftOffer.connect(owner).withdrawFees(await mockERC20.getAddress()))
+          .to.be.revertedWithCustomError(nftOffer, 'NoFeesToWithdraw');
+      });
+
+      it('should accumulate fees from multiple offers', async function () {
+        await mockNFT.connect(owner).mint(nftOwner.address, TOKEN_ID + 1);
+        await mockNFT.connect(owner).mint(nftOwner.address, TOKEN_ID + 2);
+
+        const currentTime = await time.latest();
+        const expirationTime = currentTime + 1800;
+
+        // Create 3 offers and accept all
+        for (let i = 0; i < 3; i++) {
+          const params = {
+            assetContract: await mockNFT.getAddress(),
+            tokenId: TOKEN_ID + i,
+            quantity: 1,
+            currency: await mockERC20.getAddress(),
+            totalPrice: OFFER_PRICE,
+            expirationTimestamp: expirationTime
+          };
+          await nftOffer.connect(offeror).makeOffer(params);
+          await nftOffer.connect(nftOwner).acceptOffer(i + 1);
+        }
+
+        const expectedFee = (OFFER_PRICE * BigInt(250) / BigInt(10000)) * BigInt(3);
+        expect(await nftOffer.accumulatedFees(await mockERC20.getAddress())).to.equal(expectedFee);
+
+        const adminBalanceBefore = await mockERC20.balanceOf(owner.address);
+        await nftOffer.connect(owner).withdrawFees(await mockERC20.getAddress());
+        expect(await mockERC20.balanceOf(owner.address)).to.equal(adminBalanceBefore + expectedFee);
       });
     });
 
@@ -849,7 +1120,7 @@ describe('NFTOffer', function () {
     it('should handle max fee percentage (10%)', async function () {
       await nftOffer.connect(owner).setFeePercentage(1000); // Exactly 10%
       expect(await nftOffer.feePercentage()).to.equal(1000);
-      
+
       const currentTime = await time.latest();
       const expirationTime = currentTime + 1800;
       const params = {
@@ -864,16 +1135,16 @@ describe('NFTOffer', function () {
       await mockNFT.connect(owner).mint(nftOwner.address, TOKEN_ID + 20);
       await mockERC20.connect(owner).mint(offeror.address, ethers.parseEther('10'));
       await mockERC20.connect(offeror).approve(await nftOffer.getAddress(), ethers.parseEther('10'));
-      
+
       await nftOffer.connect(offeror).makeOffer(params);
       const offerId = await nftOffer.totalOffers();
-      
-      const feeRecipientBefore = await mockERC20.balanceOf(feeRecipient.address);
+
+      const accumulatedBefore = await nftOffer.accumulatedFees(await mockERC20.getAddress());
       await nftOffer.connect(nftOwner).acceptOffer(offerId);
-      
-      // Check 10% fee was transferred
+
+      // Check 10% fee was accumulated
       const expectedFee = ethers.parseEther('1'); // 10% of 10 ETH
-      expect(await mockERC20.balanceOf(feeRecipient.address)).to.equal(feeRecipientBefore + expectedFee);
+      expect(await nftOffer.accumulatedFees(await mockERC20.getAddress())).to.equal(accumulatedBefore + expectedFee);
     });
   });
 });

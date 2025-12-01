@@ -1,5 +1,6 @@
-import { Signer } from 'ethers';
 import { ethers } from 'hardhat';
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 type OfferParams = {
   assetContract: string;
@@ -10,222 +11,174 @@ type OfferParams = {
   expirationTimestamp: number;
 };
 
-class Offer {
-  public contract: any;
-
-  constructor(contract: any) {
-    this.contract = contract;
-  }
-
-  static async init(address: string, signer: Signer) {
-    console.log(`Initializing Offer via Router at address: ${address}`);
-    // IMPORTANT: Use Router address with NFTOffer interface (delegatecall pattern)
-    const offerInterface = (await ethers.getContractFactory('NFTOffer')).interface;
-    const contract = new ethers.Contract(address, offerInterface, signer);
-    return new Offer(contract);
-  }
-
-  async getTotalOffers() {
-    console.log('Fetching total offers...');
-    return await this.contract.totalOffers();
-  }
-
-  async getOfferDetails(offerId: number) {
-    console.log(`Fetching details for offer ID: ${offerId}`);
-    return await this.contract.getOffer(offerId);
-  }
-
-  async getAllOffers(startId: number, endId: number) {
-    console.log('Fetching all offers...');
-    return await this.contract.getAllOffers(startId, endId);
-  }
-
-  async getAllValidOffers(startId: number, endId: number) {
-    console.log('Fetching all valid offers...');
-    return await this.contract.getAllValidOffers(startId, endId);
-  }
-
-  async makeOffer(offerParams: OfferParams) {
-    console.log('Creating offer with parameters:', offerParams);
-    try {
-      const tx = await this.contract.makeOffer(offerParams);
-      await tx.wait();
-      console.log('Offer created successfully:', tx);
-      return tx;
-    } catch (error: any) {
-      console.error('Error creating offer:', error);
-      if (error.data) {
-        console.error('Error data:', error.data);
-      }
-      if (error.reason) {
-        console.error('Revert reason:', error.reason);
-      }
-      throw error;
-    }
-  }
-
-  async cancelOffer(offerId: number) {
-    console.log(`Cancelling offer ID: ${offerId}`);
-    try {
-      const tx = await this.contract.cancelOffer(offerId);
-      await tx.wait();
-      console.log(`Offer ID ${offerId} cancelled successfully.`);
-      return tx;
-    } catch (error) {
-      console.error('Error cancelling offer:', error);
-      throw new Error(`Failed to cancel offer ID ${offerId}`);
-    }
-  }
-
-  async acceptOffer(offerId: number) {
-    console.log(`Accepting offer ID: ${offerId}`);
-    try {
-      const tx = await this.contract.acceptOffer(offerId);
-      await tx.wait();
-      console.log(`Offer ID ${offerId} accepted successfully.`);
-      return tx;
-    } catch (error) {
-      console.error('Error accepting offer:', error);
-      throw new Error(`Failed to accept offer ID ${offerId}`);
-    }
-  }
-
-  async getFeeRecipient() {
-    console.log('Fetching fee recipient...');
-    return await this.contract.feeRecipient();
-  }
-
-  async getFeePercentage() {
-    console.log('Fetching fee percentage...');
-    return await this.contract.feePercentage();
-  }
-
-  async setFeeRecipient(newFeeRecipient: string) {
-    console.log('Setting fee recipient...');
-    try {
-      const tx = await this.contract.setFeeRecipient(newFeeRecipient);
-      await tx.wait();
-      console.log('Fee recipient set successfully:', tx);
-      return tx;
-    } catch (error) {
-      console.error('Error setting fee recipient:', error);
-      throw new Error('Failed to set fee recipient');
-    }
-  }
-
-  async setFeePercentage(newFeePercentage: number) {
-    console.log('Setting fee percentage...');
-    try {
-      const tx = await this.contract.setFeePercentage(newFeePercentage);
-      await tx.wait();
-      console.log('Fee percentage set successfully:', tx);
-      return tx;
-    } catch (error) {
-      console.error('Error setting fee percentage:', error);
-      throw new Error('Failed to set fee percentage');
-    }
-  }
-}
-
 async function main() {
-  const [signer] = await ethers.getSigners();
+  const delayBetweenCalls = 1000;
 
-  // IMPORTANT: Use ROUTER address, not Offer contract address!
-  // Events are emitted from Router when using delegatecall
-  const ROUTER_ADDRESS = process.env['ADDRESS_ROUTER'] || '0x...'; // TODO: Set ADDRESS_ROUTER env variable
-
-  if (!ROUTER_ADDRESS || ROUTER_ADDRESS === '0x...') {
-    throw new Error('Please set ADDRESS_ROUTER environment variable');
-  }
-
-  const offer = await Offer.init(ROUTER_ADDRESS, signer);
-
-  console.log('Signer address:', await signer.getAddress());
-
-  // Initialize Offer if needed
   try {
-    console.log('\nInitializing Offer contract...');
-    const PERMISSIONS_ADDRESS = process.env['ADDRESS_PERMISSIONS'] || '';
-    const FEE_RECIPIENT = await signer.getAddress();
-    const FEE_PERCENTAGE = 250; // 2.5%
+    const [signer] = await ethers.getSigners();
+    const ROUTER_ADDRESS = process.env['ADDRESS_ROUTER'];
 
-    if (!PERMISSIONS_ADDRESS) {
-      console.error('ADDRESS_PERMISSIONS environment variable is required!');
-      process.exit(1);
+    // You can set this NFT address or let user input
+    // This is the same NFT used in CallListing.ts
+    const NFT_ADDRESS = process.env['ADDRESS_NFT'] || '0xD704424d262e312fD2954eA7a51Be352fDa8E38A';
+
+    if (!ROUTER_ADDRESS) {
+      throw new Error('Please set ADDRESS_ROUTER in .env file');
     }
 
-    const tx = await offer.contract.initializeOffer(PERMISSIONS_ADDRESS, FEE_RECIPIENT, FEE_PERCENTAGE);
+    console.log('========================================');
+    console.log('Testing Offer via Router with Native ETH');
+    console.log('========================================');
+    console.log('Signer address:', signer.address);
+    console.log('Router address:', ROUTER_ADDRESS);
+    console.log('NFT address:', NFT_ADDRESS);
+    console.log('');
+
+    const offerInterface = (await ethers.getContractFactory('NFTOffer')).interface;
+    const routerAsOffer = new ethers.Contract(ROUTER_ADDRESS, offerInterface, signer);
+
+    // STEP 1: Get current state
+    console.log('========== CURRENT STATE ==========');
+    const totalOffers = await routerAsOffer['totalOffers']();
+    console.log('Total offers:', totalOffers.toString());
+
+    const feeRecipient = await routerAsOffer['feeRecipient']();
+    console.log('Fee recipient:', feeRecipient);
+
+    const feePercentage = await routerAsOffer['feePercentage']();
+    const feePercent = (Number(feePercentage) / 100).toFixed(2);
+    console.log('Fee percentage:', feePercentage.toString(), '(' + feePercent + '%)');
+
+    const accumulatedFees = await routerAsOffer['accumulatedFees'](ethers.ZeroAddress);
+    console.log('Accumulated ETH fees:', ethers.formatEther(accumulatedFees), 'ETH');
+
+    await delay(delayBetweenCalls);
+
+    // STEP 2: Create new offer with Native ETH
+    console.log('\n========== CREATE NEW OFFER ==========');
+    const latestBlock = await ethers.provider.getBlock('latest');
+    if (!latestBlock) throw new Error('Could not get latest block');
+    const now = latestBlock.timestamp;
+
+    const offerAmount = ethers.parseEther('0.05'); // 0.05 ETH
+    const offerParams: OfferParams = {
+      assetContract: NFT_ADDRESS,
+      tokenId: 1,
+      quantity: 1,
+      currency: ethers.ZeroAddress, // Native ETH
+      totalPrice: offerAmount,
+      expirationTimestamp: now + 1800, // 30 minutes from now
+    };
+
+    console.log('Creating offer with parameters:');
+    console.log('- Asset:', offerParams.assetContract);
+    console.log('- Token ID:', offerParams.tokenId);
+    console.log('- Quantity:', offerParams.quantity);
+    console.log('- Currency: ETH (Native Token)');
+    console.log('- Total Price:', ethers.formatEther(offerParams.totalPrice), 'ETH');
+    console.log('- Expiration:', new Date((offerParams.expirationTimestamp) * 1000).toISOString());
+
+    const tx = await routerAsOffer['makeOffer'](offerParams, {
+      value: offerAmount // IMPORTANT: Send ETH with transaction
+    });
     console.log('Transaction hash:', tx.hash);
-    await tx.wait();
-    console.log('Offer initialized successfully!');
-  } catch (error: any) {
-    if (error.message.includes('Already initialized')) {
-      console.log('Offer already initialized');
-    } else {
-      console.log('Initialization error:', error.message);
+
+    const receipt = await tx.wait();
+    console.log('Offer created! Gas used:', receipt.gasUsed.toString());
+
+    // Get offer ID from event
+    let newOfferId = totalOffers + BigInt(1);
+    const event = receipt.logs.find((log: any) => {
+      try {
+        const parsed = routerAsOffer.interface.parseLog(log);
+        return parsed?.name === 'OfferCreated';
+      } catch {
+        return false;
+      }
+    });
+
+    if (event) {
+      const parsed = routerAsOffer.interface.parseLog(event);
+      if (parsed) {
+        newOfferId = parsed.args['offerId'];
+        console.log('New offer ID:', newOfferId.toString());
+      }
     }
-  }
 
-  // Get total offers (skip if causing issues)
-  // const totalOffers = await offer.getTotalOffers();
-  // console.log('\nTotal Offers:', totalOffers.toString());
+    await delay(delayBetweenCalls);
 
-  // Example: Get offer details
-  // const offerDetails = await offer.getOfferDetails(1);
-  // console.log('Offer Details:', offerDetails);
+    // STEP 3: Get offer details
+    console.log('\n========== GET OFFER DETAILS ==========');
+    const offer = await routerAsOffer['getOffer'](newOfferId);
+    console.log('Offer details:');
+    console.log('- Offer ID:', offer.offerId.toString());
+    console.log('- Offeror:', offer.offeror);
+    console.log('- Asset:', offer.assetContract);
+    console.log('- Token ID:', offer.tokenId.toString());
+    console.log('- Quantity:', offer.quantity.toString());
+    console.log('- Total Price:', ethers.formatEther(offer.totalPrice), 'ETH');
+    console.log('- Currency:', offer.currency === ethers.ZeroAddress ? 'ETH' : offer.currency);
+    console.log('- Expiration:', new Date(Number(offer.expirationTimestamp) * 1000).toISOString());
+    console.log('- Status:', offer.status.toString(), '(1=ACTIVE, 2=COMPLETED, 3=CANCELLED)');
+    console.log('- Token Type:', Number(offer.tokenType) === 0 ? 'ERC721' : 'ERC1155');
 
-  // Example: Get all offers
-  // const allOffers = await offer.getAllOffers(0, 10);
-  // console.log('All Offers:', allOffers);
+    await delay(delayBetweenCalls);
 
-  // Example: Get all valid offers
-  // const allValidOffers = await offer.getAllValidOffers(0, 10);
-  // console.log('All Valid Offers:', allValidOffers);
+    // STEP 4: Get all valid offers
+    console.log('\n========== GET ALL VALID OFFERS ==========');
+    const totalOffersNow = await routerAsOffer['totalOffers']();
+    if (totalOffersNow > 0) {
+      const validOffers = await routerAsOffer['getAllValidOffers'](1, Math.min(Number(totalOffersNow), 5));
+      console.log('Found', validOffers.length, 'valid offers');
 
-  // Example: Create a new offer
-  const MOCK_TOKEN_ADDRESS = process.env['ADDRESS_MOCK_TOKEN'] || '';
-  const NFT_CONTRACT_ADDRESS = process.env['ADDRESS_NFT'] || '';
+      for (let i = 0; i < Math.min(validOffers.length, 3); i++) {
+        const o = validOffers[i];
+        console.log('\nValid Offer #' + o.offerId.toString() + ':');
+        console.log('- Offeror:', o.offeror);
+        console.log('- Total Price:', ethers.formatEther(o.totalPrice), 'ETH');
+        console.log('- Status:', o.status.toString());
+      }
+    }
 
-  if (!MOCK_TOKEN_ADDRESS || !NFT_CONTRACT_ADDRESS) {
-    console.error('ADDRESS_MOCK_TOKEN and ADDRESS_NFT environment variables are required!');
+    await delay(delayBetweenCalls);
+
+    // STEP 5: Cancel the offer
+    console.log('\n========== CANCEL OFFER ==========');
+    console.log('Cancelling offer #' + newOfferId.toString() + '...');
+
+    const cancelTx = await routerAsOffer['cancelOffer'](newOfferId);
+    console.log('Transaction hash:', cancelTx.hash);
+
+    const cancelReceipt = await cancelTx.wait();
+    console.log('Offer cancelled! Gas used:', cancelReceipt.gasUsed.toString());
+    console.log('ETH refunded to offeror');
+
+    await delay(delayBetweenCalls);
+
+    // STEP 6: Final state
+    console.log('\n========== FINAL STATE ==========');
+    const totalOffersEnd = await routerAsOffer['totalOffers']();
+    console.log('Total offers:', totalOffersEnd.toString());
+
+    const accumulatedFeesEnd = await routerAsOffer['accumulatedFees'](ethers.ZeroAddress);
+    console.log('Accumulated ETH fees:', ethers.formatEther(accumulatedFeesEnd), 'ETH');
+
+    console.log('\n========================================');
+    console.log('All operations completed successfully!');
+    console.log('========================================');
+
+  } catch (error: any) {
+    console.error('\n========================================');
+    console.error('Error occurred:');
+    console.error('========================================');
+    console.error('Message:', error.message);
+
+    if (error.data) {
+      console.error('Error data:', error.data);
+    }
+
     process.exit(1);
   }
-
-  const offerAmount = ethers.parseEther('10'); // 10 MTK
-
-  // Approve MockToken for Router
-  console.log('\nApproving MockToken for Router...');
-  const mockToken = await ethers.getContractAt('MockToken', MOCK_TOKEN_ADDRESS);
-  const approveTx = await mockToken['approve'](ROUTER_ADDRESS, offerAmount);
-  await approveTx.wait();
-  console.log('MockToken approved');
-
-  const offerParams: OfferParams = {
-    assetContract: NFT_CONTRACT_ADDRESS,
-    tokenId: 1,
-    quantity: 1, // Must be 1 for ERC721
-    currency: MOCK_TOKEN_ADDRESS,
-    totalPrice: offerAmount,
-    expirationTimestamp: Math.floor(Date.now() / 1000) + 86400, // 24 hours from now
-  };
-  await offer.makeOffer(offerParams);
-
-  // Example: Cancel an offer
-  // await offer.cancelOffer(1);
-
-  // Example: Accept an offer (must be called by NFT owner)
-  // await offer.acceptOffer(1);
-
-  // Example: Get fee info
-  // const feeRecipient = await offer.getFeeRecipient();
-  // console.log('Fee Recipient:', feeRecipient);
-  
-  // const feePercentage = await offer.getFeePercentage();
-  // console.log('Fee Percentage:', feePercentage.toString(), 'basis points');
-
-  // Example: Admin functions (requires MANAGEMENT_ROLE)
-  // await offer.setFeeRecipient('0x...');
-  // await offer.setFeePercentage(300); // 3%
 }
 
 main().catch(console.error);
