@@ -96,80 +96,78 @@ export const GET_NFT_BY_ID_QUERY = `
           createdAt
         }
       }
-      # TODO: Uncomment when Auction and Offer are added to schema
-      # auctions(where: { status_in: [CREATED, ACTIVE] }) {
-      #   id
-      #   auctionId
-      #   sellerAddress
-      #   quantity
-      #   minimumBidAmount
-      #   bidBufferBps
-      #   startPrice
-      #   stepAmount
-      #   ceilingPrice
-      #   startTime
-      #   endTime
-      #   timeBufferInSeconds
-      #   status
-      #   auctionCreator {
-      #     id
-      #     name
-      #     avatarUrl
-      #   }
-      #   currency {
-      #     id
-      #     symbol
-      #     decimals
-      #   }
-      #   winningBid {
-      #     id
-      #     bidderAddress
-      #     bidAmount
-      #     timestamp
-      #     bidder {
-      #       id
-      #       name
-      #       avatarUrl
-      #     }
-      #   }
-      #   bids {
-      #     id
-      #     bidderAddress
-      #     bidAmount
-      #     timestamp
-      #     bidder {
-      #       id
-      #       name
-      #       avatarUrl
-      #     }
-      #   }
-      # }
-      # offers(where: { status_eq: ACTIVE }) {
-      #   id
-      #   offerId
-      #   buyerAddress
-      #   quantity
-      #   totalPrice
-      #   expirationTime
-      #   expirationTimestamp
-      #   status
-      #   createdAt
-      #   offeror {
-      #     id
-      #     name
-      #     avatarUrl
-      #   }
-      #   tokenOwner {
-      #     id
-      #     name
-      #     avatarUrl
-      #   }
-      #   currency {
-      #     id
-      #     symbol
-      #     decimals
-      #   }
-      # }
+      auctions(where: { status_in: [CREATED, ACTIVE] }) {
+        id
+        auctionId
+        sellerAddress
+        quantity
+        minimumBidAmount
+        bidBufferBps
+        startPrice
+        stepAmount
+        ceilingPrice
+        startTime
+        endTime
+        timeBufferInSeconds
+        tokenType
+        status
+        isPayoutCollected
+        isTokenCollected
+        seller {
+          id
+          name
+          avatarUrl
+        }
+        currency {
+          id
+          symbol
+          decimals
+        }
+        winningBidder {
+          id
+          name
+          avatarUrl
+        }
+        bids {
+          id
+          bidderAddress
+          bidAmount
+          timestamp
+          bidder {
+            id
+            name
+            avatarUrl
+          }
+        }
+      }
+      offers(where: { status_eq: ACTIVE }) {
+        id
+        offerId
+        quantity
+        totalPrice
+        expirationTime
+        expirationTimestamp
+        status
+        createdAt
+        updatedAt
+        transactionHash
+        blockNumber
+        offeror {
+          id
+          name
+          avatarUrl
+        }
+        tokenOwner {
+          id
+          name
+          avatarUrl
+        }
+        currency {
+          id
+          symbol
+          decimals
+        }
+      }
     }
   }
 `;
@@ -391,6 +389,34 @@ export const GET_COLLECTION_LISTED_NFTS_QUERY = `
           value
           displayType
         }
+        offers(where: { status_eq: ACTIVE }) {
+          id
+          offerId
+          quantity
+          totalPrice
+          expirationTime
+          expirationTimestamp
+          status
+          createdAt
+          updatedAt
+          transactionHash
+          blockNumber
+          offeror {
+            id
+            name
+            avatarUrl
+          }
+          tokenOwner {
+            id
+            name
+            avatarUrl
+          }
+          currency {
+            id
+            symbol
+            decimals
+          }
+        }
       }
       currencyApprovals {
         pricePerToken
@@ -412,10 +438,29 @@ export const GET_COLLECTION_LISTED_NFTS_QUERY = `
 
 export const GET_COLLECTION_AUCTIONED_NFTS_QUERY = `
   query GetCollectionAuctionedNFTs($collectionId: String!) {
-    auctions(where: { nftId: { collection: { id_eq: $collectionId } }, status_in: [CREATED, ACTIVE] }, limit: 1000) {
+    auctions(where: { nft: { collection: { id_eq: $collectionId } }, status_in: [CREATED, ACTIVE] }, limit: 1000) {
       id
+      auctionId
+      sellerAddress
+      quantity
+      minimumBidAmount
+      bidBufferBps
       startPrice
-      nftId {
+      stepAmount
+      ceilingPrice
+      startTime
+      endTime
+      timeBufferInSeconds
+      tokenType
+      status
+      isPayoutCollected
+      isTokenCollected
+      seller {
+        id
+        name
+        avatarUrl
+      }
+      nft {
         id
         tokenId
         name
@@ -433,23 +478,84 @@ export const GET_COLLECTION_AUCTIONED_NFTS_QUERY = `
           value
           displayType
         }
+        offers(where: { status_eq: ACTIVE }) {
+          id
+          offerId
+          quantity
+          totalPrice
+          expirationTime
+          expirationTimestamp
+          status
+          createdAt
+          updatedAt
+          transactionHash
+          blockNumber
+          offeror {
+            id
+            name
+            avatarUrl
+          }
+          tokenOwner {
+            id
+            name
+            avatarUrl
+          }
+          currency {
+            id
+            symbol
+            decimals
+          }
+        }
       }
       currency {
+        id
         symbol
+        decimals
       }
-      endTime
+      winningBidder {
+        id
+        name
+        avatarUrl
+      }
+      bids {
+        id
+        bidderAddress
+        bidAmount
+        timestamp
+        bidder {
+          id
+          name
+          avatarUrl
+        }
+      }
     }
   }
 `;
 
 export const GET_COLLECTION_OFFERED_NFTS_QUERY = `
   query GetCollectionOfferedNFTs($collectionId: String!) {
-    offers(where: { nftId: { collection: { id_eq: $collectionId } }, status_eq: ACTIVE }, limit: 1000) {
+    offers(where: { nft: { collection: { id_eq: $collectionId } } }, limit: 1000) {
       id
+      offerId
       totalPrice
       quantity
       expirationTime
-      nftId {
+      expirationTimestamp
+      status
+      createdAt
+      transactionHash
+      blockNumber
+      offeror {
+        id
+        name
+        avatarUrl
+      }
+      tokenOwner {
+        id
+        name
+        avatarUrl
+      }
+      nft {
         id
         tokenId
         name
@@ -461,15 +567,57 @@ export const GET_COLLECTION_OFFERED_NFTS_QUERY = `
           symbol
           collectionType
         }
+        owners {
+          id
+          ownerAddress
+          balance
+        }
+        listings(where: { status_eq: CREATED }) {
+          id
+          owner {
+            id
+            name
+          }
+        }
         traits {
           id
           traitType
           value
           displayType
         }
+        offers(where: { status_eq: ACTIVE }) {
+          id
+          offerId
+          quantity
+          totalPrice
+          expirationTime
+          expirationTimestamp
+          status
+          createdAt
+          updatedAt
+          transactionHash
+          blockNumber
+          offeror {
+            id
+            name
+            avatarUrl
+          }
+          tokenOwner {
+            id
+            name
+            avatarUrl
+          }
+          currency {
+            id
+            symbol
+            decimals
+          }
+        }
       }
       currency {
+        id
         symbol
+        decimals
       }
     }
   }
@@ -506,6 +654,34 @@ export const GET_COLLECTION_USER_LISTINGS_QUERY = `
           value
           displayType
         }
+        offers(where: { status_eq: ACTIVE }) {
+          id
+          offerId
+          quantity
+          totalPrice
+          expirationTime
+          expirationTimestamp
+          status
+          createdAt
+          updatedAt
+          transactionHash
+          blockNumber
+          offeror {
+            id
+            name
+            avatarUrl
+          }
+          tokenOwner {
+            id
+            name
+            avatarUrl
+          }
+          currency {
+            id
+            symbol
+            decimals
+          }
+        }
       }
       currencyApprovals {
         pricePerToken
@@ -527,10 +703,29 @@ export const GET_COLLECTION_USER_LISTINGS_QUERY = `
 
 export const GET_COLLECTION_USER_AUCTIONS_QUERY = `
   query GetCollectionUserAuctions($collectionId: String!, $ownerAddress: String!) {
-    auctions(where: { nftId: { collection: { id_eq: $collectionId } }, sellerAddress_eq: $ownerAddress, status_in: [CREATED, ACTIVE] }) {
+    auctions(where: { nft: { collection: { id_eq: $collectionId } }, seller: { id_eq: $ownerAddress }, status_in: [CREATED, ACTIVE] }) {
       id
+      auctionId
+      sellerAddress
+      quantity
+      minimumBidAmount
+      bidBufferBps
       startPrice
-      nftId {
+      stepAmount
+      ceilingPrice
+      startTime
+      endTime
+      timeBufferInSeconds
+      tokenType
+      status
+      isPayoutCollected
+      isTokenCollected
+      seller {
+        id
+        name
+        avatarUrl
+      }
+      nft {
         id
         tokenId
         name
@@ -548,23 +743,84 @@ export const GET_COLLECTION_USER_AUCTIONS_QUERY = `
           value
           displayType
         }
+        offers(where: { status_eq: ACTIVE }) {
+          id
+          offerId
+          quantity
+          totalPrice
+          expirationTime
+          expirationTimestamp
+          status
+          createdAt
+          updatedAt
+          transactionHash
+          blockNumber
+          offeror {
+            id
+            name
+            avatarUrl
+          }
+          tokenOwner {
+            id
+            name
+            avatarUrl
+          }
+          currency {
+            id
+            symbol
+            decimals
+          }
+        }
       }
       currency {
+        id
         symbol
+        decimals
       }
-      endTime
+      winningBidder {
+        id
+        name
+        avatarUrl
+      }
+      bids {
+        id
+        bidderAddress
+        bidAmount
+        timestamp
+        bidder {
+          id
+          name
+          avatarUrl
+        }
+      }
     }
   }
 `;
 
 export const GET_COLLECTION_USER_OFFERS_QUERY = `
   query GetCollectionUserOffers($collectionId: String!, $buyerAddress: String!) {
-    offers(where: { nftId: { collection: { id_eq: $collectionId } }, buyerAddress_eq: $buyerAddress, status_eq: ACTIVE }) {
+    offers(where: { nft: { collection: { id_eq: $collectionId } }, offeror: { id_eq: $buyerAddress }, status_eq: ACTIVE }) {
       id
+      offerId
       totalPrice
       quantity
       expirationTime
-      nftId {
+      expirationTimestamp
+      status
+      createdAt
+      transactionHash
+      blockNumber
+      offeror {
+        id
+        name
+        avatarUrl
+      }
+      tokenOwner {
+        id
+        name
+        avatarUrl
+      }
+      nft {
         id
         tokenId
         name
@@ -576,15 +832,57 @@ export const GET_COLLECTION_USER_OFFERS_QUERY = `
           symbol
           collectionType
         }
+        owners {
+          id
+          ownerAddress
+          balance
+        }
+        listings(where: { status_eq: CREATED }) {
+          id
+          owner {
+            id
+            name
+          }
+        }
         traits {
           id
           traitType
           value
           displayType
         }
+        offers(where: { status_eq: ACTIVE }) {
+          id
+          offerId
+          quantity
+          totalPrice
+          expirationTime
+          expirationTimestamp
+          status
+          createdAt
+          updatedAt
+          transactionHash
+          blockNumber
+          offeror {
+            id
+            name
+            avatarUrl
+          }
+          tokenOwner {
+            id
+            name
+            avatarUrl
+          }
+          currency {
+            id
+            symbol
+            decimals
+          }
+        }
       }
       currency {
+        id
         symbol
+        decimals
       }
     }
   }
@@ -605,13 +903,16 @@ export const GET_AUCTIONS_QUERY = `
       startTime
       endTime
       timeBufferInSeconds
+      tokenType
       status
-      auctionCreator {
+      isPayoutCollected
+      isTokenCollected
+      seller {
         id
         name
         avatarUrl
       }
-      nft: nftId {
+      nft {
         id
         tokenId
         name
@@ -627,16 +928,10 @@ export const GET_AUCTIONS_QUERY = `
         symbol
         decimals
       }
-      winningBid {
+      winningBidder {
         id
-        bidderAddress
-        bidAmount
-        timestamp
-        bidder {
-          id
-          name
-          avatarUrl
-        }
+        name
+        avatarUrl
       }
       bids {
         id
@@ -658,13 +953,15 @@ export const GET_OFFERS_QUERY = `
     offers(limit: $limit, offset: $offset, where: $where, orderBy: expirationTime_DESC) {
       id
       offerId
-      buyerAddress
       quantity
       totalPrice
       expirationTime
       expirationTimestamp
       status
       createdAt
+      updatedAt
+      transactionHash
+      blockNumber
       offeror {
         id
         name
@@ -675,7 +972,7 @@ export const GET_OFFERS_QUERY = `
         name
         avatarUrl
       }
-      nft: nftId {
+      nft {
         id
         tokenId
         name
@@ -994,20 +1291,94 @@ export const GET_TRENDING_NFTS_QUERY = `
         name
         symbol
         collectionType
+        floorPrice
+      }
+      owners {
+        ownerAddress
+        balance
       }
       purchaseHistory(limit: 1000) {
         id
         timestamp
         totalPrice
       }
-      listings(where: { status_eq: CREATED }, limit: 1) {
+      listings(where: { status_eq: CREATED }, limit: 10) {
         id
+        status
         pricePerToken
+        quantity
+        startTimestamp
+        endTimestamp
+        isReserved
+        owner {
+          id
+        }
         currencyApprovals {
+          id
+          pricePerToken
           currency {
+            id
             symbol
+            name
+            decimals
           }
         }
+        buyerApprovals {
+          id
+          buyerAddress
+          isApproved
+          createdAt
+        }
+      }
+      auctions(where: { status_in: [CREATED, ACTIVE] }, limit: 10) {
+        id
+        auctionId
+        status
+        startPrice
+        ceilingPrice
+        bidBufferBps
+        startTime
+        endTime
+        quantity
+        sellerAddress
+        currency {
+          id
+          symbol
+          name
+          decimals
+        }
+        bids(limit: 1, orderBy: bidAmount_DESC) {
+          id
+          bidAmount
+          bidderAddress
+          timestamp
+        }
+      }
+      offers(where: { status_eq: ACTIVE }, limit: 10) {
+        id
+        offerId
+        status
+        totalPrice
+        quantity
+        expirationTimestamp
+        offeror {
+          id
+          name
+        }
+        tokenOwner {
+          id
+        }
+        currency {
+          id
+          symbol
+          name
+          decimals
+        }
+      }
+      traits {
+        id
+        traitType
+        value
       }
     }
   }

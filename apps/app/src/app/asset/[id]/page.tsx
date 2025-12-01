@@ -10,16 +10,21 @@ import { CreateAuctionModal } from '../../../components/marketplace/CreateAuctio
 import { UpdateListingModal } from '../../../components/marketplace/UpdateListingModal';
 import { AddCurrencyModal } from '../../../components/marketplace/AddCurrencyModal';
 import { ApproveBuyerModal } from '../../../components/marketplace/ApproveBuyerModal';
+import { AuctionDetailModal } from '../../../components/auction/AuctionDetailModal';
+import { BidModal } from '../../../components/auction/BidModal';
+import { MakeOfferModal } from '../../../components/marketplace/MakeOfferModal';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
 import { Spinner } from '../../../components/common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_NFT_BY_ID_QUERY } from '../../../lib/graphql/queries';
 import { useWallet } from '../../../hooks/useWallet';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
-import { NFT, Listing } from '../../../types';
+import { NFT, Listing, Auction, Offer } from '../../../types';
 import {
   encodeCancelListing,
   encodeApproveBuyerForListing,
+  encodeAcceptOffer,
+  encodeCancelOffer,
 } from '../../../lib/web3/encoding';
 import toast from 'react-hot-toast';
 
@@ -32,12 +37,17 @@ export default function AssetPage() {
   const [nft, setNft] = useState<NFT | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreateAuction, setShowCreateAuction] = useState(false);
   const [showUpdateListing, setShowUpdateListing] = useState(false);
   const [showAddCurrency, setShowAddCurrency] = useState(false);
   const [showApproveBuyer, setShowApproveBuyer] = useState(false);
+  const [showAuctionModal, setShowAuctionModal] = useState(false);
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [showMakeOffer, setShowMakeOffer] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [isNFTOwner, setIsNFTOwner] = useState(false);
 
   const loadNFT = useCallback(async () => {
@@ -89,14 +99,14 @@ export default function AssetPage() {
           description: metadata.description,
           metadataUri: moralisNFT.token_uri,
           collection: {
-            id: contractAddress.toLowerCase(),
+            id: contractAddress.toLowerCase() as `0x${string}`,
             name: moralisNFT.name || 'Unknown Collection',
             symbol: moralisNFT.symbol || 'NFT',
-            collectionType: moralisNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            collectionType: (moralisNFT.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155') as any,
             creator: {
-              id: contractAddress.toLowerCase(),
+              id: contractAddress.toLowerCase() as `0x${string}`,
               name: moralisNFT.name || 'Unknown',
-              subjectType: 'CONTRACT' as const,
+              subjectType: 'CONTRACT' as any,
               createdAt: new Date().toISOString(),
             },
             totalSupply: '0',
@@ -229,7 +239,7 @@ export default function AssetPage() {
     try {
       const tx = encodeApproveBuyerForListing(
         BigInt(selectedListing.id),
-        buyerAddress,
+        buyerAddress as `0x${string}`,
         approve
       );
       const receipt = await sendTransaction(
@@ -254,7 +264,7 @@ export default function AssetPage() {
     }
 
     try {
-      const tx = encodeCancelListing(BigInt(listing.id)); // listing.id is the listingId from contract
+      const tx = encodeCancelListing(BigInt(listing.listingId || listing.id)); // listing.listingId is the listingId from contract
       const receipt = await sendTransaction(tx, 'Listing cancelled successfully!');
 
       if (receipt?.status === 1) {
@@ -262,6 +272,66 @@ export default function AssetPage() {
       }
     } catch (error: unknown) {
       console.error('Cancel listing error:', error);
+    }
+  };
+
+  const handleViewAuction = (auction: Auction) => {
+    setSelectedAuction(auction);
+    setShowAuctionModal(true);
+    setShowBidModal(false);
+  };
+
+  const handlePlaceBid = (auction: Auction) => {
+    if (!address) {
+      toast.error('Please connect your wallet');
+      return;
+    }
+    setSelectedAuction(auction);
+    setShowBidModal(true);
+    setShowAuctionModal(false);
+  };
+
+  const handleCloseAuctionModal = () => {
+    setShowAuctionModal(false);
+    setSelectedAuction(null);
+  };
+
+  const handleCloseBidModal = () => {
+    setShowBidModal(false);
+    // Keep selectedAuction so we can go back to detail modal
+  };
+
+  const handleBidSuccess = () => {
+    setShowBidModal(false);
+    loadNFT();
+  };
+
+  // Offer handlers
+  const handleMakeOffer = () => {
+    setShowMakeOffer(true);
+  };
+
+  const handleAcceptOffer = async (offer: Offer) => {
+    try {
+      const tx = encodeAcceptOffer(BigInt(offer.offerId));
+
+      await sendTransaction(tx, 'Offer accepted successfully!');
+      loadNFT();
+    } catch (error) {
+      console.error('Accept offer error:', error);
+      toast.error('Failed to accept offer');
+    }
+  };
+
+  const handleCancelOffer = async (offer: Offer) => {
+    try {
+      const tx = encodeCancelOffer(BigInt(offer.offerId));
+
+      await sendTransaction(tx, 'Offer cancelled successfully!');
+      loadNFT();
+    } catch (error) {
+      console.error('Cancel offer error:', error);
+      toast.error('Failed to cancel offer');
     }
   };
 
@@ -287,6 +357,8 @@ export default function AssetPage() {
   }
 
   const activeListings = nft.listings?.filter((l) => l.status === 'CREATED') || [];
+  const activeAuctions = nft.auctions?.filter((a) => a.status === 'CREATED' || a.status === 'ACTIVE') || [];
+  const activeOffers = nft.offers?.filter((o) => o.status === 'ACTIVE' || o.status === 'CREATED') || [];
 
   return (
     <MainLayout>
@@ -295,13 +367,20 @@ export default function AssetPage() {
           nft={nft}
           isOwner={isNFTOwner}
           activeListings={activeListings}
+          activeAuctions={activeAuctions}
+          activeOffers={activeOffers}
           onBuy={handleBuyClick}
           onCreateListing={() => setShowCreateListing(true)}
           onCreateAuction={() => setShowCreateAuction(true)}
+          onMakeOffer={handleMakeOffer}
+          onAcceptOffer={handleAcceptOffer}
+          onCancelOffer={handleCancelOffer}
           onCancelListing={handleCancelListing}
           onUpdateListing={handleUpdateListingClick}
           onAddCurrency={handleAddCurrencyClick}
           onApproveBuyer={handleApproveBuyerClick}
+          onViewAuction={handleViewAuction}
+          onPlaceBid={handlePlaceBid}
         />
 
         {/* Create Listing Modal */}
@@ -317,7 +396,7 @@ export default function AssetPage() {
         )}
 
         {/* Create Auction Modal */}
-        {isNFTOwner && (
+        {isNFTOwner && nft && (
           <CreateAuctionModal
             nft={nft}
             isOpen={showCreateAuction}
@@ -331,7 +410,6 @@ export default function AssetPage() {
         {/* Update Listing Modal */}
         {selectedListing && (
           <UpdateListingModal
-            nft={nft}
             listing={selectedListing}
             isOpen={showUpdateListing}
             onClose={() => {
@@ -387,6 +465,39 @@ export default function AssetPage() {
           }}
           listing={selectedListing}
           onSuccess={loadNFT}
+        />
+      )}
+
+      {/* Auction Detail Modal */}
+      {selectedAuction && showAuctionModal && (
+        <AuctionDetailModal
+          auction={selectedAuction}
+          isOpen={showAuctionModal}
+          onClose={handleCloseAuctionModal}
+          onRefresh={loadNFT}
+        />
+      )}
+
+      {/* Bid Modal */}
+      {selectedAuction && showBidModal && (
+        <BidModal
+          auction={selectedAuction}
+          isOpen={showBidModal}
+          onClose={handleCloseBidModal}
+          onSuccess={handleBidSuccess}
+        />
+      )}
+
+      {/* Make Offer Modal */}
+      {showMakeOffer && nft && (
+        <MakeOfferModal
+          nft={nft}
+          isOpen={showMakeOffer}
+          onClose={() => setShowMakeOffer(false)}
+          onSuccess={() => {
+            setShowMakeOffer(false);
+            loadNFT();
+          }}
         />
       )}
 

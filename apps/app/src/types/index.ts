@@ -26,6 +26,7 @@ export enum AuctionStatus {
 
 export enum OfferStatus {
   UNSET = 'UNSET',
+  CREATED = 'CREATED',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
@@ -174,7 +175,9 @@ export interface Auction {
   auctionId: string;
   nft: NFT; // Changed from nftId for clarity
   sellerAddress: Address;
-  auctionCreator: Subject; // Auction creator details
+  seller: Subject; // Auction seller/creator details
+  winningBidder?: Subject; // Winning bidder details
+  winningBid?: Bid; // Computed from bids[0] (highest bid)
   quantity: string;
   currency: SupportedCurrency;
   minimumBidAmount: string; // Minimum bid for auction
@@ -185,16 +188,18 @@ export interface Auction {
   startTime: string;
   endTime: string;
   timeBufferInSeconds: number;
+  tokenType: 'ERC721' | 'ERC1155'; // Token standard
   status: AuctionStatus;
-  winningBid?: Bid;
   bids?: Bid[];
-  createdAt: string;
+  isPayoutCollected?: boolean; // Whether seller collected payout
+  isTokenCollected?: boolean; // Whether winner collected NFT
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Offer {
   id: string;
   offerId: string;
-  buyerAddress: Address;
   offeror: Subject; // Offer maker details
   tokenOwner?: Subject; // Target token owner (for specific offers)
   nft: NFT; // Changed from nftId for clarity
@@ -205,6 +210,9 @@ export interface Offer {
   expirationTimestamp: string; // Alias for expirationTime
   status: OfferStatus;
   createdAt: string;
+  updatedAt?: string;
+  transactionHash?: string; // Transaction hash when offer was created
+  blockNumber?: number; // Block number when offer was created
 }
 
 export interface PurchaseHistory {

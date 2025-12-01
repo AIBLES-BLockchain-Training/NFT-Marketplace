@@ -172,7 +172,7 @@ export async function approveNFT(
 
       // Cache the approval status if successful
       if (success) {
-        const cacheKey = getCacheKey(nftContract, ownerAddress);
+        const cacheKey = getCacheKey(nftContract as `0x${string}`, ownerAddress as `0x${string}`);
         approvalCache.set(cacheKey, true);
       }
 
@@ -187,7 +187,7 @@ export async function approveNFT(
 
       // Cache the approval status if successful
       if (success) {
-        const cacheKey = getCacheKey(nftContract, ownerAddress);
+        const cacheKey = getCacheKey(nftContract as `0x${string}`, ownerAddress as `0x${string}`);
         approvalCache.set(cacheKey, true);
       }
 
@@ -294,7 +294,7 @@ export async function approveERC20(
 
     // Update cache if successful
     if (success) {
-      const cacheKey = getERC20CacheKey(tokenAddress, ownerAddress, spenderAddress);
+      const cacheKey = getERC20CacheKey(tokenAddress as `0x${string}`, ownerAddress as `0x${string}`, spenderAddress as `0x${string}`);
       erc20AllowanceCache.set(cacheKey, approvalAmount);
     }
 
@@ -317,5 +317,68 @@ export function clearERC20AllowanceCache(tokenAddress?: Address, ownerAddress?: 
     erc20AllowanceCache.delete(cacheKey);
   } else {
     erc20AllowanceCache.clear();
+  }
+}
+
+// ============================================================================
+// Currency Approval Helpers (for Auction/Listing Bids)
+// ============================================================================
+
+/**
+ * Check if currency (ERC20) is approved for Router contract
+ * Wrapper function for bid/listing flows
+ */
+export async function checkCurrencyApproval(
+  currencyAddress: Address,
+  ownerAddress: Address,
+  requiredAmount: bigint
+): Promise<ApprovalStatus> {
+  try {
+    // Native currency (ETH) doesn't need approval
+    if (currencyAddress === '0x0000000000000000000000000000000000000000') {
+      return {
+        isApproved: true,
+        needsApproval: false,
+      };
+    }
+
+    const { hasAllowance } = await checkERC20Allowance(
+      currencyAddress,
+      ownerAddress,
+      ROUTER_ADDRESS,
+      requiredAmount
+    );
+
+    return {
+      isApproved: hasAllowance,
+      needsApproval: !hasAllowance,
+    };
+  } catch (error) {
+    console.error('Error checking currency approval:', error);
+    return {
+      isApproved: false,
+      needsApproval: true,
+    };
+  }
+}
+
+/**
+ * Approve currency (ERC20) for Router contract
+ * Wrapper function for bid/listing flows
+ */
+export async function approveCurrency(
+  currencyAddress: Address,
+  amount?: bigint
+): Promise<boolean> {
+  try {
+    // Native currency (ETH) doesn't need approval
+    if (currencyAddress === '0x0000000000000000000000000000000000000000') {
+      return true;
+    }
+
+    return await approveERC20(currencyAddress, ROUTER_ADDRESS, amount);
+  } catch (error) {
+    console.error('Error approving currency:', error);
+    throw error;
   }
 }

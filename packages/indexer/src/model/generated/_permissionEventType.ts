@@ -1,5 +1,0 @@
-export enum PermissionEventType {
-    ROLE_GRANTED = "ROLE_GRANTED",
-    ROLE_REVOKED = "ROLE_REVOKED",
-    ADMIN_ROLE_CHANGED = "ADMIN_ROLE_CHANGED",
-}

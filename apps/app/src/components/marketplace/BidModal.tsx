@@ -41,6 +41,7 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
       const tx = encodeBidInAuction({
         auctionId: BigInt(auction.auctionId),
         bidAmount: bidWei,
+        currency: auction.currency.id,
       });
 
       await sendTransaction(tx, 'Bid placed successfully!');

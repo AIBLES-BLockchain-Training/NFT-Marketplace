@@ -36,6 +36,7 @@ export function GlobalPermissions() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'All NFT contracts are now globally allowed!');
@@ -60,6 +61,7 @@ export function GlobalPermissions() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'NFT whitelist restriction enabled!');
@@ -87,6 +89,7 @@ export function GlobalPermissions() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, `All users can now ${roleName.toLowerCase()}!`);
@@ -107,6 +110,7 @@ export function GlobalPermissions() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       await sendTransaction(tx, `${roleName} is now restricted to role holders only!`);

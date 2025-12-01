@@ -101,8 +101,9 @@ export function RoleRequests() {
       const data = iface.encodeFunctionData('assignNFTRole', [[request.nftAddress]]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'NFT whitelisted successfully!');

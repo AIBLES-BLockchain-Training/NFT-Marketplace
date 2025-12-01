@@ -31,8 +31,9 @@ export function NFTWhitelistManagement() {
       const data = iface.encodeFunctionData('assignNFTRole', [addresses]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'NFT contracts whitelisted successfully!');
@@ -60,8 +61,9 @@ export function NFTWhitelistManagement() {
       const data = iface.encodeFunctionData('revokeNFTRole', [addresses]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'NFT contracts revoked successfully!');

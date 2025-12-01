@@ -170,10 +170,9 @@ async function deployListing(
 
   console.log("Initializing Listing...");
   console.log(`   Permissions: ${permissionsAddress}`);
-  console.log(`   Router: ${routerAddress}`);
   console.log(`   Fee Receiver (Multisig): ${feeReceiverAddress}`);
 
-  await listing['initializeListing'](permissionsAddress, routerAddress, feeReceiverAddress);
+  await listing['initializeListing'](permissionsAddress, feeReceiverAddress);
   console.log(`Listing initialized successfully`);
 
   console.log("Waiting 30 seconds before verification...");
@@ -301,11 +300,11 @@ async function main() {
 
   try {
     // 1. Deploy MultiSigWallet (Fee Receiver)
-    console.log("=".repeat(70));
-    console.log("STEP 1: Deploying MultiSigWallet (Fee Receiver)");
-    console.log("=".repeat(70));
-    const multisigAddress = await deployMultiSigWallet(MULTISIG_OWNERS, MULTISIG_REQUIRED_CONFIRMATIONS, signer);
-    console.log("-".repeat(70) + "\n");
+    // console.log("=".repeat(70));
+    // console.log("STEP 1: Deploying MultiSigWallet (Fee Receiver)");
+    // console.log("=".repeat(70));
+    // const multisigAddress = await deployMultiSigWallet(MULTISIG_OWNERS, MULTISIG_REQUIRED_CONFIRMATIONS, signer);
+    // console.log("-".repeat(70) + "\n");
 
     // // 2. Deploy Permissions
     // console.log("=".repeat(70));
@@ -332,7 +331,7 @@ async function main() {
     console.log("=".repeat(70));
     console.log("STEP 5: Deploying Listing");
     console.log("=".repeat(70));
-    const listingAddress = await deployListing('0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc', '0x1279e1f267968eC70841dFa26Fbab60F65CdF717', multisigAddress, signer);
+    const listingAddress = await deployListing('0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc', '0x1279e1f267968eC70841dFa26Fbab60F65CdF717', "0xE41FBfa9c12476a61bd8C36212a8C65C24eB0867", signer);
     console.log("-".repeat(70) + "\n");
 
     // // 6. Deploy NFTAuction
@@ -354,7 +353,7 @@ async function main() {
     console.log("ALL CONTRACTS DEPLOYED SUCCESSFULLY!");
     console.log("=".repeat(70));
     console.log("\nContract Addresses:");
-    console.log(`   MultiSigWallet:   ${multisigAddress}`);
+    // console.log(`   MultiSigWallet:   ${multisigAddress}`);
     // console.log(`   Permissions:      ${permissionsAddress}`);
     // console.log(`   ExtensionManager: ${extensionManagerAddress}`);
     // console.log(`   Router:           ${routerAddress}`);
@@ -370,7 +369,7 @@ async function main() {
     console.log("5. Save all addresses to .env and frontend config");
 
     console.log("\n.env configuration:");
-    console.log(`ADDRESS_MULTISIG=${multisigAddress}`);
+    // console.log(`ADDRESS_MULTISIG=${multisigAddress}`);
     // console.log(`ADDRESS_PERMISSIONS=${permissionsAddress}`);
     // console.log(`ADDRESS_EXTENSION_MANAGER=${extensionManagerAddress}`);
     // console.log(`ADDRESS_ROUTER=${routerAddress}`);

@@ -98,6 +98,7 @@ export function NFTWhitelistRequests() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, `Successfully whitelisted ${nftAddresses.length} NFT collection(s)`);
@@ -134,7 +135,7 @@ export function NFTWhitelistRequests() {
   }, [searchQuery]);
 
   const renderPageNumbers = () => {
-    const pages = [];
+    const pages: React.ReactElement[] = [];
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);

@@ -31,14 +31,14 @@ function getListingFunctions(): ListingFunction[] {
     { selector: "0x31654b4d", signature: "getAllValidListings(uint256,uint256)" },
     { selector: "0x107a274a", signature: "getListing(uint256)" },
     { selector: "0xc78b616c", signature: "totalListings()" },
-    { selector: "0x99c194c4", signature: "initializeListing(address,address,address)" },
+    { selector: "0x6cf8745d", signature: "initializeListing(address,address)" },
     { selector: "0x51d5f97c", signature: "setCurrencyFee(address,uint256)" },
     { selector: "0x164e68de", signature: "withdrawFees(address)" },
     { selector: "0x48dd77df", signature: "approveBuyerForListing(uint256,address,bool)" },
     { selector: "0xea8f9a3c", signature: "approveCurrencyForListing(uint256,address,uint256)" },
-    { selector: "0x0d2b4dd3", signature: "setRouter(address)" },
-    { selector: "0xf0f44260", signature: "router()" },
-    { selector: "0x3fa615b0", signature: "feeReceiver()" }
+    { selector: "0x3fa615b0", signature: "feeReceiver()" },
+    { selector: "0xfcf66664", signature: "accumulatedFees(address)" },
+    { selector: "0x752d8a09", signature: "getCurrencyFee(address)" }
   ];
 }
 

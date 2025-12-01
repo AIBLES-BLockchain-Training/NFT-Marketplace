@@ -34,6 +34,7 @@ export function CurrencyManagement() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'Currencies added successfully!');
@@ -63,6 +64,7 @@ export function CurrencyManagement() {
       const tx = {
         to: PERMISSIONS_ADDRESS,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'Currencies removed successfully!');

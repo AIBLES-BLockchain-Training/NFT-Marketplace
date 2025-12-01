@@ -25,14 +25,14 @@ export function useUserNFTs({ address, enabled = true }: UseUserNFTsOptions) {
           metadataUri: nft.token_uri || undefined,
           amount: nft.amount || '1', // For ERC1155, Moralis provides amount; default to 1 for ERC721
           collection: {
-            id: nft.token_address.toLowerCase(),
+            id: nft.token_address.toLowerCase() as `0x${string}`,
             name: nft.name || 'Unknown Collection',
             symbol: nft.symbol || 'NFT',
-            collectionType: nft.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            collectionType: (nft.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155') as any,
             creator: {
-              id: nft.token_address.toLowerCase(),
+              id: nft.token_address.toLowerCase() as `0x${string}`,
               name: nft.name || 'Unknown',
-              subjectType: 'CONTRACT' as const,
+              subjectType: 'CONTRACT' as any,
               createdAt: new Date().toISOString(),
             },
             totalSupply: '0',

@@ -6,7 +6,7 @@ import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { graphqlClient } from '../../lib/graphql/client';
-import { GET_USER_ROLE_ASSIGNMENTS_QUERY } from '../../lib/graphql/queries';
+import { GET_USER_ROLE_ASSIGNMENTS_QUERY, GET_USER_ACTIVE_LISTINGS_QUERY } from '../../lib/graphql/queries';
 import { getNFTsByAddress, MoralisNFT } from '../../lib/moralis/client';
 import { REQUESTABLE_ROLES } from '../../lib/constants/roles';
 import { PERMISSIONS_ADDRESS } from '../../lib/contracts/addresses';
@@ -18,10 +18,13 @@ interface NFT {
   tokenId: string;
   name: string;
   imageUrl?: string;
+  amount?: string;
+  availableAmount?: string;
   collection: {
     id: string;
     name: string;
     symbol: string;
+    collectionType: string;
   };
 }
 
@@ -45,27 +48,48 @@ export function RequestRoles() {
     try {
       setLoadingNFTs(true);
 
-      const [moralisResponse, rolesData] = await Promise.all([
+      const [moralisResponse, rolesData, listingsResult] = await Promise.all([
         getNFTsByAddress(address),
-        graphqlClient.query(GET_USER_ROLE_ASSIGNMENTS_QUERY, { address })
+        graphqlClient.query(GET_USER_ROLE_ASSIGNMENTS_QUERY, { address }),
+        graphqlClient.query(GET_USER_ACTIVE_LISTINGS_QUERY, { address: address.toLowerCase() })
       ]);
 
-      // Transform Moralis NFTs to app NFT format
-      const transformedNFTs: NFT[] = moralisResponse.data.map((nft: MoralisNFT) => {
-        const metadata = nft.normalized_metadata || {};
+      // Build map of listed quantities
+      const listedQtyMap = new Map<string, string>();
+      if (listingsResult.listings) {
+        listingsResult.listings.forEach((listing: any) => {
+          const nftId = listing.nft.id;
+          const currentQty = BigInt(listedQtyMap.get(nftId) || '0');
+          const listingQty = BigInt(listing.quantity || '1');
+          listedQtyMap.set(nftId, (currentQty + listingQty).toString());
+        });
+      }
 
-        return {
-          id: `${nft.token_address.toLowerCase()}-${nft.token_id}`,
-          tokenId: nft.token_id,
-          name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
-          imageUrl: metadata.image,
-          collection: {
-            id: nft.token_address.toLowerCase(),
-            name: nft.name || 'Unknown Collection',
-            symbol: nft.symbol || 'NFT',
-          },
-        };
-      });
+      // Transform Moralis NFTs to app NFT format and filter out fully listed NFTs
+      const transformedNFTs: NFT[] = moralisResponse.data
+        .map((nft: MoralisNFT) => {
+          const metadata = nft.normalized_metadata || {};
+          const nftId = `${nft.token_address.toLowerCase()}-${nft.token_id}`;
+          const totalAmount = BigInt(nft.amount || '1');
+          const listedAmount = BigInt(listedQtyMap.get(nftId) || '0');
+          const availableAmount = totalAmount - listedAmount;
+
+          return {
+            id: nftId,
+            tokenId: nft.token_id,
+            name: metadata.name || nft.name || `${nft.symbol} #${nft.token_id}`,
+            imageUrl: metadata.image,
+            amount: totalAmount.toString(),
+            availableAmount: availableAmount.toString(),
+            collection: {
+              id: nft.token_address.toLowerCase(),
+              name: nft.name || 'Unknown Collection',
+              symbol: nft.symbol || 'NFT',
+              collectionType: nft.contract_type === 'ERC721' ? 'ERC721' : 'ERC1155',
+            },
+          };
+        })
+        .filter((nft: NFT) => BigInt(nft.availableAmount || '0') > 0); // Only show NFTs with available amount > 0
 
       setUserNFTs(transformedNFTs);
 
@@ -110,6 +134,7 @@ export function RequestRoles() {
       const tx = {
         to: PERMISSIONS_ADDRESS,  // Call Permissions contract directly
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'Role requests submitted successfully!');
@@ -140,6 +165,7 @@ export function RequestRoles() {
       const tx = {
         to: PERMISSIONS_ADDRESS,  // Call Permissions contract directly
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'NFT whitelist request submitted successfully!');
@@ -178,7 +204,7 @@ export function RequestRoles() {
   };
 
   const renderPageNumbers = () => {
-    const pages = [];
+    const pages: React.ReactElement[] = [];
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
@@ -373,6 +399,18 @@ export function RequestRoles() {
                             className="object-cover"
                             width={200}
                           />
+                          {/* Token Type Badge */}
+                          <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-gray-500/50">
+                            <p className="text-[10px] font-bold text-gray-300">
+                              {nft.collection.collectionType === 'ERC721' ? 'ERC-721' : 'ERC-1155'}
+                            </p>
+                          </div>
+                          {/* Available Amount Badge for ERC1155 */}
+                          {nft.collection.collectionType === 'ERC1155' && nft.availableAmount && nft.availableAmount !== '1' && (
+                            <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-lg border border-green-500/50">
+                              <p className="text-xs font-bold text-green-400">x{nft.availableAmount}</p>
+                            </div>
+                          )}
                           {isSelected && (
                             <div className="absolute top-2 right-2 w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center">
                               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

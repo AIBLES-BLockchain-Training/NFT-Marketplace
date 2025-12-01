@@ -32,8 +32,9 @@ export function FeeManagement() {
       const data = iface.encodeFunctionData('setCurrencyFee', [currency, fee]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, `Fee set to ${feePercentage}% for currency`);
@@ -55,8 +56,9 @@ export function FeeManagement() {
       const data = iface.encodeFunctionData('withdrawFees', [withdrawCurrency]);
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_ADDRESS!,
+        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
         data,
+        value: '0',
       };
 
       const receipt = await sendTransaction(tx, 'Fees withdrawn successfully!');

@@ -217,7 +217,7 @@ export function useWallet() {
 
     const handleChainChanged = (chainIdHex: string) => {
       const newChainId = parseInt(chainIdHex, 16);
-      const currentChainId = getChainId();
+      const currentChainId = chainId;
 
       // Only reload if chain ACTUALLY changed (not just a refresh event)
       if (newChainId !== currentChainId) {

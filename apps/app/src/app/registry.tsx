@@ -21,5 +21,10 @@ export function StyledComponentsRegistry({ children }: { children: React.ReactNo
 
   if (typeof window !== 'undefined') return <>{children}</>;
 
-  return <StyleSheetManager sheet={styledComponentsStyleSheet.instance}>{children}</StyleSheetManager>;
+  return (
+    (StyleSheetManager as any)({
+      sheet: styledComponentsStyleSheet.instance,
+      children
+    })
+  );
 }

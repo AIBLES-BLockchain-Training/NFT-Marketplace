@@ -21,7 +21,6 @@ interface Extension {
 }
 
 // Configuration
-// QUAN TRỌNG: Sử dụng signature chuẩn (với tuple được mở rộng) để khớp với cách mã hóa của ethers.js
 function getAuctionFunctions(): AuctionFunction[] {
 return [
   // === Các hàm tương tác lõi (User-facing) ===
