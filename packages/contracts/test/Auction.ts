@@ -14,6 +14,14 @@ describe('Auction', function () {
     await permissions['initialize'](admin.address);
     await permissions.waitForDeployment();
 
+    const extFactory = await ethers.getContractFactory('ExtensionManager');
+    const extensions: any = await extFactory.deploy(admin.address);
+    await extensions.waitForDeployment();
+
+    const routerFactory = await ethers.getContractFactory('Router');
+    const router: any = await routerFactory.deploy(await extensions.getAddress());
+    await router.waitForDeployment();
+
     // Deploy MockToken (ERC20)
     const MockToken = await ethers.getContractFactory('MockToken');
     const mockERC20: any = await MockToken.deploy(admin.address);
@@ -33,7 +41,11 @@ describe('Auction', function () {
     const NFTAuction = await ethers.getContractFactory('NFTAuction');
     const auction = await NFTAuction.deploy();
     await auction.waitForDeployment();
-    await auction['initializeAuction'](await permissions.getAddress());
+    await auction['initializeAuction'](
+      await permissions.getAddress(),
+      await router.getAddress(),
+      admin.address,
+    );
 
     nftAuction = auction as unknown as NFTAuction;
 
@@ -42,7 +54,7 @@ describe('Auction', function () {
     await permissions.connect(admin).assignRole(AUCTION_ROLE, [seller.address]);
     await permissions.connect(admin).assignNFTRole([mockERC721.getAddress()]);
     await permissions.connect(admin).assignNFTRole([mockERC1155.getAddress()]);
-    await permissions.addCurrency([mockERC20.getAddress()]);
+    await permissions.addCurrency([mockERC20.getAddress(), ethers.ZeroAddress]);
 
     // Mint NFTs and tokens
     const value = ethers.parseEther('100');
@@ -182,6 +194,35 @@ describe('Auction', function () {
     return { startTime, endTime, auctionObject };
   }
 
+  async function createAuctionETH(tokenId: number) {
+    const startTime = await time.latest();
+    const endTime = startTime + 3600; // 1 hour later
+    const auctionArgs = {
+      _assetContract: addressErc721,
+      _tokenId: tokenId,
+      _quantity: 1,
+      _currency: ethers.ZeroAddress,
+      _startPrice: ethers.parseEther('1'),
+      _ceilingPrice: ethers.parseEther('100'),
+      _stepAmount: 500,
+      _timeBufferInSeconds: 120,
+      _startTime: startTime,
+      _endTime: endTime,
+    };
+
+    // Approve all NFT transfer before creating auction
+    await mockERC721.connect(seller).setApprovalForAll(addressSystem, true);
+    await nftAuction.connect(seller).createAuction(auctionArgs);
+    const auction = await nftAuction.auctions(0);
+    const auctionObject = transformAuctionObject(auction);
+    return { startTime, endTime, auctionObject };
+  }
+
+  async function bidETH(auctionId: number, bidder: HardhatEthersSigner, amount: string) {
+    const value = ethers.parseEther(amount);
+    await nftAuction.connect(bidder).bidInAuction(auctionId, value, { value: value });
+  }
+
   async function bid(auctionId: number, bidder: HardhatEthersSigner, amount: string) {
     const balance = await mockERC20.balanceOf(bidder.address);
     const value = ethers.parseEther(amount);
@@ -229,6 +270,18 @@ describe('Auction', function () {
           status: BigInt(0),
           tokenType: BigInt(0),
         });
+      });
+
+      it('Should create an auction and bid with ETH currency', async function () {
+        const { startTime, endTime, auctionObject } = await createAuctionETH(1);
+        expect(await mockERC721.ownerOf(1)).to.equal(addressSystem);
+        expect(auctionObject.currency).to.equal(ethers.ZeroAddress);
+
+        // Bidder1 places a bid with ETH
+        await bidETH(0, bidder1, '2');
+        const auction = await nftAuction.auctions(0);
+        expect(auction.highestBidder).to.equal(bidder1.address);
+        expect(auction.highestBid).to.equal(ethers.parseEther('2'));
       });
 
       it('Should revert an auction if NFT ERC721 is not approved', async function () {

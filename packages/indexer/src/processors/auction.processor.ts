@@ -162,7 +162,10 @@ export async function processAuctionEvents(
     if (auctionMap.has(auctionId)) {
       return auctionMap.get(auctionId)!;
     }
-    const auction = await ctx.store.get(Auction, auctionId);
+    const auction = await ctx.store.get(Auction, {
+      where: { id: auctionId },
+      relations: { nft: true, bids: true, purchaseHistory: true}
+    })
     if (auction) {
       // đảm bảo luôn có mảng trống
       auction.bids = auction.bids || [];
@@ -307,7 +310,7 @@ export async function processAuctionEvents(
           });
           auctionMap.set(auctionIdStr, auction);
           await updateTokenOwnership(
-            auction.nft,
+            nft,
             auction.seller.id,
             contractAddress,
             quantity,

@@ -145,6 +145,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     event RouterSet(address indexed router);
     event FeeReceiverUpdated(address indexed oldReceiver, address indexed newReceiver);
     event FeeWithdrawn(address indexed feeReceiver, address indexed currency, uint256 amount);
+    event AuctionStorageReset(address indexed admin);
 
     // ============= INITIALIZATION =============
     function initializeAuction(address _permissionsContract, address _router, address _feeReceiver) external {
@@ -178,11 +179,11 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         return _auctionStorage().coreStorage.minTimeAuction;
     }
 
-    function getCurrencyFee(address _currency) external view returns (uint256) {
+    function getCurrencyFeeAuction(address _currency) external view returns (uint256) {
         return _auctionStorage().feeData.currencyFees[_currency];
     }
 
-    function getAccumulatedFee(address _currency) external view returns (uint256) {
+    function getAccumulatedFeeAuction(address _currency) external view returns (uint256) {
         return _auctionStorage().feeData.accumulatedFees[_currency];
     }
 
@@ -266,7 +267,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         emit UpdatePermissionsContract(oldPermissionsContract, _permissionsContract);
     }
 
-    function setFeeReceiver(address _feeReceiver) external {
+    function setFeeReceiverAuction(address _feeReceiver) external {
         _checkManagementPermission();
         if (_feeReceiver == address(0)) revert InValidFeeReceiverAddress();
         AuctionStorage storage s = _auctionStorage();
@@ -275,13 +276,13 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         emit FeeReceiverUpdated(oldReceiver, _feeReceiver);
     }
 
-    function setCurrencyFee(address _currency, uint256 _fee) external {
+    function setCurrencyFeeAuction(address _currency, uint256 _fee) external {
         _checkManagementPermission();
         AuctionStorage storage s = _auctionStorage();
         s.feeData.currencyFees[_currency] = _fee;
     }
 
-    function setRouter(address _router) external {
+    function setRouterAuction(address _router) external {
         _checkManagementPermission();
         if (_router == address(0)) revert InValidRouterAddress();
         AuctionStorage storage s = _auctionStorage();
@@ -295,15 +296,15 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         s.coreStorage.minTimeAuction = _minTimeAuction;
     }
 
-    function getPermissionsContract() external view returns (address) {
+    function getPermissionsAuction() external view returns (address) {
         return address(_auctionStorage().coreStorage.permissionsContract);
     }
 
-    function getRouter() external view returns (address) {
+    function getRouterAuction() external view returns (address) {
         return _auctionStorage().router;
     }
 
-    function getFeeReceiver() external view returns (address) {
+    function getFeeReceiverAuction() external view returns (address) {
         return _auctionStorage().feeReceiver;
     }
 
@@ -453,7 +454,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     // collect auction payout
-    function collectAuctionPayout(uint256 _auctionId) external auctionExists(_auctionId) onlyCreator(_auctionId) {
+    function collectAuctionPayout(uint256 _auctionId) external auctionExists(_auctionId) onlyCreator(_auctionId) nonReentrant {
         AuctionStorage storage s = _auctionStorage();
         Auction storage auction = s.auctionData.auctions[_auctionId];
         require(isAuctionExpired(_auctionId), "Auction is not expired");
@@ -462,13 +463,22 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
 
         auction.isPayoutCollected = true;
 
+        bool isETH = (auction.currency == address(0));
+
         // calculate fee amount
         uint256 feeAmount = (auction.highestBid * s.feeData.currencyFees[auction.currency]) / s.coreStorage.decimal;
         s.feeData.accumulatedFees[auction.currency] += feeAmount;
+        uint256 creatorAmount = auction.highestBid - feeAmount;
 
-        // transfer payout to seller
-        IERC20 currency = IERC20(auction.currency);
-        require(currency.transfer(auction.auctionCreator, auction.highestBid - feeAmount), "Payout transfer failed");
+        if(isETH) {
+            // transfer ETH to seller
+            payable(auction.auctionCreator).transfer(creatorAmount);
+        } else {
+            // transfer ERC20 to seller
+            IERC20 currency = IERC20(auction.currency);
+            require(currency.transfer(auction.auctionCreator, creatorAmount), "ERC20 payout failed");
+        }
+        
 
         emit AuctionPayoutCollected(_auctionId, msg.sender, auction.highestBid);
         emit AuctionFinalized(_auctionId, auction.highestBidder, auction.highestBid, auction.currency);
@@ -486,6 +496,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
 
         if (auction.highestBidder == address(0)) {
             // back nft for seller
+            require(auction.auctionCreator == msg.sender, "Only seller can collect token");
             transferNft(
                 auction.assetContract,
                 address(this),
@@ -528,7 +539,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     // bid in auction
-    function bidInAuction(uint256 _auctionId, uint256 _bidAmount) external payable auctionExists(_auctionId) {
+    function bidInAuction(uint256 _auctionId, uint256 _bidAmount) external payable auctionExists(_auctionId) nonReentrant {
         // ======================== 1. CHECKS (Kiểm tra điều kiện) ========================
         AuctionStorage storage s = _auctionStorage();
         Auction storage auction = s.auctionData.auctions[_auctionId];
@@ -548,14 +559,18 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         // Lấy thông tin người trả giá cũ và token currency TRƯỚC KHI thay đổi bất cứ thứ gì
         address previousHighestBidder = auction.highestBidder;
         uint256 previousHighestBid = auction.highestBid;
-        IERC20 currency = IERC20(auction.currency);
 
-        // Kiểm tra số dư và allowance của người dùng
-        require(currency.balanceOf(msg.sender) >= _bidAmount, "Insufficient balance");
-        require(currency.allowance(msg.sender, address(this)) >= _bidAmount, "Insufficient allowance");
+        bool isETH = (auction.currency == address(0));
+        if (isETH) {
+            require(msg.value == _bidAmount, "ETH sent != bid amount");
+        } else {
+            IERC20 currency = IERC20(auction.currency);
+            // Kiểm tra số dư và allowance của người dùng
+            require(currency.balanceOf(msg.sender) >= _bidAmount, "Insufficient balance");
+            require(currency.allowance(msg.sender, address(this)) >= _bidAmount, "Insufficient allowance");
+        }
 
         // ======================== 2. EFFECTS (Cập nhật TOÀN BỘ trạng thái nội bộ) ========================
-
         // Cập nhật người trả giá cao nhất mới
         auction.highestBidder = msg.sender;
         auction.highestBid = _bidAmount;
@@ -571,15 +586,23 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
             auction.endTime += auction.timeBufferInSeconds;
         }
 
-        emit AuctionBidPlaced(_auctionId, msg.sender, _bidAmount, address(currency));
+        emit AuctionBidPlaced(_auctionId, msg.sender, _bidAmount, auction.currency);
 
         // ======================== 3. INTERACTIONS (Tương tác với BÊN NGOÀI) ========================
         // Lấy tiền của người mới VÀO hợp đồng
-        currency.transferFrom(msg.sender, address(this), _bidAmount);
+        if(!isETH) {
+            IERC20 currency = IERC20(auction.currency);
+            require(currency.transferFrom(msg.sender, address(this), _bidAmount), "Bid transfer failed");
+        }
 
         // Hoàn trả tiền cho người cũ RA KHỎI hợp đồng
         if (previousHighestBidder != address(0)) {
-            currency.transfer(previousHighestBidder, previousHighestBid);
+            if (isETH) {
+                payable(previousHighestBidder).transfer(previousHighestBid);
+            } else {
+                IERC20 currency = IERC20(auction.currency);
+                require(currency.transfer(previousHighestBidder, previousHighestBid), "Bid refund failed");
+            }
         }
     }
 
@@ -674,7 +697,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         return size > 0;
     }
 
-    function withdrawFees(address currency) external onlyFeeReceiver nonReentrant {
+    function withdrawFeesAuction(address currency) external onlyFeeReceiver nonReentrant {
         AuctionStorage storage s = _auctionStorage();
         if (s.feeReceiver == address(0)) revert FeeReceiverNotSet();
 
@@ -691,5 +714,19 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         }
 
         emit FeeWithdrawn(s.feeReceiver, currency, amount);
+    }
+
+    function resetAuctionStorage() external {
+        _checkManagementPermission();
+        AuctionStorage storage s = _auctionStorage();
+
+        delete s.coreStorage;
+        delete s.auctionData;
+        delete s.feeData;
+
+        s.router = address(0);
+        s.feeReceiver = address(0);
+
+        emit AuctionStorageReset(msg.sender);
     }
 }
