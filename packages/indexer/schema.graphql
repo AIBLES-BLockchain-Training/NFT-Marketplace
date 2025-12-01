@@ -40,9 +40,6 @@ type Collection @entity {
   id: ID! @index # contract address
   name: String!
   symbol: String! @index
-  description: String
-  logoUrl: String
-  bannerUrl: String
   collectionType: CollectionType!
   creator: Subject! @index
   totalSupply: BigInt!
@@ -67,6 +64,8 @@ type NFT @entity {
 
   # Relations
   listings: [Listing]! @derivedFrom(field: "nft")
+  auctions: [Auction]! @derivedFrom(field: "nft")
+  offers: [Offer]! @derivedFrom(field: "nft")
   purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "nft")
   traits: [Trait]! @derivedFrom(field: "nft")
   extensions: [Extension]! @derivedFrom(field: "nft")
@@ -113,6 +112,19 @@ type SupportedCurrency @entity {
   # Relations
   currencyApprovals: [CurrencyApproval]! @derivedFrom(field: "currency")
   purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "currency")
+  feeWithdrawals: [FeeWithdrawal]! @derivedFrom(field: "currency")
+}
+
+# FeeWithdrawal entity - Lich su rut fee tu cac extensions
+type FeeWithdrawal @entity {
+  id: ID! @index # txHash-logIndex
+  extensionType: ExtensionType! @index
+  currency: SupportedCurrency! @index
+  amount: BigInt! @index
+  receiver: String! @index # MultiSig wallet address
+  timestamp: DateTime! @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
 }
 
 # CurrencyApproval entity - cac currencies duoc approve cho listings
@@ -150,20 +162,29 @@ type Listing @entity {
 
 type Auction @entity {
   id: ID! @index
-  nftId: NFT!
-  sellerAddress: String! @index
+  auctionId: BigInt! @index # Contract's auction ID
+  nft: NFT! @index
+  seller: Subject! @index
+  sellerAddress: String! @index # Seller's address for easy querying
+  winningBidder: Subject @index
   quantity: BigInt!
   currency: SupportedCurrency! @index
+  minimumBidAmount: BigInt! # Minimum bid required for auction
   startPrice: BigInt! @index
   stepAmount: BigInt! @index
+  bidBufferBps: BigInt! # Bid buffer in basis points
   ceilingPrice: BigInt @index
   startTime: DateTime
   endTime: DateTime
   timeBufferInSeconds: Int!
+  tokenType: String! # ERC721 or ERC1155
   status: AuctionStatus!
+  isPayoutCollected: Boolean!
+  isTokenCollected: Boolean!
+  createdAt: DateTime! @index
+  updatedAt: DateTime
 
   # Relations
-  winningBid: Bid
   bids: [Bid]! @derivedFrom(field: "auction")
   purchaseHistory: [PurchaseHistory]! @derivedFrom(field: "auction")
 }
@@ -171,20 +192,28 @@ type Auction @entity {
 type Bid @entity {
   id: ID! @index
   auction: Auction! @index
-  bidderAddress: String! @index
+  bidder: Subject! @index
+  bidderAddress: String! @index # Bidder's address for easy querying
   bidAmount: BigInt! @index
   timestamp: DateTime!
 }
 
 type Offer @entity {
-  id: ID! @index
-  buyerAddress: String! @index
-  nftId: NFT! @index
+  id: ID! @index # Format: contractAddress-offerId
+  offerId: String! @index # Contract's offer ID
+  offeror: Subject! @index # User who made the offer
+  tokenOwner: Subject @index # NFT owner at time of offer creation (can accept)
+  nft: NFT! @index
   quantity: BigInt!
   totalPrice: BigInt!
   currency: SupportedCurrency! @index
-  expirationTime: DateTime!
+  expirationTime: DateTime! @index
+  expirationTimestamp: BigInt! # Raw timestamp for calculations
   status: OfferStatus! @index
+  createdAt: DateTime! @index
+  updatedAt: DateTime
+  transactionHash: String! @index
+  blockNumber: Int! @index
 }
 
 # BuyerApproval entity - cac buyers duoc approve cho reserved listings
@@ -203,7 +232,7 @@ type BuyerApproval @entity {
 type PurchaseHistory @entity {
   id: ID! @index
   transactionHash: String! @unique
-  nft: NFT! @index
+  nft: NFT @index # Allow null for deleted/unmapped NFTs
   seller: Subject! @index
   buyer: Subject! @index
   quantity: BigInt!
@@ -212,9 +241,9 @@ type PurchaseHistory @entity {
   tradeType: TradeType! @index
   timestamp: DateTime! @index
   blockNumber: Int! @index
-  
+
   # Relation
-  auction: Auction 
+  auction: Auction
   listing: Listing
 }
 
@@ -258,6 +287,33 @@ type PermissionEvent @entity {
   blockNumber: Int! @index
 }
 
+# Role request from users
+type RoleRequest @entity {
+  id: ID! @index
+  requester: Subject! @index
+  role: Role! @index
+  status: RequestStatus! @index
+  requestedAt: DateTime! @index
+  processedAt: DateTime
+  processedBy: String @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
+# NFT role request from users
+type NFTRoleRequest @entity {
+  id: ID! @index
+  requester: Subject! @index
+  nftAddress: String! @index
+  tokenId: BigInt! @index
+  status: RequestStatus! @index
+  requestedAt: DateTime! @index
+  processedAt: DateTime
+  processedBy: String @index
+  transactionHash: String! @index
+  blockNumber: Int! @index
+}
+
 # Enums
 enum SubjectType {
   USER
@@ -293,6 +349,13 @@ enum OfferStatus {
 enum TradeType {
   AUCTION
   LISTING
+  OFFER
+}
+
+enum ExtensionType {
+  LISTING
+  AUCTION
+  OFFER
 }
 
 enum RouterEventType {
@@ -305,5 +368,11 @@ enum PermissionEventType {
   ROLE_GRANTED
   ROLE_REVOKED
   ADMIN_ROLE_CHANGED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 

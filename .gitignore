@@ -52,9 +52,12 @@ out
 
 # Env
 .env
+.env.local
 coverage
 coverage.json
 typechain-types
 crytic-export
 
 run_test.bat
+
+packages/indexer/db/migrations/

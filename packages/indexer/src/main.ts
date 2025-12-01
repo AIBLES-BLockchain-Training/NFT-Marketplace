@@ -13,7 +13,13 @@ import {
   PermissionEvent,
   PurchaseHistory,
   CurrencyApproval,
-  BuyerApproval
+  BuyerApproval,
+  TokenOwnership,
+  RoleRequest,
+  NFTRoleRequest,
+  FeeWithdrawal,
+  Auction,
+  Bid
 } from './model'
 
 import {
@@ -28,6 +34,10 @@ import {
   processOfferEvents,
   getOfferTopics
 } from './processors/offer.processor'
+import {
+  processAuctionEvents,
+  getAuctionTopics
+} from './processors/auction.processor'
 
 const NETWORK_CONFIG = {
   gateway: process.env.GATEWAY_URL || 'https://v2.archive.subsquid.io/network/ethereum-sepolia',
@@ -99,6 +109,15 @@ class CombinedIndexer {
         topic0: offerTopics
       })
     }
+
+    // Add logs for auction contract
+    const auctionTopics = getAuctionTopics()
+    if (auctionTopics.length > 0) {
+      this.processor.addLog({
+        address: [CONTRACT_ADDRESSES.router.toLowerCase()],
+        topic0: auctionTopics
+      })
+    }
   }
 
   async run() {
@@ -111,21 +130,28 @@ class CombinedIndexer {
     await this.processor.run(db, async (ctx) => {
       const listingMap: Map<string, Listing> = new Map()
       const offerMap: Map<string, Offer> = new Map()
+      const auctionMap: Map<string, Auction> = new Map()
       const subjectMap: Map<string, Subject> = new Map()
       const collectionMap: Map<string, Collection> = new Map()
       const nftMap: Map<string, NFT> = new Map()
       const currencyMap: Map<string, SupportedCurrency> = new Map()
       const roleMap: Map<string, Role> = new Map()
+      const tokenOwnershipMap: Map<string, TokenOwnership> = new Map()
+      const bidMap: Map<string, Bid> = new Map()
 
       const roleAssignments: RoleAssignment[] = []
       const permissionEvents: PermissionEvent[] = []
       const purchaseHistories: PurchaseHistory[] = []
       const currencyApprovals: CurrencyApproval[] = []
       const buyerApprovals: BuyerApproval[] = []
+      const roleRequests: RoleRequest[] = []
+      const nftRoleRequests: NFTRoleRequest[] = []
+      const feeWithdrawals: FeeWithdrawal[] = []
 
       const permissionsLogs: any[] = []
       const listingLogs: any[] = []
       const offerLogs: any[] = []
+      const auctionLogs: any[] = []
 
       for (let block of ctx.blocks) {
         for (let log of block.logs) {
@@ -137,6 +163,7 @@ class CombinedIndexer {
             // Router emits both Listing and Offer events
             listingLogs.push({ ...log, block })
             offerLogs.push({ ...log, block })
+            auctionLogs.push({ ...log, block })
           }
         }
       }
@@ -152,7 +179,9 @@ class CombinedIndexer {
           subjectMap,
           currencyMap,
           roleAssignments,
-          permissionEvents
+          permissionEvents,
+          roleRequests,
+          nftRoleRequests
         )
       }
 
@@ -170,7 +199,9 @@ class CombinedIndexer {
           currencyMap,
           purchaseHistories,
           currencyApprovals,
-          buyerApprovals
+          buyerApprovals,
+          tokenOwnershipMap,
+          feeWithdrawals
         )
       }
 
@@ -190,33 +221,78 @@ class CombinedIndexer {
         )
       }
 
+      // Process auction events
+      if (auctionLogs.length > 0) {
+        console.log(`Processing ${auctionLogs.length} auction events`)
+        await processAuctionEvents(
+          auctionLogs,
+          ctx,
+          CONTRACT_ADDRESSES.router.toLowerCase(),
+          auctionMap,
+          nftMap,
+          subjectMap,
+          collectionMap,
+          bidMap,
+          currencyMap,
+          purchaseHistories,
+          tokenOwnershipMap
+        )
+      }
+
       console.log('Saving entities to database...')
       await ctx.store.save(Array.from(subjectMap.values()))
       await ctx.store.save(Array.from(roleMap.values()))
       await ctx.store.save(Array.from(collectionMap.values()))
       await ctx.store.save(Array.from(nftMap.values()))
+
+      // Save traits from all NFTs
+      const allTraits = Array.from(nftMap.values())
+        .flatMap(nft => nft.traits || [])
+        .filter(trait => trait != null)
+      if (allTraits.length > 0) {
+        console.log(`Saving ${allTraits.length} traits...`)
+        await ctx.store.save(allTraits)
+      }
+
+      await ctx.store.save(Array.from(tokenOwnershipMap.values()))
       await ctx.store.save(Array.from(currencyMap.values()))
       await ctx.store.save(Array.from(listingMap.values()))
       await ctx.store.save(Array.from(offerMap.values()))
+      await ctx.store.save(Array.from(auctionMap.values()))
+      await ctx.store.save(Array.from(bidMap.values()))
 
       const assignmentsToRemove = roleAssignments.filter((a: any) => a._toRemove)
       const assignmentsToSave = roleAssignments.filter((a: any) => !a._toRemove)
+
+      // Deduplicate role assignments by ID to avoid "ON CONFLICT" errors
+      const uniqueAssignmentsMap = new Map<string, any>()
+      for (const assignment of assignmentsToSave) {
+        uniqueAssignmentsMap.set(assignment.id, assignment)
+      }
+      const uniqueAssignments = Array.from(uniqueAssignmentsMap.values())
 
       if (assignmentsToRemove.length > 0) {
         console.log(`Removing ${assignmentsToRemove.length} role assignments`)
         await ctx.store.remove(assignmentsToRemove)
       }
 
-      if (assignmentsToSave.length > 0) {
-        await ctx.store.save(assignmentsToSave)
+      if (uniqueAssignments.length > 0) {
+        console.log(`Saving ${uniqueAssignments.length} unique role assignments (${assignmentsToSave.length - uniqueAssignments.length} duplicates removed)`)
+        await ctx.store.save(uniqueAssignments)
       }
 
       await ctx.store.save(permissionEvents)
       await ctx.store.save(currencyApprovals)
       await ctx.store.save(buyerApprovals)
       await ctx.store.save(purchaseHistories)
+      await ctx.store.save(roleRequests)
+      await ctx.store.save(nftRoleRequests)
+      await ctx.store.save(feeWithdrawals)
 
       console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length + offerLogs.length} events processed`)
+      console.log(`Batch completed: ${permissionsLogs.length + listingLogs.length} events processed`)
+      console.log(`Role requests: ${roleRequests.length}, NFT role requests: ${nftRoleRequests.length}`)
+      console.log(`Fee withdrawals: ${feeWithdrawals.length}`)
     })
   }
 }

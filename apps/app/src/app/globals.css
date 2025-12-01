@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+  }
+
+  * {
+    @apply border-dark-border;
+  }
+
+  body {
+    @apply bg-dark-bg text-foreground font-sans;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 hover:shadow-glow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-dark-card text-foreground border border-dark-border hover:bg-opacity-80 hover:border-primary-500;
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-white;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-dark-card;
+  }
+
+  .card {
+    @apply bg-dark-card border border-dark-border rounded-xl p-6 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:border-primary-500 hover:shadow-glow-sm cursor-pointer;
+  }
+
+  .input {
+    @apply w-full px-4 py-3 bg-dark-card border border-dark-border rounded-lg text-foreground placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all;
+  }
+
+  .input-error {
+    @apply border-error focus:ring-error;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary-500 bg-opacity-20 text-primary-400 border border-primary-500 border-opacity-30;
+  }
+
+  .badge-secondary {
+    @apply bg-gray-500 bg-opacity-20 text-gray-300 border border-gray-500 border-opacity-30;
+  }
+
+  .badge-success {
+    @apply bg-success bg-opacity-20 text-success border border-success border-opacity-30;
+  }
+
+  .badge-warning {
+    @apply bg-warning bg-opacity-20 text-warning border border-warning border-opacity-30;
+  }
+
+  .badge-error {
+    @apply bg-error bg-opacity-20 text-error border border-error border-opacity-30;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent;
+  }
+
+  .cyber-border {
+    @apply relative before:absolute before:inset-0 before:rounded-lg before:border-2 before:border-primary-500 before:opacity-0 hover:before:opacity-100 before:transition-opacity;
+  }
+
+  .skeleton {
+    @apply animate-pulse bg-dark-border rounded;
+  }
+
+  .glass {
+    @apply bg-dark-card bg-opacity-40 backdrop-blur-md border border-dark-border border-opacity-50;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Custom thin scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: theme('colors.dark.border');
+    border-radius: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.gray.600');
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.dark.border') transparent;
+  }
+
+  /* Extra thin scrollbar for nested scrollable areas */
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 2px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+  }
+
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 transparent;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

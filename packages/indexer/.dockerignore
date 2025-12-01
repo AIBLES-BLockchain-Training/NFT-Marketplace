@@ -3,6 +3,7 @@
 /.env
 /lib
 /packages/contract
+src/model/generated
 
 /*Versions.json
 npm-debug.log

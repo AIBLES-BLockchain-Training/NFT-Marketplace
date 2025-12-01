@@ -3,29 +3,50 @@ import { event, fun, viewFun, indexed, ContractBase } from '@subsquid/evm-abi'
 import type { EventParams as EParams, FunctionArguments, FunctionReturn } from '@subsquid/evm-abi'
 
 export const events = {
+    FeeWithdrawn: event("0x00ed5939179dc194223f0edd1517ecee2210b22da7f82c8e4b1795e93b9f06aa", "FeeWithdrawn(address,address,uint256)", {"admin": indexed(p.address), "currency": indexed(p.address), "amount": p.uint256}),
     OfferAccepted: event("0x7bd0ddd73195a425576126800ce5139c341ea40544c64c4ff027a57306ffd3a3", "OfferAccepted(uint256,address,address,address,uint256,uint256,address,uint256)", {"offerId": indexed(p.uint256), "offeror": indexed(p.address), "assetOwner": indexed(p.address), "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256}),
     OfferCancelled: event("0x1f51377b3e685a0e2419f9bb4ba7c07ec54936353ba3d0fb3c6538dab6766222", "OfferCancelled(uint256,address)", {"offerId": indexed(p.uint256), "offeror": indexed(p.address)}),
     OfferCreated: event("0xdca81464157430ede65dbc88b4aba35f309e8142e6fb6237c1f61e0fd1d32485", "OfferCreated(uint256,address,address,uint256,uint256,address,uint256,uint256)", {"offerId": indexed(p.uint256), "offeror": indexed(p.address), "assetContract": indexed(p.address), "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256}),
-    OwnershipTransferred: event("0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0", "OwnershipTransferred(address,address)", {"previousOwner": indexed(p.address), "newOwner": indexed(p.address)}),
 }
 
 export const functions = {
+    MANAGEMENT_ROLE: viewFun("0xcda5f89f", "MANAGEMENT_ROLE()", {}, p.bytes32),
+    NFT_ROLE: viewFun("0xf684f33c", "NFT_ROLE()", {}, p.bytes32),
+    OFFER_ROLE: viewFun("0x2d663f30", "OFFER_ROLE()", {}, p.bytes32),
     acceptOffer: fun("0xc815729d", "acceptOffer(uint256)", {"offerId": p.uint256}, ),
+    accumulatedFees: viewFun("0xfcf66664", "accumulatedFees(address)", {"currency": p.address}, p.uint256),
     cancelOffer: fun("0xef706adf", "cancelOffer(uint256)", {"offerId": p.uint256}, ),
     feePercentage: viewFun("0xa001ecdd", "feePercentage()", {}, p.uint256),
     feeRecipient: viewFun("0x46904840", "feeRecipient()", {}, p.address),
     getAllOffers: viewFun("0xc1edcfbe", "getAllOffers(uint256,uint256)", {"startId": p.uint256, "endId": p.uint256}, p.array(p.struct({"offerId": p.uint256, "offeror": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256, "tokenType": p.uint8, "status": p.uint8}))),
-    getAllValidOffer: viewFun("0x9087be71", "getAllValidOffer(uint256,uint256)", {"startId": p.uint256, "endId": p.uint256}, p.array(p.struct({"offerId": p.uint256, "offeror": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256, "tokenType": p.uint8, "status": p.uint8}))),
+    getAllValidOffers: viewFun("0x91940b3e", "getAllValidOffers(uint256,uint256)", {"startId": p.uint256, "endId": p.uint256}, p.array(p.struct({"offerId": p.uint256, "offeror": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256, "tokenType": p.uint8, "status": p.uint8}))),
     getOffer: viewFun("0x4579268a", "getOffer(uint256)", {"offerId": p.uint256}, p.struct({"offerId": p.uint256, "offeror": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256, "tokenType": p.uint8, "status": p.uint8})),
+    initializeOffer: fun("0x56d331c2", "initializeOffer(address,address,uint256)", {"_permissions": p.address, "_feeRecipient": p.address, "_feePercentage": p.uint256}, ),
     makeOffer: fun("0x016767fa", "makeOffer((address,uint256,uint256,address,uint256,uint256))", {"params": p.struct({"assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256})}, p.uint256),
-    owner: viewFun("0x8da5cb5b", "owner()", {}, p.address),
     permissions: viewFun("0xab8c71c0", "permissions()", {}, p.address),
-    renounceOwnership: fun("0x715018a6", "renounceOwnership()", {}, ),
+    setFeePercentage: fun("0xae06c1b7", "setFeePercentage(uint256)", {"_feePercentage": p.uint256}, ),
+    setFeeRecipient: fun("0xe74b981b", "setFeeRecipient(address)", {"_feeRecipient": p.address}, ),
     totalOffers: viewFun("0xa9fd8ed1", "totalOffers()", {}, p.uint256),
-    transferOwnership: fun("0xf2fde38b", "transferOwnership(address)", {"newOwner": p.address}, ),
+    withdrawFees: fun("0x164e68de", "withdrawFees(address)", {"currency": p.address}, ),
 }
 
 export class Contract extends ContractBase {
+
+    MANAGEMENT_ROLE() {
+        return this.eth_call(functions.MANAGEMENT_ROLE, {})
+    }
+
+    NFT_ROLE() {
+        return this.eth_call(functions.NFT_ROLE, {})
+    }
+
+    OFFER_ROLE() {
+        return this.eth_call(functions.OFFER_ROLE, {})
+    }
+
+    accumulatedFees(currency: AccumulatedFeesParams["currency"]) {
+        return this.eth_call(functions.accumulatedFees, {currency})
+    }
 
     feePercentage() {
         return this.eth_call(functions.feePercentage, {})
@@ -39,16 +60,12 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.getAllOffers, {startId, endId})
     }
 
-    getAllValidOffer(startId: GetAllValidOfferParams["startId"], endId: GetAllValidOfferParams["endId"]) {
-        return this.eth_call(functions.getAllValidOffer, {startId, endId})
+    getAllValidOffers(startId: GetAllValidOffersParams["startId"], endId: GetAllValidOffersParams["endId"]) {
+        return this.eth_call(functions.getAllValidOffers, {startId, endId})
     }
 
     getOffer(offerId: GetOfferParams["offerId"]) {
         return this.eth_call(functions.getOffer, {offerId})
-    }
-
-    owner() {
-        return this.eth_call(functions.owner, {})
     }
 
     permissions() {
@@ -61,14 +78,26 @@ export class Contract extends ContractBase {
 }
 
 /// Event types
+export type FeeWithdrawnEventArgs = EParams<typeof events.FeeWithdrawn>
 export type OfferAcceptedEventArgs = EParams<typeof events.OfferAccepted>
 export type OfferCancelledEventArgs = EParams<typeof events.OfferCancelled>
 export type OfferCreatedEventArgs = EParams<typeof events.OfferCreated>
-export type OwnershipTransferredEventArgs = EParams<typeof events.OwnershipTransferred>
 
 /// Function types
+export type MANAGEMENT_ROLEParams = FunctionArguments<typeof functions.MANAGEMENT_ROLE>
+export type MANAGEMENT_ROLEReturn = FunctionReturn<typeof functions.MANAGEMENT_ROLE>
+
+export type NFT_ROLEParams = FunctionArguments<typeof functions.NFT_ROLE>
+export type NFT_ROLEReturn = FunctionReturn<typeof functions.NFT_ROLE>
+
+export type OFFER_ROLEParams = FunctionArguments<typeof functions.OFFER_ROLE>
+export type OFFER_ROLEReturn = FunctionReturn<typeof functions.OFFER_ROLE>
+
 export type AcceptOfferParams = FunctionArguments<typeof functions.acceptOffer>
 export type AcceptOfferReturn = FunctionReturn<typeof functions.acceptOffer>
+
+export type AccumulatedFeesParams = FunctionArguments<typeof functions.accumulatedFees>
+export type AccumulatedFeesReturn = FunctionReturn<typeof functions.accumulatedFees>
 
 export type CancelOfferParams = FunctionArguments<typeof functions.cancelOffer>
 export type CancelOfferReturn = FunctionReturn<typeof functions.cancelOffer>
@@ -82,27 +111,30 @@ export type FeeRecipientReturn = FunctionReturn<typeof functions.feeRecipient>
 export type GetAllOffersParams = FunctionArguments<typeof functions.getAllOffers>
 export type GetAllOffersReturn = FunctionReturn<typeof functions.getAllOffers>
 
-export type GetAllValidOfferParams = FunctionArguments<typeof functions.getAllValidOffer>
-export type GetAllValidOfferReturn = FunctionReturn<typeof functions.getAllValidOffer>
+export type GetAllValidOffersParams = FunctionArguments<typeof functions.getAllValidOffers>
+export type GetAllValidOffersReturn = FunctionReturn<typeof functions.getAllValidOffers>
 
 export type GetOfferParams = FunctionArguments<typeof functions.getOffer>
 export type GetOfferReturn = FunctionReturn<typeof functions.getOffer>
 
+export type InitializeOfferParams = FunctionArguments<typeof functions.initializeOffer>
+export type InitializeOfferReturn = FunctionReturn<typeof functions.initializeOffer>
+
 export type MakeOfferParams = FunctionArguments<typeof functions.makeOffer>
 export type MakeOfferReturn = FunctionReturn<typeof functions.makeOffer>
-
-export type OwnerParams = FunctionArguments<typeof functions.owner>
-export type OwnerReturn = FunctionReturn<typeof functions.owner>
 
 export type PermissionsParams = FunctionArguments<typeof functions.permissions>
 export type PermissionsReturn = FunctionReturn<typeof functions.permissions>
 
-export type RenounceOwnershipParams = FunctionArguments<typeof functions.renounceOwnership>
-export type RenounceOwnershipReturn = FunctionReturn<typeof functions.renounceOwnership>
+export type SetFeePercentageParams = FunctionArguments<typeof functions.setFeePercentage>
+export type SetFeePercentageReturn = FunctionReturn<typeof functions.setFeePercentage>
+
+export type SetFeeRecipientParams = FunctionArguments<typeof functions.setFeeRecipient>
+export type SetFeeRecipientReturn = FunctionReturn<typeof functions.setFeeRecipient>
 
 export type TotalOffersParams = FunctionArguments<typeof functions.totalOffers>
 export type TotalOffersReturn = FunctionReturn<typeof functions.totalOffers>
 
-export type TransferOwnershipParams = FunctionArguments<typeof functions.transferOwnership>
-export type TransferOwnershipReturn = FunctionReturn<typeof functions.transferOwnership>
+export type WithdrawFeesParams = FunctionArguments<typeof functions.withdrawFees>
+export type WithdrawFeesReturn = FunctionReturn<typeof functions.withdrawFees>
 

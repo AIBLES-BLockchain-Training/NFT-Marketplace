@@ -16,7 +16,8 @@ export function getOfferTopics(): string[] {
   return [
     OfferABI.events.OfferCreated?.topic,
     OfferABI.events.OfferCancelled?.topic,
-    OfferABI.events.OfferAccepted?.topic
+    OfferABI.events.OfferAccepted?.topic,
+    OfferABI.events.FeeWithdrawn?.topic
   ].filter(Boolean) as string[]
 }
 
@@ -68,9 +69,9 @@ export async function processOfferEvents(
         id: collectionId,
         name: `Collection ${contractAddress.slice(0, 6)}`,
         symbol: 'NFT',
-        description: undefined,
-        logoUrl: undefined,
-        bannerUrl: undefined,
+        // description: undefined,
+        // logoUrl: undefined,
+        // bannerUrl: undefined,
         collectionType: CollectionType.ERC721,
         creator: creator,
         totalSupply: BigInt(0),
@@ -84,7 +85,7 @@ export async function processOfferEvents(
     collectionMap.set(collectionId, collection)
     return collection
   }
-
+// 6 lệnh của nó để restart indexer là: docker compose down -v, docker conpose up -d, npx tsc, npx squid-typeorm-codegen, npx squid-typeorm-migration generate, npx squid-typeorm-migration apply, node -r dotenv/config lib/main.js
   async function getOrCreateNFT(contractAddress: string, tokenId: bigint, owner?: Subject): Promise<NFT> {
     const nftId = `${contractAddress.toLowerCase()}-${tokenId.toString()}`
     if (nftMap.has(nftId)) {
@@ -147,6 +148,11 @@ export async function processOfferEvents(
     return null
   }
 
+  let offerCreatedCount = 0
+  let offerCancelledCount = 0
+  let offerAcceptedCount = 0
+  let feeWithdrawnCount = 0
+
   for (let log of logs) {
     const topic0 = log.topics[0]
     const timestamp = new Date(log.block.header.timestamp)
@@ -156,54 +162,100 @@ export async function processOfferEvents(
     try {
       // OfferCreated event
       if (topic0 === OfferABI.events.OfferCreated?.topic) {
+        console.log(`[Offer] Processing OfferCreated at block ${blockNumber}, tx ${transactionHash}`)
+
         const {
           offerId, offeror, assetContract, tokenId, quantity,
           currency, totalPrice, expirationTimestamp
         } = OfferABI.events.OfferCreated.decode(log)
 
-        const offerIdStr = offerId.toString()
+        const offerIdStr = `${contractAddress.toLowerCase()}-${offerId.toString()}`
+        console.log(`[Offer] Decoded OfferCreated: offerId=${offerIdStr}, offeror=${offeror}, assetContract=${assetContract}, tokenId=${tokenId}`)
         const offerorSubject = await getOrCreateSubject(offeror)
+        console.log(`[Offer] Created/Found subject: ${offerorSubject.id}`)
+
         const nft = await getOrCreateNFT(assetContract, tokenId, offerorSubject)
+        console.log(`[Offer] Created/Found NFT: ${nft.id}`)
+
         const currencyEntity = await getOrCreateCurrency(currency)
+        console.log(`[Offer] Created/Found currency: ${currencyEntity.id}`)
+
+        // Try to get NFT owner at time of offer creation
+        let tokenOwner: Subject | undefined = undefined
+        try {
+          if (nft.owners && nft.owners.length > 0) {
+            const ownerSubject = nft.owners[0]
+            if (ownerSubject && ownerSubject.id) {
+              tokenOwner = await getOrCreateSubject(ownerSubject.id)
+            }
+          }
+        } catch (error) {
+          // Leave tokenOwner as undefined if we can't determine it
+        }
 
         let offer = await getOffer(offerIdStr)
         if (!offer) {
           offer = new Offer({
             id: offerIdStr,
-            buyerAddress: offerorSubject.id,
-            nftId: nft,
+            offerId: offerId.toString(),
+            offeror: offerorSubject,
+            tokenOwner: tokenOwner,
+            nft: nft,
             quantity: quantity,
             totalPrice: totalPrice,
             currency: currencyEntity,
             expirationTime: new Date(Number(expirationTimestamp) * 1000),
-            status: OfferStatus.ACTIVE
+            expirationTimestamp: expirationTimestamp,
+            status: OfferStatus.ACTIVE,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            transactionHash: transactionHash,
+            blockNumber: blockNumber
           })
           offerMap.set(offerIdStr, offer)
+          offerCreatedCount++
+          console.log(`[Offer] Created new offer ${offerIdStr} and added to offerMap (size: ${offerMap.size})`)
+        } else {
+          console.log(`[Offer] Offer ${offerIdStr} already exists, skipping`)
         }
       }
 
       // OfferCancelled event
       else if (topic0 === OfferABI.events.OfferCancelled?.topic) {
+        console.log(`[Offer] Processing OfferCancelled at block ${blockNumber}, tx ${transactionHash}`)
+
         const { offerId, offeror } = OfferABI.events.OfferCancelled.decode(log)
-        const offerIdStr = offerId.toString()
+        const offerIdStr = `${contractAddress.toLowerCase()}-${offerId.toString()}`
+        console.log(`[Offer] Cancelling offer ${offerIdStr}`)
+
         let offer = await getOffer(offerIdStr)
         if (offer) {
           offer.status = OfferStatus.CANCELLED
+          offer.updatedAt = timestamp
+          offerCancelledCount++
+          console.log(`[Offer] Offer ${offerIdStr} marked as CANCELLED`)
+        } else {
+          console.warn(`[Offer] Cannot cancel - Offer ${offerIdStr} not found`)
         }
       }
 
       // OfferAccepted event
       else if (topic0 === OfferABI.events.OfferAccepted?.topic) {
+        console.log(`[Offer] Processing OfferAccepted at block ${blockNumber}, tx ${transactionHash}`)
+
         const {
           offerId, offeror, assetOwner, assetContract,
           tokenId, quantity, currency, totalPrice
         } = OfferABI.events.OfferAccepted.decode(log)
 
-        const offerIdStr = offerId.toString()
+        const offerIdStr = `${contractAddress.toLowerCase()}-${offerId.toString()}`
+        console.log(`[Offer] Accepting offer ${offerIdStr}`)
+
         let offer = await getOffer(offerIdStr)
 
         if (offer) {
           offer.status = OfferStatus.COMPLETED
+          offer.updatedAt = timestamp
 
           const offerorSubject = await getOrCreateSubject(offeror)
           const assetOwnerSubject = await getOrCreateSubject(assetOwner)
@@ -220,18 +272,36 @@ export async function processOfferEvents(
             quantity: quantity,
             currency: currencyEntity,
             totalPrice: totalPrice,
-            tradeType: TradeType.LISTING, // Using LISTING as there's no OFFER type in schema
+            tradeType: TradeType.OFFER,
             timestamp: timestamp,
             blockNumber: blockNumber,
             auction: undefined,
             listing: undefined
           })
           purchaseHistories.push(purchaseHistory)
+          offerAcceptedCount++
+          console.log(`[Offer] Offer ${offerIdStr} marked as COMPLETED, purchase history created`)
+        } else {
+          console.warn(`[Offer] Cannot accept - Offer ${offerIdStr} not found`)
         }
       }
 
+      // FeeWithdrawn event
+      else if (topic0 === OfferABI.events.FeeWithdrawn?.topic) {
+        console.log(`[Offer] Processing FeeWithdrawn at block ${blockNumber}, tx ${transactionHash}`)
+
+        const { admin, currency, amount } = OfferABI.events.FeeWithdrawn.decode(log)
+
+        console.log(`[Offer] Fee withdrawn by admin ${admin} for currency ${currency}: ${amount.toString()}`)
+        feeWithdrawnCount++
+      }
+
     } catch (error) {
-      console.error(`Error processing offer log at block ${blockNumber}, tx ${transactionHash}:`, error)
+      console.error(`[Offer] ERROR processing log at block ${blockNumber}, tx ${transactionHash}:`, error)
+      console.error(`[Offer] Error details:`, JSON.stringify(error, null, 2))
     }
   }
+
+  console.log(`[Offer] Processed ${offerCreatedCount} OfferCreated, ${offerCancelledCount} OfferCancelled, ${offerAcceptedCount} OfferAccepted, ${feeWithdrawnCount} FeeWithdrawn`)
+  console.log(`[Offer] Total offers in map: ${offerMap.size}`)
 }

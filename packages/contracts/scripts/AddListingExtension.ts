@@ -23,19 +23,22 @@ interface Extension {
 // Configuration
 function getListingFunctions(): ListingFunction[] {
   return [
-    { selector: "0xaac46674", signature: "createListing(ListingParameters)" },
+    { selector: "0x746415b5", signature: "createListing((address,uint256,uint256,address,uint256,uint128,uint128,bool))" },
     { selector: "0x704232dc", signature: "buyFromListing(uint256,address,uint256,address,uint256)" },
     { selector: "0x305a67a8", signature: "cancelListing(uint256)" },
-    { selector: "0xcd83c165", signature: "updateListing(uint256,ListingParameters)" },
+    { selector: "0x07b67758", signature: "updateListing(uint256,(address,uint256,uint256,address,uint256,uint128,uint128,bool))" },
     { selector: "0xc5275fb0", signature: "getAllListings(uint256,uint256)" },
     { selector: "0x31654b4d", signature: "getAllValidListings(uint256,uint256)" },
     { selector: "0x107a274a", signature: "getListing(uint256)" },
     { selector: "0xc78b616c", signature: "totalListings()" },
-    { selector: "0xe4c3a1fa", signature: "initializeListing(address)" },
+    { selector: "0x6cf8745d", signature: "initializeListing(address,address)" },
     { selector: "0x51d5f97c", signature: "setCurrencyFee(address,uint256)" },
     { selector: "0x164e68de", signature: "withdrawFees(address)" },
     { selector: "0x48dd77df", signature: "approveBuyerForListing(uint256,address,bool)" },
-    { selector: "0xea8f9a3c", signature: "approveCurrencyForListing(uint256,address,uint256)" }
+    { selector: "0xea8f9a3c", signature: "approveCurrencyForListing(uint256,address,uint256)" },
+    { selector: "0x3fa615b0", signature: "feeReceiver()" },
+    { selector: "0xfcf66664", signature: "accumulatedFees(address)" },
+    { selector: "0x752d8a09", signature: "getCurrencyFee(address)" }
   ];
 }
 

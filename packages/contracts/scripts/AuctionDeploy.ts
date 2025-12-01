@@ -4,8 +4,6 @@ async function main() {
   await run('compile');
   console.log('Compiled contract...');
 
-  const permissionsAddr = '0x37034119b05f710acD1a7983105FEAEeB80851A6';
-
   console.log('Deploying Auction contract...');
   const Auction = await ethers.getContractFactory('NFTAuction');
   const auction = await Auction.deploy(); // Không truyền permissionsAddr
@@ -14,18 +12,23 @@ async function main() {
   const auctionAddr = await auction.getAddress();
   console.log('Auction deployed to:', auctionAddr);
 
-  console.log('Initializing contract...');
-  const tx = await auction.initializeAuction(permissionsAddr);
-  await tx.wait();
-  console.log('Auction initialized with permissions address:', permissionsAddr);
-
-  console.log('Waiting before verification...');
+ console.log('\nWaiting 60 seconds before verification...');
   await new Promise((resolve) => setTimeout(resolve, 60 * 1000));
 
-  await run('verify:verify', {
-    address: auctionAddr,
-    constructorArguments: [],
-  });
+  console.log('\nVerifying contract on Etherscan...');
+  try {
+    await run('verify:verify', {
+      address: auctionAddr,
+      constructorArguments: [], // No constructor arguments
+    });
+    console.log('Contract verified!');
+  } catch (error: any) {
+    if (error.message.includes('Already Verified')) {
+      console.log('Contract already verified!');
+    } else {
+      console.error('Verification failed:', error.message);
+    }
+  }
 }
 
 main().catch((error) => {

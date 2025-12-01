@@ -4,18 +4,18 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper functions
 async function getContracts() {
-  const routerAddress = process.env['ADDRESS_ROUTER'] || "";
+  const listingAddress = process.env['ADDRESS_LISTING'] || "";
   const permissionsAddress = process.env['ADDRESS_PERMISSIONS'] || "";
-  
-  if (!routerAddress || !permissionsAddress) {
-    throw new Error("Please set ADDRESS_ROUTER and ADDRESS_PERMISSIONS environment variables");
+  const feeReceiverAddress = process.env['ADDRESS_FEE_RECEIVER'] || "";
+
+  if (!listingAddress || !permissionsAddress || !feeReceiverAddress) {
+    throw new Error("Please set ADDRESS_LISTING, ADDRESS_PERMISSIONS, and ADDRESS_FEE_RECEIVER environment variables");
   }
-  
+
   const [signer] = await ethers.getSigners();
-  const listingInterface = (await ethers.getContractFactory("Listing")).interface;
-  const routerAsListing = new ethers.Contract(routerAddress, listingInterface, signer);
-  
-  return { routerAsListing, permissionsAddress, signer };
+  const listing = await ethers.getContractAt("Listing", listingAddress, signer);
+
+  return { listing, permissionsAddress, feeReceiverAddress, signer };
 }
 
 // Initialization functions
@@ -31,13 +31,21 @@ async function checkCurrentPermissionContract(routerAsListing: any) {
   }
 }
 
-async function initializeListing(routerAsListing: any, permissionsAddress: string) {
-  console.log("Initializing Listing with Permissions contract...");
-  console.log("Permissions address:", permissionsAddress);
-  
-  const tx = await routerAsListing.initializeListing(permissionsAddress);
+async function initializeListing(
+  routerAsListing: any,
+  permissionsAddress: string,
+  feeReceiverAddress: string
+) {
+  console.log("Initializing Listing contract...");
+  console.log("- Permissions address:", permissionsAddress);
+  console.log("- Fee Receiver address (Multisig):", feeReceiverAddress);
+
+  const tx = await routerAsListing.initializeListing(
+    permissionsAddress,
+    feeReceiverAddress
+  );
   console.log("Transaction hash:", tx.hash);
-  
+
   const receipt = await tx.wait();
   console.log("Listing initialized! Gas used:", receipt.gasUsed.toString());
 }
@@ -83,19 +91,19 @@ async function verifyConfiguration(routerAsListing: any, permissionsAddress: str
 
 async function main() {
   const delayBetweenCalls = 1000;
-  
+
   try {
-    const { routerAsListing, permissionsAddress, signer } = await getContracts();
+    const { routerAsListing, routerAddress, permissionsAddress, feeReceiverAddress, signer } = await getContracts();
     console.log("Using signer:", signer.address);
     console.log("Router address:", await routerAsListing.getAddress());
     console.log("");
-    
+
     const functionsToCall = [
       () => checkCurrentPermissionContract(routerAsListing),
-      
+
       async (currentPermission: string) => {
         if (currentPermission === ethers.ZeroAddress) {
-          await initializeListing(routerAsListing, permissionsAddress);
+          await initializeListing(routerAsListing, permissionsAddress, feeReceiverAddress);
         } else if (currentPermission !== permissionsAddress) {
           console.log("Different permission contract already set, updating...");
           await setPermissionContract(routerAsListing, permissionsAddress);
@@ -103,20 +111,20 @@ async function main() {
           console.log("Listing already initialized with correct permissions");
         }
       },
-      
+
       () => setCurrencyFee(routerAsListing, ethers.ZeroAddress, "250"), // 2.5% for ETH
-      
+
       () => verifyConfiguration(routerAsListing, permissionsAddress)
     ];
-    
+
     let result: any;
     for (const fn of functionsToCall) {
       result = await fn(result) || result;
       await delay(delayBetweenCalls);
     }
-    
+
     console.log("\nListing initialization complete!");
-    
+
   } catch (error) {
     console.error("Error:", error);
     process.exit(1);

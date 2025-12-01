@@ -1,5 +1,0 @@
-export enum RouterEventType {
-    ROUTE_CREATED = "ROUTE_CREATED",
-    ROUTE_EXECUTED = "ROUTE_EXECUTED",
-    ROUTE_FAILED = "ROUTE_FAILED",
-}

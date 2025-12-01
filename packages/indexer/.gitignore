@@ -1,6 +1,7 @@
 /node_modules
 /lib
 /builds
+src/model/generated
 
 /**Versions.json
 
