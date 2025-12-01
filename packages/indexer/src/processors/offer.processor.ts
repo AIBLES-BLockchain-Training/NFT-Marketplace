@@ -193,6 +193,19 @@ export async function processOfferEvents(
           // Leave tokenOwner as undefined if we can't determine it
         }
 
+        // Try to get NFT owner at time of offer creation
+        let tokenOwner: Subject | undefined = undefined
+        try {
+          if (nft.owners && nft.owners.length > 0) {
+            const ownerSubject = nft.owners[0]
+            if (ownerSubject && ownerSubject.id) {
+              tokenOwner = await getOrCreateSubject(ownerSubject.id)
+            }
+          }
+        } catch (error) {
+          // Leave tokenOwner as undefined if we can't determine it
+        }
+
         let offer = await getOffer(offerIdStr)
         if (!offer) {
           offer = new Offer({
