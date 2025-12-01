@@ -102,8 +102,9 @@ export function useBidValidation(
 
   // Validate bid input
   useEffect(() => {
-    // Parse input
-    const parsedAmount = parseEthInput(bidInput);
+    // Parse input with currency decimals
+    const currencyDecimals = auction.currency?.decimals || 18;
+    const parsedAmount = parseEthInput(bidInput, currencyDecimals);
 
     if (!bidInput.trim()) {
       setValidationResult({
@@ -192,9 +193,10 @@ export function useBidValidation(
       const hasSufficientBalance = availableBalance >= parsedAmount;
 
       if (!hasSufficientBalance) {
+        const currencyDecimals = auction.currency?.decimals || 18;
         const balanceErrorMsg = isNativeToken
-          ? `You need ${formatBidAmount(parsedAmount)} ${auction.currency.symbol} but have ${formatBidAmount(availableBalance)} available (${formatBidAmount(balanceBigInt)} total, ${formatBidAmount(GAS_BUFFER)} reserved for gas)`
-          : `You need ${formatBidAmount(parsedAmount)} ${auction.currency.symbol} but have ${formatBidAmount(balanceBigInt)}`;
+          ? `You need ${formatBidAmount(parsedAmount, 4, currencyDecimals)} ${auction.currency.symbol} but have ${formatBidAmount(availableBalance, 4, currencyDecimals)} available (${formatBidAmount(balanceBigInt, 4, currencyDecimals)} total, ${formatBidAmount(GAS_BUFFER, 4, 18)} reserved for gas)`
+          : `You need ${formatBidAmount(parsedAmount, 4, currencyDecimals)} ${auction.currency.symbol} but have ${formatBidAmount(balanceBigInt, 4, currencyDecimals)}`;
 
         setValidationResult({
           isValid: false,
@@ -235,9 +237,10 @@ export function useBidValidation(
 /**
  * Format bid amount for display
  */
-function formatBidAmount(amount: bigint): string {
-  const eth = Number(amount) / 1e18;
-  return eth.toFixed(4);
+function formatBidAmount(amount: bigint, displayDecimals = 4, currencyDecimals = 18): string {
+  const divisor = Math.pow(10, currencyDecimals);
+  const value = Number(amount) / divisor;
+  return value.toFixed(displayDecimals);
 }
 
 /**

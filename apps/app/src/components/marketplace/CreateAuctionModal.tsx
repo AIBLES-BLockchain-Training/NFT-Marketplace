@@ -174,7 +174,9 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
       // Create auction - use captured values
       const minimumBidWei = (() => {
         try {
-          return ethers.parseEther(minimumBid.toString());
+          // Get selected currency decimals
+          const currencyDecimals = selectedCurrency?.decimals || 18;
+          return ethers.parseUnits(minimumBid.toString(), currencyDecimals);
         } catch (error) {
           console.warn('Invalid minimum bid:', minimumBid);
           return 0n;
@@ -184,7 +186,9 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
       const buyoutBidWei = buyoutBid
         ? (() => {
             try {
-              return ethers.parseEther(buyoutBid.toString());
+              // Get selected currency decimals
+              const currencyDecimals = selectedCurrency?.decimals || 18;
+              return ethers.parseUnits(buyoutBid.toString(), currencyDecimals);
             } catch (error) {
               console.warn('Invalid buyout bid:', buyoutBid);
               return minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;

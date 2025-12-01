@@ -3,7 +3,7 @@ import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_ALL_ROLE_ASSIGNMENTS_QUERY } from '../../lib/graphql/queries';
-import { MANAGEMENT_ROLE_HASH } from '../../lib/web3/utils';
+import { LISTING_MANAGEMENT_ROLE_HASH } from '../../lib/web3/utils';
 import toast from 'react-hot-toast';
 
 interface Admin {
@@ -35,7 +35,7 @@ export function AdminList() {
       const offset = (currentPage - 1) * itemsPerPage;
 
       const where: any = {
-        role: { roleHash_eq: MANAGEMENT_ROLE_HASH }
+        role: { roleHash_eq: LISTING_MANAGEMENT_ROLE_HASH }
       };
 
       if (searchTerm) {
@@ -69,7 +69,7 @@ export function AdminList() {
     <Card>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white mb-2">Admin List</h2>
-        <p className="text-sm text-gray-400">Users with MANAGEMENT_ROLE permissions</p>
+        <p className="text-sm text-gray-400">Users with LISTING_MANAGEMENT_ROLE permissions</p>
       </div>
 
       {/* Search */}
@@ -133,7 +133,7 @@ export function AdminList() {
                       <Badge variant="secondary">{admin.subject.subjectType}</Badge>
                     </td>
                     <td className="px-4 py-4">
-                      <Badge variant="error">MANAGEMENT_ROLE</Badge>
+                      <Badge variant="error">LISTING_MANAGEMENT_ROLE</Badge>
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-gray-400">

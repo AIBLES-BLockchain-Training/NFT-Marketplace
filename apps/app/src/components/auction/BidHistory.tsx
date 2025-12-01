@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { calculateBidIncrease } from '../../lib/auction/calculations';
 import { Card } from '../common/Card';
 
@@ -19,6 +20,7 @@ export interface BidHistoryProps {
   currency: {
     symbol: string;
     decimals: number;
+    id?: string; // Currency contract address for USDC detection
   };
   startPrice?: string;
   /** Maximum number of bids to show initially */
@@ -45,6 +47,17 @@ export function BidHistory({
   highlightTopCount = 3,
   className = '',
 }: BidHistoryProps) {
+  // Check if this is USDC currency
+  const isUSDC = isUSDCCurrency(currency?.id || '');
+  
+  // Helper function to format currency based on type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
+
   if (bids.length === 0) {
     return (
       <Card className={className}>
@@ -101,6 +114,7 @@ export function BidHistory({
               isWinningBid={index === 0}
               increasePercent={increasePercent}
               currencySymbol={currency.symbol}
+              formatPrice={formatPrice}
             />
           );
         })}
@@ -130,6 +144,7 @@ export function BidHistory({
                 isWinningBid={false}
                 increasePercent={increasePercent}
                 currencySymbol={currency.symbol}
+                formatPrice={formatPrice}
               />
             );
           })}
@@ -150,6 +165,7 @@ interface BidItemProps {
   isWinningBid: boolean;
   increasePercent: number;
   currencySymbol: string;
+  formatPrice: (amount: bigint) => string;
 }
 
 function BidItem({
@@ -160,6 +176,7 @@ function BidItem({
   isWinningBid,
   increasePercent,
   currencySymbol,
+  formatPrice,
 }: BidItemProps) {
   const bgClass = isTopBid
     ? isWinningBid
@@ -211,7 +228,7 @@ function BidItem({
         <div className="text-right flex-shrink-0">
           <div className="flex items-baseline gap-2">
             <p className={`text-lg font-bold ${isWinningBid ? 'text-primary-400' : 'text-white'}`}>
-              {formatEth(BigInt(bid.bidAmount))}
+              {formatPrice(BigInt(bid.bidAmount))}
             </p>
             <p className="text-xs text-gray-500">{currencySymbol}</p>
           </div>

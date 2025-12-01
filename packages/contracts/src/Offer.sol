@@ -429,7 +429,7 @@ contract NFTOffer is ReentrancyGuard {
         return _offerStorage().coreStorage.feePercentage;
     }
 
-    function accumulatedFees(address currency) external view returns (uint256) {
+    function offerAccumulatedFees(address currency) external view returns (uint256) {
         return _offerStorage().feeData.accumulatedFees[currency];
     }
 
@@ -448,7 +448,7 @@ contract NFTOffer is ReentrancyGuard {
         s.coreStorage.feePercentage = _feePercentage;
     }
 
-    function withdrawFees(address currency) external {
+    function withdrawOfferFees(address currency) external {
         OfferStorage storage s = _offerStorage();
         if (!s.coreStorage.permissions.hasRole(MANAGEMENT_ROLE(), msg.sender)) revert CallerDoesNotHaveManagementRole();
 

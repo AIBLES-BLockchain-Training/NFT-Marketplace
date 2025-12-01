@@ -3,6 +3,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { CompactCountdownTimer } from './CountdownTimer';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { isAuctionActive, getAuctionStatusText, getAuctionStatusVariant } from '../../lib/auction/status';
 import { Auction } from '../../types';
 
@@ -30,6 +31,17 @@ export function AuctionCardCompact({
   const currentBid = auction.winningBid
     ? BigInt(auction.winningBid.bidAmount)
     : BigInt(auction.startPrice);
+    
+  // Check if this is USDC currency
+  const isUSDC = isUSDCCurrency(auction.currency?.id || '');
+  
+  // Format price based on currency type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
 
   return (
     <Card>
@@ -55,7 +67,7 @@ export function AuctionCardCompact({
           <p className="text-xs text-gray-400 mb-1">Current Bid</p>
           <div className="flex items-baseline gap-2">
             <p className="text-2xl font-bold text-primary-400">
-              {formatEth(currentBid)}
+              {formatPrice(currentBid)}
             </p>
             <p className="text-sm text-gray-400">{auction.currency.symbol}</p>
           </div>
@@ -86,7 +98,7 @@ export function AuctionCardCompact({
             <div>
               <p className="text-xs text-gray-400 mb-1">Buyout Price</p>
               <p className="text-sm font-semibold text-primary-400">
-                {formatEth(BigInt(auction.ceilingPrice))} {auction.currency.symbol}
+                {formatPrice(BigInt(auction.ceilingPrice))} {auction.currency.symbol}
               </p>
             </div>
           )}

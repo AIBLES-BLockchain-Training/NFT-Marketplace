@@ -4,7 +4,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
-import { truncate } from '../../lib/utils/format';
+import { truncate, formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
 interface OfferCardProps {
@@ -28,6 +28,17 @@ export function OfferCard({ offer, onAccept, onCancel, isTokenOwner, isOfferMake
 
   // Get currency symbol, fallback to 'TOKEN' if not available
   const currencySymbol = offer.currency?.symbol || 'TOKEN';
+  
+  // Check if this is USDC currency
+  const isUSDC = isUSDCCurrency(offer.currency?.id || '');
+  
+  // Format price based on currency type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
 
   const showActions = isActive && !hasExpired && (isTokenOwner || isOfferMaker);
 
@@ -63,7 +74,7 @@ export function OfferCard({ offer, onAccept, onCancel, isTokenOwner, isOfferMake
             <div>
               <p className="text-xs text-gray-400 mb-1">Total Price</p>
               <p className="text-xl font-bold text-primary-400">
-                {formatEth(totalPrice)} {currencySymbol}
+                {formatPrice(totalPrice)} {currencySymbol}
               </p>
             </div>
             <div>
@@ -79,7 +90,7 @@ export function OfferCard({ offer, onAccept, onCancel, isTokenOwner, isOfferMake
           <div>
             <p className="text-xs text-gray-400 mb-1">Price per Token</p>
             <p className="text-sm font-semibold text-white">
-              {formatEth(pricePerToken)} {currencySymbol}
+              {formatPrice(pricePerToken)} {currencySymbol}
             </p>
           </div>
           <div>

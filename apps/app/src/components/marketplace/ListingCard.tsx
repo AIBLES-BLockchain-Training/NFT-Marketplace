@@ -3,6 +3,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { truncate } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -18,6 +19,22 @@ export function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardPr
   const price = BigInt(listing.pricePerToken);
   const quantity = BigInt(listing.quantity);
   const totalPrice = price * quantity;
+  
+  // Get currency info - prefer currencyApprovals if available
+  const currencyInfo = listing.currencyApprovals?.[0]?.currency;
+  const currencyAddress = currencyInfo?.id || listing.currency;
+  const currencySymbol = currencyInfo?.symbol || 'TOKEN';
+  
+  // Check if this is USDC currency
+  const isUSDC = isUSDCCurrency(currencyAddress);
+  
+  // Format price based on currency type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
 
   return (
     <Card>
@@ -45,7 +62,7 @@ export function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardPr
           <div>
             <p className="text-xs text-gray-400 mb-1">Price per Token</p>
             <p className="text-lg font-semibold text-primary-400">
-              {formatEth(price)} ETH
+              {formatPrice(price)} {currencySymbol}
             </p>
           </div>
           <div>
@@ -57,7 +74,7 @@ export function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardPr
           <div>
             <p className="text-xs text-gray-400 mb-1">Total Price</p>
             <p className="text-lg font-semibold text-white">
-              {formatEth(totalPrice)} ETH
+              {formatPrice(totalPrice)} {currencySymbol}
             </p>
           </div>
           <div>

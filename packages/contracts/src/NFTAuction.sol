@@ -210,7 +210,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         }
     }
 
-    function _checkManagementPermission() internal view {
+    function _checkAuctionManagementPermission() internal view {
         AuctionStorage storage s = _auctionStorage();
         if (!s.coreStorage.permissionsContract.hasRole(MANAGEMENT_ROLE(), msg.sender)) {
             revert("Caller does not have MANAGEMENT_ROLE");
@@ -260,7 +260,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
 
     // ============= ADMIN FUNCTIONS =============
     function setPermissionsContract(address _permissionsContract) external {
-        _checkManagementPermission();
+        _checkAuctionManagementPermission();
         AuctionStorage storage s = _auctionStorage();
         address oldPermissionsContract = address(s.coreStorage.permissionsContract);
         s.coreStorage.permissionsContract = IPermission(_permissionsContract);
@@ -268,7 +268,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     function setFeeReceiverAuction(address _feeReceiver) external {
-        _checkManagementPermission();
+        _checkAuctionManagementPermission();
         if (_feeReceiver == address(0)) revert InValidFeeReceiverAddress();
         AuctionStorage storage s = _auctionStorage();
         address oldReceiver = s.feeReceiver;
@@ -277,13 +277,13 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     function setCurrencyFeeAuction(address _currency, uint256 _fee) external {
-        _checkManagementPermission();
+        _checkAuctionManagementPermission();
         AuctionStorage storage s = _auctionStorage();
         s.feeData.currencyFees[_currency] = _fee;
     }
 
     function setRouterAuction(address _router) external {
-        _checkManagementPermission();
+        _checkAuctionManagementPermission();
         if (_router == address(0)) revert InValidRouterAddress();
         AuctionStorage storage s = _auctionStorage();
         s.router = _router;
@@ -291,7 +291,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     function setMinTimeAuction(uint256 _minTimeAuction) external {
-        _checkManagementPermission();
+        _checkAuctionManagementPermission();
         AuctionStorage storage s = _auctionStorage();
         s.coreStorage.minTimeAuction = _minTimeAuction;
     }
@@ -545,7 +545,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
         Auction storage auction = s.auctionData.auctions[_auctionId];
 
         // Tất cả các lệnh require được đặt ở đây
-        require(!_isContract(msg.sender), "Contract can not bid in auction");
+        require(!_isAuctionContract(msg.sender), "Contract can not bid in auction");
         require(msg.sender != address(0), "Invalid bidder address");
         require(block.timestamp < auction.endTime, "Auction is expired");
         require(
@@ -689,7 +689,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     // check if address is contract
-    function _isContract(address account) internal view returns (bool) {
+    function _isAuctionContract(address account) internal view returns (bool) {
         uint256 size;
         assembly {
             size := extcodesize(account)
@@ -717,7 +717,7 @@ contract NFTAuction is IERC721Receiver, ERC1155Holder, ReentrancyGuard {
     }
 
     function resetAuctionStorage() external {
-        _checkManagementPermission();
+        _checkAuctionManagementPermission();
         AuctionStorage storage s = _auctionStorage();
 
         delete s.coreStorage;

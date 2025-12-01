@@ -156,6 +156,51 @@ export function formatUSDCWithSymbol(
 }
 
 /**
+ * Format USDC amount from legacy 18-decimal storage to proper display
+ * This handles old database entries that stored USDC prices in 18-decimal format
+ * @param amount - Amount in legacy 18-decimal format
+ * @param displayDecimals - Number of decimal places to show
+ * @param showSymbol - Whether to show USDC symbol
+ */
+export function formatUSDCFromLegacy(
+  amount: string | bigint, 
+  displayDecimals = 2, 
+  showSymbol = true
+): string {
+  try {
+    const amountBigInt = typeof amount === 'string' ? BigInt(amount) : amount;
+    
+    // Check the size of the number to determine format
+    // For USDC: 10 USDC = 10,000,000 (6 decimals) or 10,000,000,000,000,000,000 (18 decimals legacy)
+    
+    // If number is very large (18+ digits), it's definitely 18-decimal format
+    if (amountBigInt >= BigInt('1000000000000000000')) { // 1e18
+      const usdcAmount = amountBigInt / BigInt(10**12);
+      return formatUSDCWithSymbol(usdcAmount, displayDecimals, showSymbol);
+    }
+    
+    // If number is medium (7-17 digits), could be either format - check more carefully
+    if (amountBigInt >= BigInt('1000000')) { // 1e6
+      // If it's exactly divisible by 10^12 and result > 0, it's likely 18-decimal
+      if (amountBigInt % BigInt(10**12) === 0n && amountBigInt >= BigInt(10**12)) {
+        const usdcAmount = amountBigInt / BigInt(10**12);
+        return formatUSDCWithSymbol(usdcAmount, displayDecimals, showSymbol);
+      }
+      
+      // Otherwise assume 6-decimal format
+      return formatUSDCWithSymbol(amountBigInt, displayDecimals, showSymbol);
+    }
+    
+    // Small numbers (< 1M) - assume already in 6-decimal
+    return formatUSDCWithSymbol(amountBigInt, displayDecimals, showSymbol);
+    
+  } catch (error) {
+    console.warn('Failed to format USDC amount from legacy format:', amount, error);
+    return showSymbol ? '0.00 USDC' : '0.00';
+  }
+}
+
+/**
  * Check if a currency address is USDC
  * @param currencyAddress - Currency contract address
  */
@@ -163,6 +208,57 @@ export function isUSDCCurrency(currencyAddress: string): boolean {
   // Use direct import instead of require
   const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
   return currencyAddress?.toLowerCase() === USDC_ADDRESS.toLowerCase();
+}
+
+/**
+ * Format ETH amount from wei to human readable
+ * @param amount - Amount in wei (18 decimals)
+ * @param displayDecimals - Number of decimal places to show
+ */
+export function formatEther(amount: string | bigint, displayDecimals = 4): string {
+  try {
+    const amountBigInt = typeof amount === 'string' ? BigInt(amount) : amount;
+    if (amountBigInt === 0n) return '0.0000';
+    
+    // Convert from 18 decimals to human readable
+    const divisor = 10n ** 18n;
+    const whole = amountBigInt / divisor;
+    const fraction = amountBigInt % divisor;
+    
+    // Format with the specified number of decimal places
+    const fractionStr = fraction.toString().padStart(18, '0');
+    const truncatedFraction = fractionStr.slice(0, displayDecimals);
+    
+    if (displayDecimals === 0) {
+      return whole.toString();
+    }
+    
+    // Remove trailing zeros
+    const cleanFraction = truncatedFraction.replace(/0+$/, '');
+    if (cleanFraction === '') {
+      return whole.toString() + '.0000';
+    }
+    
+    return `${whole.toString()}.${cleanFraction.padEnd(Math.max(4, displayDecimals), '0')}`;
+  } catch (error) {
+    console.warn('Failed to format Ether amount:', amount, error);
+    return '0.0000';
+  }
+}
+
+/**
+ * Format ETH amount with symbol
+ * @param amount - Amount in wei (18 decimals)
+ * @param displayDecimals - Number of decimal places to show
+ * @param showSymbol - Whether to show ETH symbol
+ */
+export function formatEtherWithSymbol(
+  amount: string | bigint, 
+  displayDecimals = 4, 
+  showSymbol = true
+): string {
+  const formatted = formatEther(amount, displayDecimals);
+  return showSymbol ? `${formatted} ETH` : formatted;
 }
 
 /**

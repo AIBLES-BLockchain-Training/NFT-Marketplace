@@ -13,6 +13,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { useCancelAuction } from '../../hooks/useCancelAuction';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { isAuctionActive, hasAuctionEnded, getAuctionStatusText, getAuctionStatusVariant } from '../../lib/auction/status';
 import { Auction } from '../../types';
 
@@ -48,6 +49,17 @@ export function AuctionDetailModal({
 
   const isOwner = address?.toLowerCase() === auction.sellerAddress.toLowerCase();
   const isActive = isAuctionActive(auction);
+  
+  // Check if this is USDC currency
+  const isUSDC = isUSDCCurrency(auction.currency?.id || '');
+  
+  // Helper function to format currency based on type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
   const hasEnded = hasAuctionEnded(auction.endTime);
 
   const currentBid = auction.winningBid
@@ -123,7 +135,7 @@ export function AuctionDetailModal({
                 <div>
                   <p className="text-xs text-gray-400 mb-1">Start Price</p>
                   <p className="text-sm font-semibold text-white">
-                    {formatEth(BigInt(auction.startPrice))} {auction.currency.symbol}
+                    {formatPrice(BigInt(auction.startPrice))} {auction.currency.symbol}
                   </p>
                 </div>
                 <div>
@@ -136,7 +148,7 @@ export function AuctionDetailModal({
                   <div>
                     <p className="text-xs text-gray-400 mb-1">Buyout Price</p>
                     <p className="text-sm font-semibold text-primary-400">
-                      {formatEth(BigInt(auction.ceilingPrice))} {auction.currency.symbol}
+                      {formatPrice(BigInt(auction.ceilingPrice))} {auction.currency.symbol}
                     </p>
                   </div>
                 )}
@@ -186,7 +198,7 @@ export function AuctionDetailModal({
               <p className="text-sm text-gray-400 mb-2">Current Bid</p>
               <div className="flex items-baseline gap-3 mb-3">
                 <p className="text-4xl font-bold text-primary-400">
-                  {formatEth(currentBid)}
+                  {formatPrice(currentBid)}
                 </p>
                 <p className="text-xl text-gray-400">{auction.currency.symbol}</p>
               </div>

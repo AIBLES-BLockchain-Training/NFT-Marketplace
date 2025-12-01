@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
 import { Listing } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -6,10 +7,14 @@ import { TransactionResultModal } from '../common/TransactionResultModal';
 import { formatEth } from '../../lib/web3/utils';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
+import { useUSDCBalance } from '../../hooks/useUSDCBalance';
+import { getBrowserProvider } from '../../lib/web3/provider';
 import { encodeBuyFromListing } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS, ROUTER_ADDRESS } from '../../lib/contracts/addresses';
+import { USDC_ADDRESS } from '../../lib/constants';
 import { truncate } from '../../lib/utils/format';
 import { checkERC20Allowance, approveERC20 } from '../../lib/web3/approve';
+import { ERC20_ABI } from '../../lib/contracts/abis';
 import toast from 'react-hot-toast';
 
 interface BuyModalProps {
@@ -21,10 +26,12 @@ interface BuyModalProps {
 
 export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps) {
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
-  const { address } = useWallet();
+  const { address, balance } = useWallet();
+  const { usdcBalance, refetch: refetchUSDC } = useUSDCBalance();
   const [quantity, setQuantity] = useState('1');
   const [selectedCurrencyIndex, setSelectedCurrencyIndex] = useState(0);
   const [isApprovingToken, setIsApprovingToken] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState<string>('0');
 
   // Check if listing has approved currencies
   const hasApprovedCurrencies = listing.currencyApprovals && listing.currencyApprovals.length > 0;
@@ -62,8 +69,92 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
     }
   }
 
-  // Calculate total price using decimal quantity for display
-  const totalPrice = pricePerToken * selectedQuantityForContract;
+  // Calculate total price for display (with correct decimals)
+  const totalPriceDisplay = (() => {
+    const isNativeToken = currencyAddress === ZERO_ADDRESS;
+    if (isNativeToken) {
+      return pricePerToken * selectedQuantityForContract;
+    } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+      // Use same logic as formatUSDCFromLegacy for consistency
+      console.log('BuyModal USDC price conversion:', {
+        input: pricePerToken.toString(),
+        isLarge: pricePerToken >= BigInt('1000000000000000000')
+      });
+      
+      // If number is very large (18+ digits), convert from 18-decimal to 6-decimal
+      if (pricePerToken >= BigInt('1000000000000000000')) { // 1e18
+        const usdcPrice = pricePerToken / BigInt(10**12);
+        return usdcPrice * selectedQuantityForContract;
+      }
+      
+      // If it's exactly divisible by 10^12 and result > 0, convert
+      if (pricePerToken % BigInt(10**12) === 0n && pricePerToken >= BigInt(10**12)) {
+        const usdcPrice = pricePerToken / BigInt(10**12);
+        return usdcPrice * selectedQuantityForContract;
+      }
+      
+      // Otherwise assume it's already in 6-decimal format
+      return pricePerToken * selectedQuantityForContract;
+    } else {
+      return pricePerToken * selectedQuantityForContract;
+    }
+  })();
+
+  // Calculate total price for contract (always in original storage format)
+  const totalPriceContract = pricePerToken * selectedQuantityForContract;
+
+  // Fetch balance when currency changes
+  useEffect(() => {
+    if (!address) return;
+
+    const fetchBalance = async () => {
+      try {
+        const isNativeToken = currencyAddress === ZERO_ADDRESS;
+        
+        if (isNativeToken) {
+          // Use ETH balance from wallet
+          setCurrentBalance(balance || '0');
+        } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+          // Use USDC balance from hook
+          setCurrentBalance(usdcBalance || '0');
+        } else {
+          // Fetch other ERC20 balance
+          const provider = getBrowserProvider();
+          if (!provider) return;
+
+          const contract = new ethers.Contract(currencyAddress, ERC20_ABI, provider);
+          const tokenBalance = await contract.balanceOf(address);
+          const decimals = await contract.decimals();
+          const formatted = ethers.formatUnits(tokenBalance, decimals);
+          setCurrentBalance(formatted);
+        }
+      } catch (error) {
+        console.error('Error fetching balance:', error);
+        setCurrentBalance('0');
+      }
+    };
+
+    fetchBalance();
+  }, [currencyAddress, balance, usdcBalance, address]);
+
+  // Check if user has sufficient balance
+  const balanceNum = parseFloat(currentBalance);
+  
+  // Format total price with correct decimals based on currency
+  const totalPriceNum = (() => {
+    const isNativeToken = currencyAddress === ZERO_ADDRESS;
+    if (isNativeToken) {
+      return parseFloat(ethers.formatEther(totalPriceDisplay));
+    } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+      // totalPriceDisplay is already in 6-decimal format
+      return parseFloat(ethers.formatUnits(totalPriceDisplay, 6));
+    } else {
+      // Default to 18 decimals for other ERC20 tokens
+      return parseFloat(ethers.formatEther(totalPriceDisplay));
+    }
+  })();
+  
+  const hasSufficientBalance = balanceNum >= totalPriceNum;
 
   const handleBuy = async () => {
     try {
@@ -83,6 +174,12 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
         return;
       }
 
+      // Check sufficient balance
+      if (!hasSufficientBalance) {
+        toast.error(`Insufficient ${displaySymbol} balance`);
+        return;
+      }
+
       // Check if currency is ERC20 (not native ETH)
       const isNativeToken = currencyAddress === ZERO_ADDRESS;
 
@@ -96,10 +193,10 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
             currencyAddress,
             address,
             ROUTER_ADDRESS,
-            totalPrice
+            totalPriceContract
           );
 
-          console.log(`Current allowance: ${currentAllowance}, Required: ${totalPrice}`);
+          console.log(`Current allowance: ${currentAllowance}, Required: ${totalPriceContract}`);
 
           if (!hasAllowance) {
             toast.loading('Approving token...', { id: 'approval' });
@@ -135,7 +232,7 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
         address, // Buy for connected wallet (buyer), not seller!
         selectedQuantityForContract, // Use integer quantity for contract
         currencyAddress,
-        totalPrice
+        totalPriceContract // Use original 18-decimal format for contract
       );
 
       await sendTransaction(tx, 'Purchase successful!');
@@ -205,9 +302,31 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                       const isNative = approval.currency.id.toLowerCase() === ZERO_ADDRESS.toLowerCase() ||
                                       approval.currency.id.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
                       const symbol = isNative ? 'ETH' : approval.currency.symbol;
+                      const formatPrice = () => {
+                        if (isNative) {
+                          return formatEth(BigInt(approval.pricePerToken));
+                        } else if (approval.currency.id.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                          // Use same logic as formatUSDCFromLegacy
+                          const priceBI = BigInt(approval.pricePerToken);
+                          if (priceBI >= BigInt('1000000000000000000')) { // 1e18
+                            const usdcPrice = priceBI / BigInt(10**12);
+                            return ethers.formatUnits(usdcPrice, 6);
+                          }
+                          
+                          if (priceBI % BigInt(10**12) === 0n && priceBI >= BigInt(10**12)) {
+                            const usdcPrice = priceBI / BigInt(10**12);
+                            return ethers.formatUnits(usdcPrice, 6);
+                          }
+                          
+                          // Already in 6-decimal format
+                          return ethers.formatUnits(priceBI, 6);
+                        } else {
+                          return formatEth(BigInt(approval.pricePerToken));
+                        }
+                      };
                       return (
                         <option key={index} value={index}>
-                          {symbol} - {formatEth(BigInt(approval.pricePerToken))} per token
+                          {symbol} - {formatPrice()} per token
                         </option>
                       );
                     })}
@@ -218,11 +337,47 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                 </div>
               )}
 
+              {/* Balance Display */}
+              <div className="bg-dark-card rounded-lg p-3 mb-4 border border-dark-border">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 text-sm">Your Balance</span>
+                  <span className={`font-semibold ${hasSufficientBalance ? 'text-green-400' : 'text-red-400'}`}>
+                    {currentBalance} {displaySymbol}
+                  </span>
+                </div>
+                {!hasSufficientBalance && (
+                  <p className="text-red-400 text-xs mt-1">
+                    ⚠ Insufficient balance for this purchase
+                  </p>
+                )}
+              </div>
+
               <div className="bg-dark-card rounded-lg p-3 mb-4 border border-dark-border">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-sm">Price per Token</span>
                   <span className="text-white font-bold text-lg">
-                    {formatEth(pricePerToken)} {displaySymbol}
+                    {(() => {
+                      const isNativeToken = currencyAddress === ZERO_ADDRESS;
+                      if (isNativeToken) {
+                        return formatEth(pricePerToken);
+                      } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                        // Use same logic as formatUSDCFromLegacy
+                        if (pricePerToken >= BigInt('1000000000000000000')) { // 1e18
+                          const usdcPrice = pricePerToken / BigInt(10**12);
+                          return ethers.formatUnits(usdcPrice, 6);
+                        }
+                        
+                        if (pricePerToken % BigInt(10**12) === 0n && pricePerToken >= BigInt(10**12)) {
+                          const usdcPrice = pricePerToken / BigInt(10**12);
+                          return ethers.formatUnits(usdcPrice, 6);
+                        }
+                        
+                        // Already in 6-decimal format
+                        return ethers.formatUnits(pricePerToken, 6);
+                      } else {
+                        return formatEth(pricePerToken);
+                      }
+                    })()} {displaySymbol}
                   </span>
                 </div>
               </div>
@@ -254,12 +409,43 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-semibold text-gray-400">Total Price</span>
                   <span className="text-2xl font-bold text-primary-400">
-                    {formatEth(totalPrice)} {displaySymbol}
+                    {(() => {
+                      const isNativeToken = currencyAddress === ZERO_ADDRESS;
+                      if (isNativeToken) {
+                        return formatEth(totalPriceDisplay);
+                      } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                        // totalPriceDisplay is already converted to 6-decimal format
+                        return ethers.formatUnits(totalPriceDisplay, 6);
+                      } else {
+                        return formatEth(totalPriceDisplay);
+                      }
+                    })()} {displaySymbol}
                   </span>
                 </div>
                 <div className="text-right space-y-1">
                   <p className="text-xs text-gray-500">
-                    {Math.floor(quantityNum)} × {formatEth(pricePerToken)}
+                    {Math.floor(quantityNum)} × {(() => {
+                      const isNativeToken = currencyAddress === ZERO_ADDRESS;
+                      if (isNativeToken) {
+                        return formatEth(pricePerToken);
+                      } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                        // Use same logic as formatUSDCFromLegacy
+                        if (pricePerToken >= BigInt('1000000000000000000')) { // 1e18
+                          const usdcPrice = pricePerToken / BigInt(10**12);
+                          return ethers.formatUnits(usdcPrice, 6);
+                        }
+                        
+                        if (pricePerToken % BigInt(10**12) === 0n && pricePerToken >= BigInt(10**12)) {
+                          const usdcPrice = pricePerToken / BigInt(10**12);
+                          return ethers.formatUnits(usdcPrice, 6);
+                        }
+                        
+                        // Already in 6-decimal format
+                        return ethers.formatUnits(pricePerToken, 6);
+                      } else {
+                        return formatEth(pricePerToken);
+                      }
+                    })()}
                   </p>
                   {hasApprovedCurrencies && (
                     <p className="text-xs text-gray-400">

@@ -23,23 +23,25 @@ interface Extension {
 // Configuration
 function getAuctionFunctions(): AuctionFunction[] {
   return [
-     // === Các hàm tương tác lõi (User-facing) ===
+    // === Core User Functions ===
     { selector: "0x172e9f7b", signature: "createAuction((address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))" },
     { selector: "0x96b5a755", signature: "cancelAuction(uint256)" },
     { selector: "0x0858e5ad", signature: "bidInAuction(uint256,uint256)" },
     { selector: "0xebf05a62", signature: "collectAuctionPayout(uint256)" },
     { selector: "0x12090b22", signature: "collectAuctionToken(uint256)" },
 
-    // === Các hàm quản trị (Admin/Setter) ===
+    // === Admin Functions ===
     { selector: "0x3db0f5c1", signature: "initializeAuction(address,address,address)" },
     { selector: "0xf2fc6783", signature: "setFeeReceiverAuction(address)" },
     { selector: "0xf9a6b221", signature: "setMinTimeAuction(uint256)" },
-    { selector: "0xd183ce74", signature: "setPermissionsAuction(address)" },
+    { selector: "0xd183ce74", signature: "setPermissionsContract(address)" },
     { selector: "0x6405d466", signature: "setRouterAuction(address)" },
     { selector: "0x562726b5", signature: "setCurrencyFeeAuction(address,uint256)" },
     { selector: "0x9b689a92", signature: "resetAuctionStorage()" },
-      
-    // === Các hàm xem/đọc (View/Getter) ===
+    { selector: "0x41c61672", signature: "withdrawFeesAuction(address)" },
+    
+    // === View Functions ===
+    { selector: "0x571a26a0", signature: "auctions(uint256)" },
     { selector: "0xc291537c", signature: "getAllAuctions(uint256,uint256)" },
     { selector: "0x7b063801", signature: "getAllValidAuctions(uint256,uint256)" },
     { selector: "0x78bd7935", signature: "getAuction(uint256)" },
@@ -48,7 +50,14 @@ function getAuctionFunctions(): AuctionFunction[] {
     { selector: "0xf221c4a5", signature: "getFeeReceiverAuction()" },
     { selector: "0x8e1cbb4a", signature: "getPermissionsAuction()" },
     { selector: "0x0b9d3578", signature: "getMinTimeAuction()" },
-    { selector: "0x4a739a77", signature: "getCurrencyFeeAuction(address)" }
+    { selector: "0x4a739a77", signature: "getCurrencyFeeAuction(address)" },
+    { selector: "0xd903e8c2", signature: "getAccumulatedFeeAuction(address)" },
+    { selector: "0x62349d13", signature: "getNewWinningBid(uint256)" },
+    { selector: "0x1389b117", signature: "isAuctionExpired(uint256)" },
+    { selector: "0x2eb566bd", signature: "isNewWinningBid(uint256,uint256)" },
+    
+    // === ERC721 Support ===
+    { selector: "0x150b7a02", signature: "onERC721Received(address,address,uint256,bytes)" }
   ];
 }
 
@@ -171,14 +180,25 @@ async function main() {
     }
 
     const functionsToCall = [
-      () => checkCurrentExtensions(extensionManager),
-      () => removeExt(extensionManager, "Auction"),
+      async () => {
+        const extensions = await checkCurrentExtensions(extensionManager);
+        const hasAuction = extensions.some((ext: any) => ext.metadata.name === "Auction");
+        return hasAuction;
+      },
+      async (hasAuction: boolean) => {
+        if (hasAuction) {
+          await removeExt(extensionManager, "Auction");
+        } else {
+          console.log("No existing Auction extension to remove.");
+        }
+      },
       () => addAuctionExtension(extensionManager, auctionAddress),
       () => verifyExtension(extensionManager, auctionAddress)
     ];
 
+    let result: any;
     for (const func of functionsToCall) {
-      await func();
+      result = await func(result);
       console.log(`Waiting for ${delayMs} ms before next operation...`);
       await delay(delayMs);
     }

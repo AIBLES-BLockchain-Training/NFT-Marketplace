@@ -75,12 +75,14 @@ export function calculateBidIncrease(newBid: bigint, previousBid: bigint): numbe
 /**
  * Format bid amount for display with proper decimals
  * @param amount Amount in wei
- * @param decimals Number of decimal places (default: 4)
+ * @param displayDecimals Number of decimal places for display (default: 4)
+ * @param currencyDecimals Number of decimals for the currency (default: 18 for ETH)
  * @returns Formatted string (e.g., "1.2345")
  */
-export function formatBidAmount(amount: bigint, decimals = 4): string {
-  const eth = Number(amount) / 1e18;
-  return eth.toFixed(decimals);
+export function formatBidAmount(amount: bigint, displayDecimals = 4, currencyDecimals = 18): string {
+  const divisor = Math.pow(10, currencyDecimals);
+  const value = Number(amount) / divisor;
+  return value.toFixed(displayDecimals);
 }
 
 /**
@@ -108,9 +110,10 @@ export function calculateQuickBids(currentBid: bigint, percentages: number[]): b
 /**
  * Parse user input to wei amount
  * @param input User input string (e.g., "1.5")
+ * @param decimals Number of decimals for the currency (default: 18 for ETH)
  * @returns Amount in wei, or null if invalid
  */
-export function parseEthInput(input: string): bigint | null {
+export function parseEthInput(input: string, decimals = 18): bigint | null {
   try {
     const cleaned = input.trim();
     if (!cleaned || isNaN(Number(cleaned))) return null;
@@ -118,7 +121,8 @@ export function parseEthInput(input: string): bigint | null {
     const amount = parseFloat(cleaned);
     if (amount <= 0) return null;
 
-    return BigInt(Math.floor(amount * 1e18));
+    const multiplier = Math.pow(10, decimals);
+    return BigInt(Math.floor(amount * multiplier));
   } catch {
     return null;
   }

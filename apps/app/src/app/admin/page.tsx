@@ -13,14 +13,21 @@ import { CurrencyManagement } from '../../components/admin/CurrencyManagement';
 import { PermissionsSettings } from '../../components/admin/PermissionsSettings';
 import { ListingSettings } from '../../components/admin/ListingSettings';
 import { AuctionSettings } from '../../components/admin/AuctionSettings';
+import { OfferSettings } from '../../components/admin/OfferSettings';
 import { AdminList } from '../../components/admin/AdminList';
 import { RoleAssignmentsList } from '../../components/admin/RoleAssignmentsList';
 import { WhitelistedNFTList } from '../../components/admin/WhitelistedNFTList';
 import { WhitelistedCurrenciesList } from '../../components/admin/WhitelistedCurrenciesList';
 import { RevenueStats } from '../../components/admin/revenue/RevenueStats';
 // import { FeePoolsTable } from '../../components/admin/revenue/FeePoolsTable';
-import { WithdrawFeeForm } from '../../components/admin/revenue/WithdrawFeeForm';
+// import { WithdrawFeeForm } from '../../components/admin/revenue/WithdrawFeeForm';
 import { WithdrawalHistory } from '../../components/admin/revenue/WithdrawalHistory';
+import { MultiSigDashboard } from '../../components/admin/multisig/MultiSigDashboard';
+import { RevenueChart } from '../../components/admin/charts/RevenueChart';
+import { ActivityPieChart } from '../../components/admin/charts/ActivityPieChart';
+import { VolumeAreaChart } from '../../components/admin/charts/VolumeAreaChart';
+import { UserGrowthChart } from '../../components/admin/charts/UserGrowthChart';
+import { useDashboardCharts } from '../../hooks/useDashboardCharts';
 import { Spinner } from '../../components/common/Spinner';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_ADMIN_STATS_QUERY } from '../../lib/graphql/queries';
@@ -51,6 +58,16 @@ export default function AdminDashboard() {
     recentTrades: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Charts data
+  const {
+    isLoading: chartsLoading,
+    revenueData,
+    activityData,
+    volumeData,
+    userGrowthData,
+    refreshData: refreshChartsData
+  } = useDashboardCharts();
 
   const menuItems: MenuItem[] = [
     {
@@ -140,9 +157,17 @@ export default function AdminDashboard() {
       subItems: [
         { id: 'revenue-stats', label: 'Revenue Stats' },
         // { id: 'revenue-pools', label: 'Fee Pools' },
-        { id: 'revenue-withdraw', label: 'Withdraw' },
         { id: 'revenue-history', label: 'History' },
       ],
+    },
+    {
+      id: 'multisig',
+      label: 'MultiSig Management',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
     },
   ];
 
@@ -257,6 +282,7 @@ export default function AdminDashboard() {
             </svg>
           )}
 
+          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <StatsCard
               title="Total Collections"
@@ -312,6 +338,25 @@ export default function AdminDashboard() {
                 </svg>
               }
             />
+          </div>
+
+          {/* Charts Section */}
+          <div className="mt-8 space-y-6">
+            {/* Top Row - Main Revenue Chart */}
+            <div className="grid grid-cols-1 gap-6">
+              <RevenueChart data={revenueData} isLoading={chartsLoading} />
+            </div>
+
+            {/* Second Row - Activity and Volume */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ActivityPieChart data={activityData} isLoading={chartsLoading} />
+              <VolumeAreaChart data={volumeData} isLoading={chartsLoading} />
+            </div>
+
+            {/* Third Row - User Growth */}
+            <div className="grid grid-cols-1 gap-6">
+              <UserGrowthChart data={userGrowthData} isLoading={chartsLoading} />
+            </div>
           </div>
         </div>
       );
@@ -565,14 +610,8 @@ export default function AdminDashboard() {
               </svg>,
               { parent: 'Fee Configuration', current: 'Offer Fees' }
             )}
-            <div className="bg-dark-card border border-dark-border rounded-xl p-8 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-500/10 mb-4">
-                <svg className="w-8 h-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Coming Soon</h3>
-              <p className="text-gray-400 mb-4">Offer fee configuration will be available in a future update</p>
+            <div className="bg-dark-card border border-dark-border rounded-xl p-6">
+              <OfferSettings />
             </div>
           </div>
         );
@@ -615,23 +654,6 @@ export default function AdminDashboard() {
       //     </div>
       //   );
       // }
-      if (activeSubMenu === 'revenue-withdraw') {
-        return (
-          <div className="space-y-6">
-            {renderPageHeader(
-              'Withdraw Fees',
-              'Withdraw accumulated marketplace fees to your wallet',
-              <svg className="w-7 h-7 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-              </svg>,
-              { parent: 'Revenue & Withdrawal', current: 'Withdraw' }
-            )}
-            <div className="bg-dark-card border border-dark-border rounded-xl p-6">
-              <WithdrawFeeForm />
-            </div>
-          </div>
-        );
-      }
       if (activeSubMenu === 'revenue-history') {
         return (
           <div className="space-y-6">
@@ -649,6 +671,22 @@ export default function AdminDashboard() {
           </div>
         );
       }
+    }
+
+    // MultiSig Management
+    if (activeMenu === 'multisig') {
+      return (
+        <div className="space-y-6">
+          {renderPageHeader(
+            'MultiSig Management',
+            'Manage MultiSig wallet, admins, and pending transactions',
+            <svg className="w-7 h-7 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          )}
+          <MultiSigDashboard />
+        </div>
+      );
     }
 
     return null;

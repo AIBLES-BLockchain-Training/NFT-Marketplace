@@ -222,7 +222,12 @@ async function deployOffer(feeRecipient: string, feePercentage: number, permissi
   return offerAddress;
 }
 
-async function deployNFTAuction(permissionsAddress: string, signer: any) {
+async function deployNFTAuction(
+  permissionsAddress: string,
+  routerAddress: string,
+  feeReceiverAddress: string,
+  signer: any
+) {
   console.log("Deploying NFTAuction contract...");
 
   const NFTAuction = await ethers.getContractFactory("NFTAuction", signer);
@@ -233,8 +238,11 @@ async function deployNFTAuction(permissionsAddress: string, signer: any) {
   console.log(`NFTAuction deployed to: ${nftAuctionAddress}`);
 
   console.log("Initializing NFTAuction...");
-  await nftAuction['initializeAuction'](permissionsAddress);
-  console.log(`NFTAuction initialized with permissions: ${permissionsAddress}`);
+  console.log(`   Permissions: ${permissionsAddress}`);
+  console.log(`   Router: ${routerAddress}`);
+  console.log(`   Fee Receiver: ${feeReceiverAddress}`);
+  await nftAuction['initializeAuction'](permissionsAddress, routerAddress, feeReceiverAddress);
+  console.log(`NFTAuction initialized successfully`);
 
   console.log("Waiting 30 seconds before verification...");
   await new Promise(resolve => setTimeout(resolve, 30000));
@@ -314,39 +322,39 @@ async function main() {
     // console.log("-".repeat(70) + "\n");
 
     // // 3. Deploy ExtensionManager
-    // console.log("=".repeat(70));
-    // console.log("STEP 3: Deploying ExtensionManager");
-    // console.log("=".repeat(70));
-    // const extensionManagerAddress = await deployExtensionManager(ADMIN_ADDRESS, signer);
-    // console.log("-".repeat(70) + "\n");
+    console.log("=".repeat(70));
+    console.log("STEP 3: Deploying ExtensionManager");
+    console.log("=".repeat(70));
+    const extensionManagerAddress = await deployExtensionManager(ADMIN_ADDRESS, signer);
+    console.log("-".repeat(70) + "\n");
 
     // // 4. Deploy Router
-    // console.log("=".repeat(70));
-    // console.log("STEP 4: Deploying Router");
-    // console.log("=".repeat(70));
-    // const routerAddress = await deployRouter(extensionManagerAddress, signer);
-    // console.log("-".repeat(70) + "\n");
+    console.log("=".repeat(70));
+    console.log("STEP 4: Deploying Router");
+    console.log("=".repeat(70));
+    const routerAddress = await deployRouter(extensionManagerAddress, signer);
+    console.log("-".repeat(70) + "\n");
 
     // 5. Deploy Listing
     console.log("=".repeat(70));
     console.log("STEP 5: Deploying Listing");
     console.log("=".repeat(70));
-    const listingAddress = await deployListing('0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc', '0x1279e1f267968eC70841dFa26Fbab60F65CdF717', "0xE41FBfa9c12476a61bd8C36212a8C65C24eB0867", signer);
+    const listingAddress = await deployListing('0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc', routerAddress, "0xE41FBfa9c12476a61bd8C36212a8C65C24eB0867", signer);
     console.log("-".repeat(70) + "\n");
 
     // // 6. Deploy NFTAuction
-    // console.log("=".repeat(70));
-    // console.log("STEP 6: Deploying NFTAuction");
-    // console.log("=".repeat(70));
-    // const nftAuctionAddress = await deployNFTAuction(permissionsAddress, signer);
-    // console.log("-".repeat(70) + "\n");
+    console.log("=".repeat(70));
+    console.log("STEP 6: Deploying NFTAuction");
+    console.log("=".repeat(70));
+    const nftAuctionAddress = await deployNFTAuction('0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc', routerAddress, "0xE41FBfa9c12476a61bd8C36212a8C65C24eB0867", signer);
+    console.log("-".repeat(70) + "\n");
 
     // // 7. Deploy NFTOffer
-    // console.log("=".repeat(70));
-    // console.log("STEP 7: Deploying NFTOffer");
-    // console.log("=".repeat(70));
-    // const offerAddress = await deployOffer(multisigAddress, OFFER_FEE_PERCENTAGE, permissionsAddress, signer);
-    // console.log("-".repeat(70) + "\n");
+    console.log("=".repeat(70));
+    console.log("STEP 7: Deploying NFTOffer");
+    console.log("=".repeat(70));
+    const offerAddress = await deployOffer("0xE41FBfa9c12476a61bd8C36212a8C65C24eB0867", OFFER_FEE_PERCENTAGE, "0xCD7eb6E3884777EE74B0A2e0d6abBc9E71919Ebc", signer);
+    console.log("-".repeat(70) + "\n");
 
     // Summary
     console.log("\n" + "=".repeat(70));
@@ -355,11 +363,11 @@ async function main() {
     console.log("\nContract Addresses:");
     // console.log(`   MultiSigWallet:   ${multisigAddress}`);
     // console.log(`   Permissions:      ${permissionsAddress}`);
-    // console.log(`   ExtensionManager: ${extensionManagerAddress}`);
-    // console.log(`   Router:           ${routerAddress}`);
+    console.log(`   ExtensionManager: ${extensionManagerAddress}`);
+    console.log(`   Router:           ${routerAddress}`);
     console.log(`   Listing:          ${listingAddress}`);
-    // console.log(`   NFTAuction:       ${nftAuctionAddress}`);
-    // console.log(`   NFTOffer:         ${offerAddress}`);
+    console.log(`   NFTAuction:       ${nftAuctionAddress}`);
+    console.log(`   NFTOffer:         ${offerAddress}`);
 
     console.log("\nNEXT STEPS:");
     console.log("1. Run AddListingExtension.ts to register Listing in Router");

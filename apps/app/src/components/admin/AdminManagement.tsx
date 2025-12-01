@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 export function AdminManagement() {
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const [adminAddresses, setAdminAddresses] = useState('');
+  const [selectedRole, setSelectedRole] = useState<keyof typeof ROLE_HASHES>('MANAGEMENT_ROLE');
 
   const handleAssignAdmins = async () => {
     const addresses = adminAddresses
@@ -29,7 +30,7 @@ export function AdminManagement() {
       ]);
 
       const data = iface.encodeFunctionData('assignRole', [
-        ROLE_HASHES.MANAGEMENT_ROLE,
+        ROLE_HASHES[selectedRole],
         addresses
       ]);
 
@@ -39,7 +40,7 @@ export function AdminManagement() {
         value: '0',
       };
 
-      const receipt = await sendTransaction(tx, `Successfully assigned MANAGEMENT_ROLE to ${addresses.length} address(es)`);
+      const receipt = await sendTransaction(tx, `Successfully assigned ${selectedRole} to ${addresses.length} address(es)`);
 
       if (receipt?.status === 1) {
         setAdminAddresses('');
@@ -66,7 +67,7 @@ export function AdminManagement() {
       ]);
 
       const data = iface.encodeFunctionData('revokeRole', [
-        ROLE_HASHES.MANAGEMENT_ROLE,
+        ROLE_HASHES[selectedRole],
         addresses
       ]);
 
@@ -76,7 +77,7 @@ export function AdminManagement() {
         value: '0',
       };
 
-      const receipt = await sendTransaction(tx, `Successfully revoked MANAGEMENT_ROLE from ${addresses.length} address(es)`);
+      const receipt = await sendTransaction(tx, `Successfully revoked ${selectedRole} from ${addresses.length} address(es)`);
 
       if (receipt?.status === 1) {
         setAdminAddresses('');
@@ -91,11 +92,34 @@ export function AdminManagement() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white mb-2">Admin Management</h2>
         <p className="text-sm text-gray-400">
-          Grant or revoke MANAGEMENT_ROLE for multiple addresses
+          Grant or revoke management roles for multiple addresses across all extensions
         </p>
       </div>
 
       <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Select Management Role
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { key: 'MANAGEMENT_ROLE', name: 'Management Role', color: 'blue' },
+            ].map((role) => (
+              <button
+                key={role.key}
+                onClick={() => setSelectedRole(role.key as keyof typeof ROLE_HASHES)}
+                className={`p-3 rounded-lg border text-sm font-medium transition-all ${
+                  selectedRole === role.key
+                    ? `bg-${role.color}-500/20 border-${role.color}-500/50 text-${role.color}-300`
+                    : 'bg-dark-bg border-dark-border text-gray-400 hover:border-gray-600'
+                }`}
+              >
+                {role.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Admin Addresses (one per line)
@@ -108,7 +132,7 @@ export function AdminManagement() {
             className="w-full px-4 py-3 bg-dark-card border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
           />
           <p className="mt-2 text-xs text-gray-500">
-            Enter one Ethereum address per line. You can assign/revoke MANAGEMENT_ROLE for multiple addresses at once.
+            Enter one Ethereum address per line. You can assign/revoke {selectedRole} for multiple addresses at once.
           </p>
         </div>
 

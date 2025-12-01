@@ -48,7 +48,7 @@ export function FeePoolsTable() {
       const extensions = [
         { name: 'Listing', isActive: true },
         { name: 'Auction', isActive: true },
-        { name: 'Offer', isActive: false },
+        { name: 'Offer', isActive: true },
       ];
 
       const poolsData: ExtensionPool[] = [];

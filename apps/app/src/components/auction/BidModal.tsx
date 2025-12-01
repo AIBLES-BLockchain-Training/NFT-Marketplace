@@ -5,6 +5,7 @@ import { Input } from '../common/Input';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
+import { useUSDCBalance } from '../../hooks/useUSDCBalance';
 import { useBidValidation, useQuickBidSuggestions, useIsBuyoutBid } from '../../hooks/useBidValidation';
 import { formatEth } from '../../lib/web3/utils';
 import { encodeBidInAuction } from '../../lib/web3/encoding';
@@ -13,7 +14,9 @@ import { parseWeb3Error, retryWithBackoff } from '../../lib/utils/errors';
 import { hasAuctionEnded } from '../../lib/auction/status';
 import { Auction } from '../../types';
 import { ZERO_ADDRESS, ROUTER_ADDRESS } from '../../lib/contracts/addresses';
+import { USDC_ADDRESS } from '../../lib/constants';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 export interface BidModalProps {
   auction: Auction;
@@ -29,6 +32,7 @@ export interface BidModalProps {
 export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps) {
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const { address, balance } = useWallet();
+  const { usdcBalance } = useUSDCBalance();
   const [bidInput, setBidInput] = useState('');
   const [isApproving, setIsApproving] = useState(false);
   const [auctionEnded, setAuctionEnded] = useState(false);
@@ -44,6 +48,14 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
 
   // Fallback for currency symbol
   const currencySymbol = auction.currency?.symbol || 'UNKNOWN';
+  
+  // Helper function to format currency based on decimals
+  const formatCurrency = (amount: bigint) => {
+    if (auction.currency?.id?.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+      return ethers.formatUnits(amount, 6); // USDC has 6 decimals
+    }
+    return formatEth(amount); // Default to 18 decimals for ETH and other tokens
+  };
 
   // Auto-select +5% bid when modal opens (only once when opening)
   useEffect(() => {
@@ -65,13 +77,13 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
       // Contract requires: startPrice + (startPrice * stepAmount / decimal)
       const minimumFirstBid = BigInt(auction.startPrice) +
         (BigInt(auction.startPrice) * bidBufferBps) / 10000n;
-      setBidInput(formatEth(minimumFirstBid));
+      setBidInput(formatCurrency(minimumFirstBid));
       setSelectedQuickBid(null);
     } else {
       // Has bids - set to +5% of current bid
       const currentBid = BigInt(auction.winningBid.bidAmount);
       const nextBidAmount = currentBid + (currentBid * bidBufferBps) / 10000n;
-      setBidInput(formatEth(nextBidAmount));
+      setBidInput(formatCurrency(nextBidAmount));
       setSelectedQuickBid('+5%');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,13 +111,13 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
   }, [isOpen, auction.endTime, auctionEnded]);
 
   const handleQuickBid = (amount: bigint, label: string) => {
-    setBidInput(formatEth(amount));
+    setBidInput(formatCurrency(amount));
     setSelectedQuickBid(label);
   };
 
   const handleMaxBid = () => {
     if (auction.ceilingPrice) {
-      setBidInput(formatEth(BigInt(auction.ceilingPrice)));
+      setBidInput(formatCurrency(BigInt(auction.ceilingPrice)));
       setSelectedQuickBid('buyout');
     }
   };
@@ -258,7 +270,7 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
               <div>
                 <p className="text-xs text-gray-400 mb-1">Current Bid</p>
                 <p className="text-xl font-bold text-primary-400">
-                  {formatEth(currentBid)} {currencySymbol}
+                  {formatCurrency(currentBid)} {currencySymbol}
                 </p>
                 {auction.winningBid && (
                   <p className="text-xs text-gray-500 mt-1">
@@ -271,7 +283,7 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
                   {auction.winningBid ? 'Minimum Next Bid' : 'Minimum First Bid'}
                 </p>
                 <p className="text-lg font-bold text-white">
-                  {formatEth(validation.minimumBid)} {currencySymbol}
+                  {formatCurrency(validation.minimumBid)} {currencySymbol}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   {auction.winningBid ? '+' : 'Start + '}{(Number(auction.bidBufferBps) / 100).toFixed(1)}%
@@ -289,7 +301,7 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
               type="number"
               step="any"
               min="0"
-              placeholder={formatEth(validation.minimumBid)}
+              placeholder={formatCurrency(validation.minimumBid)}
               value={bidInput}
               onChange={handleInputChange}
               required
@@ -325,7 +337,7 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
                   >
                     {qb.label}
                     <span className={`block text-xs mt-1 ${isSelected ? 'text-primary-400' : 'text-gray-500'}`}>
-                      {formatEth(qb.amount)}
+                      {formatCurrency(qb.amount)}
                     </span>
                   </button>
                 );
@@ -344,7 +356,7 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
                   >
                     Buyout
                     <span className={`block text-xs mt-1 ${isBuyoutSelected ? 'text-primary-300' : 'text-primary-500/80'}`}>
-                      {formatEth(BigInt(auction.ceilingPrice))}
+                      {formatCurrency(BigInt(auction.ceilingPrice))}
                     </span>
                   </button>
                 );
@@ -363,12 +375,26 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
                   )}
                 </p>
                 <p className="text-sm font-semibold text-white">
-                  {validation.currentBalance !== undefined
-                    ? (Number(validation.currentBalance) / 1e18).toFixed(4)
-                    : validation.isNativeToken && balance
-                    ? Number(balance).toFixed(4)
-                    : '0.00'
-                  } {currencySymbol}
+                  {(() => {
+                    // Use optimized balance for USDC
+                    if (!validation.isNativeToken && auction.currency.id.toLowerCase() === USDC_ADDRESS.toLowerCase() && usdcBalance) {
+                      return `${Number(usdcBalance).toFixed(4)} ${currencySymbol}`;
+                    }
+                    
+                    // Fallback to validation balance
+                    if (validation.currentBalance !== undefined) {
+                      const decimals = validation.isNativeToken ? 1e18 : 
+                                      (auction.currency.id.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 1e6 : 1e18);
+                      return `${(Number(validation.currentBalance) / decimals).toFixed(4)} ${currencySymbol}`;
+                    }
+                    
+                    // ETH balance from wallet
+                    if (validation.isNativeToken && balance) {
+                      return `${Number(balance).toFixed(4)} ${currencySymbol}`;
+                    }
+                    
+                    return `0.00 ${currencySymbol}`;
+                  })()}
                 </p>
               </div>
               <div className="flex items-center justify-between">
@@ -455,8 +481,8 @@ export function BidModal({ auction, isOpen, onClose, onSuccess }: BidModalProps)
               {isApproving
                 ? 'Approving...'
                 : isBuyout
-                ? `Buyout ${bidInput && validation.parsedAmount ? formatEth(validation.parsedAmount) : ''} ${currencySymbol}`
-                : `Place Bid ${bidInput && validation.parsedAmount ? formatEth(validation.parsedAmount) : ''} ${currencySymbol}`}
+                ? `Buyout ${bidInput && validation.parsedAmount ? formatCurrency(validation.parsedAmount) : ''} ${currencySymbol}`
+                : `Place Bid ${bidInput && validation.parsedAmount ? formatCurrency(validation.parsedAmount) : ''} ${currencySymbol}`}
             </Button>
           </div>
         </form>

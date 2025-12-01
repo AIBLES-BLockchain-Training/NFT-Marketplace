@@ -5,6 +5,7 @@ import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { PERMISSIONS_ADDRESS, ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { clearWhitelistCache } from '../../lib/web3/approve';
+import { ROLE_HASHES } from '../../lib/constants/roles';
 import toast from 'react-hot-toast';
 
 const PERMISSIONS_ABI = [
@@ -14,10 +15,7 @@ const PERMISSIONS_ABI = [
   'function revokeRole(bytes32 role, address[] calldata accounts) external',
 ];
 
-// Role bytes32 values (keccak256 hashes)
-const LISTING_ROLE = '0x' + Buffer.from('LISTING_ROLE').toString('hex').padEnd(64, '0');
-const AUCTION_ROLE = '0x' + Buffer.from('AUCTION_ROLE').toString('hex').padEnd(64, '0');
-const OFFER_ROLE = '0x' + Buffer.from('OFFER_ROLE').toString('hex').padEnd(64, '0');
+// Role constants imported from centralized roles file
 
 export function GlobalPermissions() {
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();

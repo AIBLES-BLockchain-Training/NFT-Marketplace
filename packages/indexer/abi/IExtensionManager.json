@@ -11,7 +11,7 @@
           "type": "bytes4"
         }
       ],
-      "name": "getImplementationForFunction",
+      "name": "getExtensionImplementation",
       "outputs": [
         {
           "internalType": "address",

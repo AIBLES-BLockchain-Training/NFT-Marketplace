@@ -35,7 +35,7 @@ import { formatEth } from '../../../lib/web3/utils';
 import { encodeCancelListing, encodeApproveBuyerForListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
-import { truncateTokenId } from '../../../lib/utils/format';
+import { truncateTokenId, formatUSDCFromLegacy, isUSDCCurrency } from '../../../lib/utils/format';
 import { EditCollectionBanner } from '../../../components/collection/EditCollectionBanner';
 import { isAuctionActive, hasAuctionEnded, canCollectPayout, canCollectNFT } from '../../../lib/auction/status';
 import toast from 'react-hot-toast';
@@ -1665,7 +1665,13 @@ export default function CollectionDetailPage() {
                                         <p className="text-white font-bold text-lg mb-1">Buy Now</p>
                                         {displayPrice && (
                                           <p className="text-primary-400 font-semibold">
-                                            {formatEth(displayPrice)} {displayCurrency}
+                                            {(() => {
+                                              const currencyId = price?.currency?.id || '';
+                                              if (isUSDCCurrency(currencyId)) {
+                                                return formatUSDCFromLegacy(BigInt(displayPrice));
+                                              }
+                                              return `${formatEth(displayPrice)} ${displayCurrency}`;
+                                            })()}
                                           </p>
                                         )}
                                       </button>

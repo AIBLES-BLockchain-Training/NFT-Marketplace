@@ -6,11 +6,12 @@ import { Input } from '../common/Input';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { useWallet } from '../../hooks/useWallet';
+import { useUSDCBalance } from '../../hooks/useUSDCBalance';
 import { encodeMakeOffer } from '../../lib/web3/encoding';
 import { formatEth } from '../../lib/web3/utils';
 import { checkERC20Allowance, approveERC20 } from '../../lib/web3/approve';
 import { ZERO_ADDRESS, ROUTER_ADDRESS } from '../../lib/contracts/addresses';
-import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
+import { SECONDS_PER_DAY, DURATION_OPTIONS, USDC_ADDRESS } from '../../lib/constants';
 import { NFT, SupportedCurrency } from '../../types';
 import { GET_SUPPORTED_CURRENCIES_QUERY } from '../../lib/graphql/queries';
 import { graphqlClient } from '../../lib/graphql/client';
@@ -32,6 +33,7 @@ export interface MakeOfferModalProps {
 export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferModalProps) {
   const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
   const { address, balance } = useWallet();
+  const { usdcBalance, refetch: refetchUSDC } = useUSDCBalance();
   const [offerAmount, setOfferAmount] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [duration, setDuration] = useState('7'); // days
@@ -93,9 +95,17 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
       return;
     }
 
-    // Fetch ERC20 balance
+    // Fetch ERC20 balance (optimize for USDC)
     const fetchERC20Balance = async () => {
       try {
+        // Use cached USDC balance if available
+        if (selectedCurrency.toLowerCase() === USDC_ADDRESS.toLowerCase() && usdcBalance) {
+          const usdcBalanceWei = ethers.parseUnits(usdcBalance, 6); // USDC has 6 decimals
+          setErc20Balance(usdcBalanceWei);
+          return;
+        }
+
+        // Fallback to direct contract call for other tokens
         const provider = getBrowserProvider();
         if (!provider) {
           setErc20Balance(null);
@@ -116,13 +126,16 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
     };
 
     fetchERC20Balance();
-  }, [selectedCurrency, address]);
+  }, [selectedCurrency, address, usdcBalance]);
 
   // Calculate values
   const totalPriceWei = (() => {
     if (!offerAmount || offerAmount.trim() === '') return 0n;
     try {
-      return ethers.parseEther(offerAmount.toString());
+      // Get selected currency decimals from GraphQL data
+      const selectedCurrencyData = currencies.find(c => c.id === selectedCurrency);
+      const decimals = selectedCurrencyData?.decimals || 18; // Default to 18 if not found
+      return ethers.parseUnits(offerAmount.toString(), decimals);
     } catch (error) {
       console.warn('Invalid offer amount:', offerAmount);
       return 0n;
@@ -137,10 +150,19 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
   const isNativeCurrency = selectedCurrency.toLowerCase() === ZERO_ADDRESS.toLowerCase() ||
                            selectedCurrency.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
-  // Get current balance based on currency type
-  const currentBalance = isNativeCurrency
-    ? (balance ?? 0n)
-    : (erc20Balance ?? 0n);
+  // Get current balance based on currency type (optimized for USDC)
+  const currentBalance = (() => {
+    if (isNativeCurrency) {
+      // ETH balance in wei
+      return ethers.parseEther(balance || '0');
+    } else if (selectedCurrency.toLowerCase() === USDC_ADDRESS.toLowerCase() && usdcBalance) {
+      // USDC balance from hook (convert to wei with 6 decimals)
+      return ethers.parseUnits(usdcBalance, 6);
+    } else {
+      // Other ERC20 balance from direct fetch
+      return erc20Balance ?? 0n;
+    }
+  })();
 
   // Validation
   const hasSufficientBalance = currentBalance >= totalPriceWei;
@@ -340,12 +362,22 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
               <div className="mt-2 space-y-1">
                 {!hasSufficientBalance && (
                   <p className="text-xs text-red-400">
-                    WARNING: Insufficient balance. You have {formatEth(currentBalance)} {currencies.find(c => c.id === selectedCurrency)?.symbol || 'TOKEN'}
+                    WARNING: Insufficient balance. You have {(() => {
+                      if (selectedCurrency.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                        return ethers.formatUnits(currentBalance, 6);
+                      }
+                      return formatEth(currentBalance);
+                    })()} {currencies.find(c => c.id === selectedCurrency)?.symbol || 'TOKEN'}
                   </p>
                 )}
                 {isERC1155 && quantityBigInt > 0n && (
                   <p className="text-xs text-gray-500">
-                    Price per token: {formatEth(pricePerToken)} {currencies.find(c => c.id === selectedCurrency)?.symbol || 'TOKEN'}
+                    Price per token: {(() => {
+                      if (selectedCurrency.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                        return ethers.formatUnits(pricePerToken, 6);
+                      }
+                      return formatEth(pricePerToken);
+                    })()} {currencies.find(c => c.id === selectedCurrency)?.symbol || 'TOKEN'}
                   </p>
                 )}
               </div>
@@ -404,7 +436,20 @@ export function MakeOfferModal({ nft, isOpen, onClose, onSuccess }: MakeOfferMod
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Your Balance</span>
               <span className={`font-semibold ${hasSufficientBalance ? 'text-green-400' : 'text-red-400'}`}>
-                {formatEth(currentBalance)} {currencies.find(c => c.id === selectedCurrency)?.symbol || 'TOKEN'}
+                {(() => {
+                  const currency = currencies.find(c => c.id === selectedCurrency);
+                  const symbol = currency?.symbol || 'TOKEN';
+                  
+                  if (isNativeCurrency) {
+                    return `${formatEth(currentBalance)} ${symbol}`;
+                  } else if (selectedCurrency.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                    // Format USDC with 6 decimals
+                    return `${ethers.formatUnits(currentBalance, 6)} ${symbol}`;
+                  } else {
+                    // Format other ERC20s with 18 decimals (default)
+                    return `${formatEth(currentBalance)} ${symbol}`;
+                  }
+                })()}
               </span>
             </div>
           </div>

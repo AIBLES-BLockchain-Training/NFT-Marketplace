@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-// Role hashes matching Permissions.sol
+// Role hashes matching Permissions.sol contract (corrected to use actual role names)
 export const ROLE_HASHES = {
   LISTING_ROLE: ethers.keccak256(ethers.toUtf8Bytes('LISTING_ROLE')),
   AUCTION_ROLE: ethers.keccak256(ethers.toUtf8Bytes('AUCTION_ROLE')),

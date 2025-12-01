@@ -257,7 +257,7 @@ contract Listing is ReentrancyGuard {
         return _listingStorage().fees.currencyFees[currency];
     }
     
-    function accumulatedFees(address currency) external view returns (uint256) {
+    function listingAccumulatedFees(address currency) external view returns (uint256) {
         return _listingStorage().fees.accumulatedFees[currency];
     }
 
@@ -305,7 +305,7 @@ contract Listing is ReentrancyGuard {
     // ============= ADMIN FUNCTIONS =============
 
     function setPermissionContract(address _permissionContract) external {
-        _checkManagementPermission();
+        _checkListingManagementPermission();
         ListingStorage storage s = _listingStorage();
         address oldPermission = address(s.core.permissionContract);
         s.core.permissionContract = IPermission(_permissionContract);
@@ -313,7 +313,7 @@ contract Listing is ReentrancyGuard {
     }
 
     function setCurrencyFee(address currency, uint256 fee) external {
-        _checkManagementPermission();
+        _checkListingManagementPermission();
         ListingStorage storage s = _listingStorage();
         if (fee == 0 || fee > s.core.decimal) revert FeeOutOfRange(fee, s.core.decimal);
         s.fees.currencyFees[currency] = fee;
@@ -336,7 +336,7 @@ contract Listing is ReentrancyGuard {
 
     // ============= PERMISSION FUNCTIONS =============
 
-    function _checkManagementPermission() internal view {
+    function _checkListingManagementPermission() internal view {
         ListingStorage storage s = _listingStorage();
         if (address(s.core.permissionContract) == address(0)) revert PermissionContractNotSet();
         if (!s.core.permissionContract.hasRole(MANAGEMENT_ROLE(), msg.sender)) {
@@ -680,7 +680,7 @@ contract Listing is ReentrancyGuard {
         uint256 quantity,
         TokenType tokenType
     ) internal {
-        if (!_isContract(recipient)) {
+        if (!_isListingContract(recipient)) {
             return;
         }
 
@@ -708,7 +708,7 @@ contract Listing is ReentrancyGuard {
         }
     }
 
-    function _isContract(address account) internal view returns (bool) {
+    function _isListingContract(address account) internal view returns (bool) {
         uint256 size;
         assembly {
             size := extcodesize(account)
@@ -825,7 +825,7 @@ contract Listing is ReentrancyGuard {
         return currencyFee;
     }
 
-    function withdrawFees(address currency) external onlyFeeReceiver nonReentrant {
+    function withdrawListingFees(address currency) external onlyFeeReceiver nonReentrant {
         ListingStorage storage s = _listingStorage();
         if (s.feeReceiver == address(0)) revert FeeReceiverNotSet();
 

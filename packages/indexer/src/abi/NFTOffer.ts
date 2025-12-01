@@ -10,11 +10,10 @@ export const events = {
 }
 
 export const functions = {
-    MANAGEMENT_ROLE: viewFun("0xcda5f89f", "MANAGEMENT_ROLE()", {}, p.bytes32),
-    NFT_ROLE: viewFun("0xf684f33c", "NFT_ROLE()", {}, p.bytes32),
-    OFFER_ROLE: viewFun("0x2d663f30", "OFFER_ROLE()", {}, p.bytes32),
+    OFFER_MANAGEMENT_ROLE: viewFun("0x1ea62026", "OFFER_MANAGEMENT_ROLE()", {}, p.bytes32),
+    OFFER_NFT_ROLE: viewFun("0x7ddd9beb", "OFFER_NFT_ROLE()", {}, p.bytes32),
+    OFFER_OFFER_ROLE: viewFun("0xa467d44b", "OFFER_OFFER_ROLE()", {}, p.bytes32),
     acceptOffer: fun("0xc815729d", "acceptOffer(uint256)", {"offerId": p.uint256}, ),
-    accumulatedFees: viewFun("0xfcf66664", "accumulatedFees(address)", {"currency": p.address}, p.uint256),
     cancelOffer: fun("0xef706adf", "cancelOffer(uint256)", {"offerId": p.uint256}, ),
     feePercentage: viewFun("0xa001ecdd", "feePercentage()", {}, p.uint256),
     feeRecipient: viewFun("0x46904840", "feeRecipient()", {}, p.address),
@@ -23,29 +22,26 @@ export const functions = {
     getOffer: viewFun("0x4579268a", "getOffer(uint256)", {"offerId": p.uint256}, p.struct({"offerId": p.uint256, "offeror": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256, "tokenType": p.uint8, "status": p.uint8})),
     initializeOffer: fun("0x56d331c2", "initializeOffer(address,address,uint256)", {"_permissions": p.address, "_feeRecipient": p.address, "_feePercentage": p.uint256}, ),
     makeOffer: fun("0x016767fa", "makeOffer((address,uint256,uint256,address,uint256,uint256))", {"params": p.struct({"assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "totalPrice": p.uint256, "expirationTimestamp": p.uint256})}, p.uint256),
+    offerAccumulatedFees: viewFun("0xc2f1412a", "offerAccumulatedFees(address)", {"currency": p.address}, p.uint256),
     permissions: viewFun("0xab8c71c0", "permissions()", {}, p.address),
     setFeePercentage: fun("0xae06c1b7", "setFeePercentage(uint256)", {"_feePercentage": p.uint256}, ),
     setFeeRecipient: fun("0xe74b981b", "setFeeRecipient(address)", {"_feeRecipient": p.address}, ),
     totalOffers: viewFun("0xa9fd8ed1", "totalOffers()", {}, p.uint256),
-    withdrawFees: fun("0x164e68de", "withdrawFees(address)", {"currency": p.address}, ),
+    withdrawOfferFees: fun("0xbc9fc552", "withdrawOfferFees(address)", {"currency": p.address}, ),
 }
 
 export class Contract extends ContractBase {
 
-    MANAGEMENT_ROLE() {
-        return this.eth_call(functions.MANAGEMENT_ROLE, {})
+    OFFER_MANAGEMENT_ROLE() {
+        return this.eth_call(functions.OFFER_MANAGEMENT_ROLE, {})
     }
 
-    NFT_ROLE() {
-        return this.eth_call(functions.NFT_ROLE, {})
+    OFFER_NFT_ROLE() {
+        return this.eth_call(functions.OFFER_NFT_ROLE, {})
     }
 
-    OFFER_ROLE() {
-        return this.eth_call(functions.OFFER_ROLE, {})
-    }
-
-    accumulatedFees(currency: AccumulatedFeesParams["currency"]) {
-        return this.eth_call(functions.accumulatedFees, {currency})
+    OFFER_OFFER_ROLE() {
+        return this.eth_call(functions.OFFER_OFFER_ROLE, {})
     }
 
     feePercentage() {
@@ -68,6 +64,10 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.getOffer, {offerId})
     }
 
+    offerAccumulatedFees(currency: OfferAccumulatedFeesParams["currency"]) {
+        return this.eth_call(functions.offerAccumulatedFees, {currency})
+    }
+
     permissions() {
         return this.eth_call(functions.permissions, {})
     }
@@ -84,20 +84,17 @@ export type OfferCancelledEventArgs = EParams<typeof events.OfferCancelled>
 export type OfferCreatedEventArgs = EParams<typeof events.OfferCreated>
 
 /// Function types
-export type MANAGEMENT_ROLEParams = FunctionArguments<typeof functions.MANAGEMENT_ROLE>
-export type MANAGEMENT_ROLEReturn = FunctionReturn<typeof functions.MANAGEMENT_ROLE>
+export type OFFER_MANAGEMENT_ROLEParams = FunctionArguments<typeof functions.OFFER_MANAGEMENT_ROLE>
+export type OFFER_MANAGEMENT_ROLEReturn = FunctionReturn<typeof functions.OFFER_MANAGEMENT_ROLE>
 
-export type NFT_ROLEParams = FunctionArguments<typeof functions.NFT_ROLE>
-export type NFT_ROLEReturn = FunctionReturn<typeof functions.NFT_ROLE>
+export type OFFER_NFT_ROLEParams = FunctionArguments<typeof functions.OFFER_NFT_ROLE>
+export type OFFER_NFT_ROLEReturn = FunctionReturn<typeof functions.OFFER_NFT_ROLE>
 
-export type OFFER_ROLEParams = FunctionArguments<typeof functions.OFFER_ROLE>
-export type OFFER_ROLEReturn = FunctionReturn<typeof functions.OFFER_ROLE>
+export type OFFER_OFFER_ROLEParams = FunctionArguments<typeof functions.OFFER_OFFER_ROLE>
+export type OFFER_OFFER_ROLEReturn = FunctionReturn<typeof functions.OFFER_OFFER_ROLE>
 
 export type AcceptOfferParams = FunctionArguments<typeof functions.acceptOffer>
 export type AcceptOfferReturn = FunctionReturn<typeof functions.acceptOffer>
-
-export type AccumulatedFeesParams = FunctionArguments<typeof functions.accumulatedFees>
-export type AccumulatedFeesReturn = FunctionReturn<typeof functions.accumulatedFees>
 
 export type CancelOfferParams = FunctionArguments<typeof functions.cancelOffer>
 export type CancelOfferReturn = FunctionReturn<typeof functions.cancelOffer>
@@ -123,6 +120,9 @@ export type InitializeOfferReturn = FunctionReturn<typeof functions.initializeOf
 export type MakeOfferParams = FunctionArguments<typeof functions.makeOffer>
 export type MakeOfferReturn = FunctionReturn<typeof functions.makeOffer>
 
+export type OfferAccumulatedFeesParams = FunctionArguments<typeof functions.offerAccumulatedFees>
+export type OfferAccumulatedFeesReturn = FunctionReturn<typeof functions.offerAccumulatedFees>
+
 export type PermissionsParams = FunctionArguments<typeof functions.permissions>
 export type PermissionsReturn = FunctionReturn<typeof functions.permissions>
 
@@ -135,6 +135,6 @@ export type SetFeeRecipientReturn = FunctionReturn<typeof functions.setFeeRecipi
 export type TotalOffersParams = FunctionArguments<typeof functions.totalOffers>
 export type TotalOffersReturn = FunctionReturn<typeof functions.totalOffers>
 
-export type WithdrawFeesParams = FunctionArguments<typeof functions.withdrawFees>
-export type WithdrawFeesReturn = FunctionReturn<typeof functions.withdrawFees>
+export type WithdrawOfferFeesParams = FunctionArguments<typeof functions.withdrawOfferFees>
+export type WithdrawOfferFeesReturn = FunctionReturn<typeof functions.withdrawOfferFees>
 

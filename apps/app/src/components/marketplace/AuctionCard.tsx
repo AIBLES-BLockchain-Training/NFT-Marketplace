@@ -4,6 +4,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
+import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { truncate } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -57,6 +58,18 @@ export function AuctionCard({ auction, onBid, onCancel, isOwner }: AuctionCardPr
   const bidBufferBps = BigInt(auction.bidBufferBps);
   const currentBid = auction.bids?.[0] ? BigInt(auction.bids[0].bidAmount) : minimumBidAmount;
   const nextMinBid = currentBid + (currentBid * bidBufferBps / 10000n);
+  
+  // Get currency info
+  const currencySymbol = auction.currency?.symbol || 'TOKEN';
+  const isUSDC = isUSDCCurrency(auction.currency?.id || '');
+  
+  // Format price based on currency type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
 
   return (
     <Card>
@@ -85,7 +98,7 @@ export function AuctionCard({ auction, onBid, onCancel, isOwner }: AuctionCardPr
             <div>
               <p className="text-xs text-gray-400 mb-1">Current Bid</p>
               <p className="text-xl font-bold text-primary-400">
-                {formatEth(currentBid)} ETH
+                {formatPrice(currentBid)} {currencySymbol}
               </p>
             </div>
             <div>
@@ -101,13 +114,13 @@ export function AuctionCard({ auction, onBid, onCancel, isOwner }: AuctionCardPr
           <div>
             <p className="text-xs text-gray-400 mb-1">Minimum Bid</p>
             <p className="text-sm font-semibold text-white">
-              {formatEth(minimumBidAmount)} ETH
+              {formatPrice(minimumBidAmount)} {currencySymbol}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">Next Min Bid</p>
             <p className="text-sm font-semibold text-white">
-              {formatEth(nextMinBid)} ETH
+              {formatPrice(nextMinBid)} {currencySymbol}
             </p>
           </div>
           <div>

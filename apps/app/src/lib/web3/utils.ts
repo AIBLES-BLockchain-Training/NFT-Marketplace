@@ -65,17 +65,20 @@ export function computeRoleHash(roleName: string): string {
 export const KNOWN_ROLES = {
   MANAGEMENT_ROLE: computeRoleHash('MANAGEMENT_ROLE'),
   LISTING_ROLE: computeRoleHash('LISTING_ROLE'),
-  NFT_ROLE: computeRoleHash('NFT_ROLE'),
   AUCTION_ROLE: computeRoleHash('AUCTION_ROLE'),
   OFFER_ROLE: computeRoleHash('OFFER_ROLE'),
+  NFT_ROLE: computeRoleHash('NFT_ROLE'),
 };
 
 // Export individual role hashes for convenience
 export const MANAGEMENT_ROLE_HASH = KNOWN_ROLES.MANAGEMENT_ROLE;
 export const LISTING_ROLE_HASH = KNOWN_ROLES.LISTING_ROLE;
-export const NFT_ROLE_HASH = KNOWN_ROLES.NFT_ROLE;
 export const AUCTION_ROLE_HASH = KNOWN_ROLES.AUCTION_ROLE;
 export const OFFER_ROLE_HASH = KNOWN_ROLES.OFFER_ROLE;
+export const NFT_ROLE_HASH = KNOWN_ROLES.NFT_ROLE;
+
+// Legacy aliases for backwards compatibility
+export const LISTING_MANAGEMENT_ROLE_HASH = KNOWN_ROLES.LISTING_ROLE;
 
 export function shortenHash(hash: string, chars = 6): string {
   return `${hash.substring(0, chars + 2)}...${hash.substring(hash.length - chars)}`;

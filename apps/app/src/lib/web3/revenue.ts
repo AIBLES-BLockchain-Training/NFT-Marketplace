@@ -1,14 +1,20 @@
 import { ethers } from 'ethers';
 
 const LISTING_ABI = [
-  'function accumulatedFees(address currency) external view returns (uint256)',
+  'function listingAccumulatedFees(address currency) external view returns (uint256)',
   'function getCurrencyFee(address currency) external view returns (uint256)',
   'function feeReceiver() external view returns (address)',
 ];
 
 const AUCTION_ABI = [
-  'function getAccumulatedFee(address currency) external view returns (uint256)', // Note: singular "Fee"
-  'function feeReceiver() external view returns (address)',
+  'function getAccumulatedFeeAuction(address currency) external view returns (uint256)',
+  'function getFeeReceiverAuction() external view returns (address)',
+];
+
+const OFFER_ABI = [
+  'function offerAccumulatedFees(address currency) external view returns (uint256)',
+  'function feeRecipient() external view returns (address)',
+  'function feePercentage() external view returns (uint256)',
 ];
 
 // Shared ABI for getCurrencyFee - both extensions use Listing's implementation via Router
@@ -36,14 +42,17 @@ export async function getAccumulatedFees(
     // Different ABIs for different extensions
     if (extensionType === 'listing') {
       const contract = new ethers.Contract(routerAddress, LISTING_ABI, provider);
-      const fees = await contract.accumulatedFees(currency);
+      const fees = await contract.listingAccumulatedFees(currency);
       return fees;
     } else if (extensionType === 'auction') {
       const contract = new ethers.Contract(routerAddress, AUCTION_ABI, provider);
-      const fees = await contract.getAccumulatedFee(currency); // Note: singular
+      const fees = await contract.getAccumulatedFeeAuction(currency);
+      return fees;
+    } else if (extensionType === 'offer') {
+      const contract = new ethers.Contract(routerAddress, OFFER_ABI, provider);
+      const fees = await contract.offerAccumulatedFees(currency);
       return fees;
     } else {
-      // Offer not implemented yet
       return BigInt(0);
     }
   } catch (error) {
@@ -83,11 +92,21 @@ export async function getFeeReceiverAddress(
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     const routerAddress = process.env.NEXT_PUBLIC_ROUTER_CONTRACT!;
-    const abi = extensionType === 'auction' ? AUCTION_ABI : LISTING_ABI;
-    const contract = new ethers.Contract(routerAddress, abi, provider);
-
-    const receiver = await contract.feeReceiver();
-    return receiver;
+    
+    let contract;
+    if (extensionType === 'auction') {
+      contract = new ethers.Contract(routerAddress, AUCTION_ABI, provider);
+      const receiver = await contract.getFeeReceiverAuction();
+      return receiver;
+    } else if (extensionType === 'offer') {
+      contract = new ethers.Contract(routerAddress, OFFER_ABI, provider);
+      const receiver = await contract.feeRecipient();
+      return receiver;
+    } else {
+      contract = new ethers.Contract(routerAddress, LISTING_ABI, provider);
+      const receiver = await contract.feeReceiver();
+      return receiver;
+    }
   } catch (error) {
     console.error('Error getting fee receiver:', error);
     return '';
@@ -111,12 +130,17 @@ export async function getCurrencyFeePercentage(
     const provider = new ethers.BrowserProvider(window.ethereum);
     const routerAddress = process.env.NEXT_PUBLIC_ROUTER_CONTRACT!;
 
-    // Always use GET_CURRENCY_FEE_ABI because only Listing has this function registered
-    const contract = new ethers.Contract(routerAddress, GET_CURRENCY_FEE_ABI, provider);
-
-    const feeBps = await contract.getCurrencyFee(currency);
-    // Convert basis points to percentage (e.g., 250 -> 2.5%)
-    return Number(feeBps) / 100;
+    if (extensionType === 'offer') {
+      // Offer uses global fee percentage, not currency-specific
+      const contract = new ethers.Contract(routerAddress, OFFER_ABI, provider);
+      const feeBps = await contract.feePercentage();
+      return Number(feeBps) / 100;
+    } else {
+      // Listing and Auction use currency-specific fees via getCurrencyFee function
+      const contract = new ethers.Contract(routerAddress, GET_CURRENCY_FEE_ABI, provider);
+      const feeBps = await contract.getCurrencyFee(currency);
+      return Number(feeBps) / 100;
+    }
   } catch (error) {
     console.debug(`Currency ${currency} fee not configured in ${extensionType}`);
     return 0;

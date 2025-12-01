@@ -21,21 +21,26 @@ interface Extension {
 
 function getOfferFunctions(): OfferFunction[] {
   return [
+    // === Core User Functions ===
     { selector: "0x016767fa", signature: "makeOffer((address,uint256,uint256,address,uint256,uint256))" },
     { selector: "0xef706adf", signature: "cancelOffer(uint256)" },
     { selector: "0xc815729d", signature: "acceptOffer(uint256)" },
+    
+    // === Admin Functions ===
+    { selector: "0x56d331c2", signature: "initializeOffer(address,address,uint256)" },
+    { selector: "0xe74b981b", signature: "setFeeRecipient(address)" },
+    { selector: "0xae06c1b7", signature: "setFeePercentage(uint256)" },
+    { selector: "0xbc9fc552", signature: "withdrawOfferFees(address)" },
+    
+    // === View Functions ===
     { selector: "0xa9fd8ed1", signature: "totalOffers()" },
     { selector: "0x4579268a", signature: "getOffer(uint256)" },
     { selector: "0xc1edcfbe", signature: "getAllOffers(uint256,uint256)" },
     { selector: "0x91940b3e", signature: "getAllValidOffers(uint256,uint256)" },
     { selector: "0x46904840", signature: "feeRecipient()" },
     { selector: "0xa001ecdd", signature: "feePercentage()" },
-    { selector: "0xe74b981b", signature: "setFeeRecipient(address)" },
-    { selector: "0xae06c1b7", signature: "setFeePercentage(uint256)" },
-    { selector: "0x56d331c2", signature: "initializeOffer(address,address,uint256)" },
     { selector: "0xab8c71c0", signature: "permissions()" },
-    { selector: "0xa221e161", signature: "withdrawFees(address)" },
-    { selector: "0xd6c083d5", signature: "accumulatedFees(address)" }
+    { selector: "0xc2f1412a", signature: "offerAccumulatedFees(address)" }
   ];
 }
 

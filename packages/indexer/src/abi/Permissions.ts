@@ -18,12 +18,12 @@ export const events = {
 }
 
 export const functions = {
-    AUCTION_ROLE: viewFun("0x430730a3", "AUCTION_ROLE()", {}, p.bytes32),
+    AUCTION_ROLE: viewFun("0x4320ac6c", "AUCTION_ROLE()", {}, p.bytes32),
+    MANAGEMENT_ROLE: viewFun("0x3c5d58d6", "MANAGEMENT_ROLE()", {}, p.bytes32),
+    NFT_ROLE: viewFun("0xe2dca2b2", "NFT_ROLE()", {}, p.bytes32),
     DEFAULT_ADMIN_ROLE: viewFun("0xa217fddf", "DEFAULT_ADMIN_ROLE()", {}, p.bytes32),
-    LISTING_ROLE: viewFun("0xfdac74da", "LISTING_ROLE()", {}, p.bytes32),
-    MANAGEMENT_ROLE: viewFun("0xcda5f89f", "MANAGEMENT_ROLE()", {}, p.bytes32),
-    NFT_ROLE: viewFun("0xf684f33c", "NFT_ROLE()", {}, p.bytes32),
-    OFFER_ROLE: viewFun("0x2d663f30", "OFFER_ROLE()", {}, p.bytes32),
+    LISTING_ROLE: viewFun("0x96f88ae4", "LISTING_ROLE()", {}, p.bytes32),
+    OFFER_ROLE: viewFun("0xa467d44b", "OFFER_ROLE()", {}, p.bytes32),
     addCurrency: fun("0xd13d7197", "addCurrency(address[])", {"_currencies": p.array(p.address)}, ),
     assignNFTRole: fun("0xfe1d7ce1", "assignNFTRole(address[])", {"_nfts": p.array(p.address)}, ),
     assignRole: fun("0x87f39dfc", "assignRole(bytes32,address[])", {"role": p.bytes32, "accounts": p.array(p.address)}, ),
@@ -48,20 +48,20 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.AUCTION_ROLE, {})
     }
 
-    DEFAULT_ADMIN_ROLE() {
-        return this.eth_call(functions.DEFAULT_ADMIN_ROLE, {})
-    }
-
-    LISTING_ROLE() {
-        return this.eth_call(functions.LISTING_ROLE, {})
-    }
-
     MANAGEMENT_ROLE() {
         return this.eth_call(functions.MANAGEMENT_ROLE, {})
     }
 
     NFT_ROLE() {
         return this.eth_call(functions.NFT_ROLE, {})
+    }
+
+    DEFAULT_ADMIN_ROLE() {
+        return this.eth_call(functions.DEFAULT_ADMIN_ROLE, {})
+    }
+
+    LISTING_ROLE() {
+        return this.eth_call(functions.LISTING_ROLE, {})
     }
 
     OFFER_ROLE() {
@@ -99,17 +99,17 @@ export type UserRoleRevokedEventArgs = EParams<typeof events.UserRoleRevoked>
 export type AUCTION_ROLEParams = FunctionArguments<typeof functions.AUCTION_ROLE>
 export type AUCTION_ROLEReturn = FunctionReturn<typeof functions.AUCTION_ROLE>
 
-export type DEFAULT_ADMIN_ROLEParams = FunctionArguments<typeof functions.DEFAULT_ADMIN_ROLE>
-export type DEFAULT_ADMIN_ROLEReturn = FunctionReturn<typeof functions.DEFAULT_ADMIN_ROLE>
-
-export type LISTING_ROLEParams = FunctionArguments<typeof functions.LISTING_ROLE>
-export type LISTING_ROLEReturn = FunctionReturn<typeof functions.LISTING_ROLE>
-
 export type MANAGEMENT_ROLEParams = FunctionArguments<typeof functions.MANAGEMENT_ROLE>
 export type MANAGEMENT_ROLEReturn = FunctionReturn<typeof functions.MANAGEMENT_ROLE>
 
 export type NFT_ROLEParams = FunctionArguments<typeof functions.NFT_ROLE>
 export type NFT_ROLEReturn = FunctionReturn<typeof functions.NFT_ROLE>
+
+export type DEFAULT_ADMIN_ROLEParams = FunctionArguments<typeof functions.DEFAULT_ADMIN_ROLE>
+export type DEFAULT_ADMIN_ROLEReturn = FunctionReturn<typeof functions.DEFAULT_ADMIN_ROLE>
+
+export type LISTING_ROLEParams = FunctionArguments<typeof functions.LISTING_ROLE>
+export type LISTING_ROLEReturn = FunctionReturn<typeof functions.LISTING_ROLE>
 
 export type OFFER_ROLEParams = FunctionArguments<typeof functions.OFFER_ROLE>
 export type OFFER_ROLEReturn = FunctionReturn<typeof functions.OFFER_ROLE>

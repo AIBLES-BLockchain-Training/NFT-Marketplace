@@ -266,6 +266,11 @@ export function decodeContractError(error: unknown): string {
       return 'Network error. Please check your connection and try again.';
     }
 
+    // Missing revert data (common with delegatecall/proxy patterns)
+    if (errorMessage.includes('missing revert data')) {
+      return 'Transaction would fail. This usually indicates:\n\n• Missing required role - Request OFFER role from admin in Profile > Request Roles\n• NFT collection not whitelisted - Request NFT whitelist in Profile > Request Roles\n• Currency not supported - Check supported currencies\n• Insufficient balance or allowance\n• NFT not approved for marketplace\n\nPlease verify your permissions, approvals, and balances.';
+    }
+
     // Generic execution revert
     if (errorMessage.includes('execution reverted')) {
       // Check if it's likely an approval issue or missing role

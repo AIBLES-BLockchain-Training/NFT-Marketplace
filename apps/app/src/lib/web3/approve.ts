@@ -26,8 +26,9 @@ const approvalCache = new Map<string, boolean>();
 // Cache whitelist status in memory (per session)
 const whitelistCache = new Map<string, boolean>();
 
-function getCacheKey(nftContract: Address, ownerAddress: Address): string {
-  return `${nftContract.toLowerCase()}_${ownerAddress.toLowerCase()}`;
+function getCacheKey(nftContract: Address, ownerAddress: Address, tokenId?: string): string {
+  const base = `${nftContract.toLowerCase()}_${ownerAddress.toLowerCase()}`;
+  return tokenId ? `${base}_${tokenId}` : base;
 }
 
 /**
@@ -89,8 +90,8 @@ export async function checkNFTApproval(
     const provider = getBrowserProvider();
     if (!provider) throw new Error('Provider not found');
 
-    // Check cache first
-    const cacheKey = getCacheKey(nftContract, ownerAddress);
+    // Check cache first (for ERC721, include tokenId in cache key)
+    const cacheKey = isERC1155 ? getCacheKey(nftContract, ownerAddress) : getCacheKey(nftContract, ownerAddress, tokenId);
     const cachedApproval = approvalCache.get(cacheKey);
     if (cachedApproval !== undefined) {
       return {
@@ -130,8 +131,9 @@ export async function checkNFTApproval(
       const approvedAddress = await contract.getApproved(tokenId);
       const isApproved = approvedAddress.toLowerCase() === ROUTER_ADDRESS.toLowerCase();
 
-      // Cache the result
-      approvalCache.set(cacheKey, isApproved);
+      // Cache the result with tokenId-specific key
+      const tokenCacheKey = getCacheKey(nftContract, ownerAddress, tokenId);
+      approvalCache.set(tokenCacheKey, isApproved);
 
       return {
         isApproved,
@@ -185,9 +187,9 @@ export async function approveNFT(
 
       const success = receipt.status === 1;
 
-      // Cache the approval status if successful
+      // Cache the approval status if successful (with tokenId-specific key)
       if (success) {
-        const cacheKey = getCacheKey(nftContract as `0x${string}`, ownerAddress as `0x${string}`);
+        const cacheKey = getCacheKey(nftContract as `0x${string}`, ownerAddress as `0x${string}`, tokenId);
         approvalCache.set(cacheKey, true);
       }
 

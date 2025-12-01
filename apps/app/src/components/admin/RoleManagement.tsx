@@ -6,7 +6,7 @@ import { Badge } from '../common/Badge';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeGrantRole, encodeRevokeRole } from '../../lib/web3/encoding';
-import { MANAGEMENT_ROLE_HASH, isValidAddress } from '../../lib/web3/utils';
+import { LISTING_MANAGEMENT_ROLE_HASH, isValidAddress } from '../../lib/web3/utils';
 import { Address } from '../../types';
 import toast from 'react-hot-toast';
 
@@ -41,7 +41,7 @@ export function RoleManagement({ roles = [], onRoleUpdate }: RoleManagementProps
 
     try {
       const tx = encodeGrantRole(
-        MANAGEMENT_ROLE_HASH,
+        LISTING_MANAGEMENT_ROLE_HASH,
         trimmedAddress as Address
       );
 
@@ -68,7 +68,7 @@ export function RoleManagement({ roles = [], onRoleUpdate }: RoleManagementProps
 
     try {
       const tx = encodeRevokeRole(
-        MANAGEMENT_ROLE_HASH,
+        LISTING_MANAGEMENT_ROLE_HASH,
         address as Address
       );
 
@@ -85,7 +85,7 @@ export function RoleManagement({ roles = [], onRoleUpdate }: RoleManagementProps
     }
   };
 
-  const adminRoles = roles.filter((r) => r.roleName === 'MANAGEMENT_ROLE');
+  const adminRoles = roles.filter((r) => r.roleName === 'LISTING_MANAGEMENT_ROLE');
 
   return (
     <Card>

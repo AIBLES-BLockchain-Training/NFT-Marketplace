@@ -49,7 +49,7 @@ async function main() {
     const feePercent = (Number(feePercentage) / 100).toFixed(2);
     console.log('Fee percentage:', feePercentage.toString(), '(' + feePercent + '%)');
 
-    const accumulatedFees = await routerAsOffer['accumulatedFees'](ethers.ZeroAddress);
+    const accumulatedFees = await routerAsOffer['offerAccumulatedFees'](ethers.ZeroAddress);
     console.log('Accumulated ETH fees:', ethers.formatEther(accumulatedFees), 'ETH');
 
     await delay(delayBetweenCalls);
@@ -160,7 +160,7 @@ async function main() {
     const totalOffersEnd = await routerAsOffer['totalOffers']();
     console.log('Total offers:', totalOffersEnd.toString());
 
-    const accumulatedFeesEnd = await routerAsOffer['accumulatedFees'](ethers.ZeroAddress);
+    const accumulatedFeesEnd = await routerAsOffer['offerAccumulatedFees'](ethers.ZeroAddress);
     console.log('Accumulated ETH fees:', ethers.formatEther(accumulatedFeesEnd), 'ETH');
 
     console.log('\n========================================');

@@ -8,6 +8,7 @@ const requiredEnvVars = {
   NEXT_PUBLIC_AUCTION_CONTRACT: process.env.NEXT_PUBLIC_AUCTION_CONTRACT,
   NEXT_PUBLIC_OFFER_CONTRACT: process.env.NEXT_PUBLIC_OFFER_CONTRACT,
   NEXT_PUBLIC_EXTENSION_MANAGER_CONTRACT: process.env.NEXT_PUBLIC_EXTENSION_MANAGER_CONTRACT,
+  NEXT_PUBLIC_MULTISIG_CONTRACT: process.env.NEXT_PUBLIC_MULTISIG_CONTRACT,
 };
 
 Object.entries(requiredEnvVars).forEach(([key, value]) => {
@@ -23,6 +24,7 @@ export const CONTRACT_ADDRESSES = {
   ROUTER: (process.env.NEXT_PUBLIC_ROUTER_CONTRACT || '') as Address,
   OFFER: (process.env.NEXT_PUBLIC_OFFER_CONTRACT || '') as Address,
   AUCTION: (process.env.NEXT_PUBLIC_AUCTION_CONTRACT || '') as Address,
+  MULTISIG: (process.env.NEXT_PUBLIC_MULTISIG_CONTRACT || '') as Address,
 };
 
 export const CHAIN_CONFIG = {

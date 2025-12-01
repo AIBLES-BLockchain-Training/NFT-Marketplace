@@ -1475,3 +1475,50 @@ export const GET_REVENUE_STATS_QUERY = `
     }
   }
 `;
+
+export const GET_DASHBOARD_CHARTS_DATA_QUERY = `
+  query GetDashboardChartsData {
+    purchaseHistories(limit: 1000, orderBy: timestamp_DESC) {
+      id
+      totalPrice
+      tradeType
+      timestamp
+      currency {
+        symbol
+        decimals
+      }
+    }
+    listings(limit: 1000, where: { status_eq: CREATED }) {
+      id
+      createdAt
+      pricePerToken
+    }
+    auctions(limit: 1000, where: { status_in: [CREATED, ACTIVE, COMPLETED] }) {
+      id
+      startTime
+      endTime
+      startPrice
+      status
+    }
+    offers(limit: 1000, where: { status_in: [ACTIVE, ACCEPTED, EXPIRED] }) {
+      id
+      createdAt
+      totalPrice
+      status
+    }
+    subjects(limit: 1000, where: { subjectType_eq: USER }) {
+      id
+      createdAt
+    }
+    feeWithdrawals(limit: 1000, orderBy: timestamp_DESC) {
+      id
+      amount
+      timestamp
+      extensionType
+      currency {
+        symbol
+        decimals
+      }
+    }
+  }
+`;

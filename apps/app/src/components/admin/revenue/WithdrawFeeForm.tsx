@@ -13,7 +13,9 @@ import { USDC_ADDRESS } from '../../../lib/constants';
 import toast from 'react-hot-toast';
 import { ethers } from 'ethers';
 
-const LISTING_ABI = ['function withdrawFees(address currency) external'];
+const LISTING_ABI = ['function withdrawListingFees(address currency) external'];
+const AUCTION_ABI = ['function withdrawFeesAuction(address currency) external'];
+const OFFER_ABI = ['function withdrawOfferFees(address currency) external'];
 
 interface Currency {
   id: string;
@@ -76,8 +78,21 @@ export function WithdrawFeeForm() {
     }
 
     try {
-      const iface = new ethers.Interface(LISTING_ABI);
-      const data = iface.encodeFunctionData('withdrawFees', [selectedCurrency]);
+      let iface: ethers.Interface;
+      let data: string;
+
+      if (extension === 'listing') {
+        iface = new ethers.Interface(LISTING_ABI);
+        data = iface.encodeFunctionData('withdrawListingFees', [selectedCurrency]);
+      } else if (extension === 'auction') {
+        iface = new ethers.Interface(AUCTION_ABI);
+        data = iface.encodeFunctionData('withdrawFeesAuction', [selectedCurrency]);
+      } else if (extension === 'offer') {
+        iface = new ethers.Interface(OFFER_ABI);
+        data = iface.encodeFunctionData('withdrawOfferFees', [selectedCurrency]);
+      } else {
+        throw new Error('Invalid extension selected');
+      }
 
       const formattedAmount = formatUSDCWithSymbol(availableAmount.toString());
 
@@ -122,9 +137,7 @@ export function WithdrawFeeForm() {
           >
             <option value="listing">Listing</option>
             <option value="auction">Auction</option>
-            <option value="offer" disabled>
-              Offer (Coming Soon)
-            </option>
+            <option value="offer">Offer</option>
           </select>
         </div>
 

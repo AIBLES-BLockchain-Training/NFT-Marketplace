@@ -8,7 +8,7 @@ import { Button } from '../common/Button';
 import { NFTImage } from '../common/NFTImage';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
-import { truncateTokenId } from '../../lib/utils/format';
+import { truncateTokenId, formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
 import { useCancelAuction } from '../../hooks/useCancelAuction';
 import {
@@ -469,7 +469,13 @@ export function NFTDetailModal({
                                     <div>
                                       <p className="text-xs text-gray-500 mb-1">Price</p>
                                       <p className="text-base text-white font-bold">
-                                        {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                                        {(() => {
+                                          const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency || '';
+                                          if (isUSDCCurrency(currencyId)) {
+                                            return formatUSDCFromLegacy(BigInt(price));
+                                          }
+                                          return `${formatEth(price)} ${currencySymbol}`;
+                                        })()}
                                       </p>
                                     </div>
 
@@ -559,7 +565,13 @@ export function NFTDetailModal({
                                     <div className="flex items-center gap-2">
                                       <p className="text-xs text-gray-500">Price:</p>
                                       <p className="text-base text-white font-bold">
-                                        {formatEth(price)} <span className="text-sm text-gray-400">{currencySymbol}</span>
+                                        {(() => {
+                                          const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency || '';
+                                          if (isUSDCCurrency(currencyId)) {
+                                            return formatUSDCFromLegacy(BigInt(price));
+                                          }
+                                          return `${formatEth(price)} ${currencySymbol}`;
+                                        })()}
                                       </p>
                                     </div>
                                     <div className="flex items-center gap-2">

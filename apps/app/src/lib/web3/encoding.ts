@@ -37,7 +37,7 @@ export interface OfferParams {
 }
 
 export function encodeCreateListing(params: ListingParams): EncodedTransaction {
-  const listingInterface = new ethers.Interface(ListingABI);
+  const listingInterface = new ethers.Interface(ListingABI.abi);
   const data = listingInterface.encodeFunctionData('createListing', [
     {
       assetContract: params.assetContract,
@@ -59,7 +59,7 @@ export function encodeCreateListing(params: ListingParams): EncodedTransaction {
 }
 
 export function encodeUpdateListing(listingId: bigint, params: ListingParams): EncodedTransaction {
-  const listingInterface = new ethers.Interface(ListingABI);
+  const listingInterface = new ethers.Interface(ListingABI.abi);
   const data = listingInterface.encodeFunctionData('updateListing', [
     listingId,
     {
@@ -82,7 +82,7 @@ export function encodeUpdateListing(listingId: bigint, params: ListingParams): E
 }
 
 export function encodeCancelListing(listingId: bigint): EncodedTransaction {
-  const listingInterface = new ethers.Interface(ListingABI);
+  const listingInterface = new ethers.Interface(ListingABI.abi);
   const data = listingInterface.encodeFunctionData('cancelListing', [listingId]);
 
   return {
@@ -99,7 +99,7 @@ export function encodeBuyFromListing(
   currency: Address,
   expectedTotalPrice: bigint
 ): EncodedTransaction {
-  const listingInterface = new ethers.Interface(ListingABI);
+  const listingInterface = new ethers.Interface(ListingABI.abi);
 
   // Check if currency is native token (ETH)
   // Contract uses address(0) for native ETH
@@ -128,7 +128,7 @@ export function encodeApproveBuyerForListing(
   buyer: Address,
   toApprove: boolean
 ): EncodedTransaction {
-  const listingInterface = new ethers.Interface(ListingABI);
+  const listingInterface = new ethers.Interface(ListingABI.abi);
   const data = listingInterface.encodeFunctionData('approveBuyerForListing', [listingId, buyer, toApprove]);
 
   return {
@@ -143,7 +143,7 @@ export function encodeApproveCurrencyForListing(
   currency: Address,
   pricePerTokenInCurrency: bigint
 ): EncodedTransaction {
-  const listingInterface = new ethers.Interface(ListingABI);
+  const listingInterface = new ethers.Interface(ListingABI.abi);
   const data = listingInterface.encodeFunctionData('approveCurrencyForListing', [
     listingId,
     currency,
@@ -158,7 +158,7 @@ export function encodeApproveCurrencyForListing(
 }
 
 export function encodeCreateAuction(params: AuctionParams): EncodedTransaction {
-  const auctionInterface = new ethers.Interface(AuctionABI);
+  const auctionInterface = new ethers.Interface(AuctionABI.abi);
   const data = auctionInterface.encodeFunctionData('createAuction', [
     {
       _assetContract: params.assetContract,
@@ -186,7 +186,7 @@ export function encodeBidInAuction(params: {
   bidAmount: bigint;
   currency: Address;
 }): EncodedTransaction {
-  const auctionInterface = new ethers.Interface(AuctionABI);
+  const auctionInterface = new ethers.Interface(AuctionABI.abi);
   const data = auctionInterface.encodeFunctionData('bidInAuction', [params.auctionId, params.bidAmount]);
 
   // Check if currency is native token (ETH)
@@ -206,7 +206,7 @@ export function encodeBidInAuction(params: {
 }
 
 export function encodeCancelAuction(params: { auctionId: bigint }): EncodedTransaction {
-  const auctionInterface = new ethers.Interface(AuctionABI);
+  const auctionInterface = new ethers.Interface(AuctionABI.abi);
   const data = auctionInterface.encodeFunctionData('cancelAuction', [params.auctionId]);
 
   return {
@@ -217,7 +217,7 @@ export function encodeCancelAuction(params: { auctionId: bigint }): EncodedTrans
 }
 
 export function encodeCollectAuctionPayout(params: { auctionId: bigint }): EncodedTransaction {
-  const auctionInterface = new ethers.Interface(AuctionABI);
+  const auctionInterface = new ethers.Interface(AuctionABI.abi);
   const data = auctionInterface.encodeFunctionData('collectAuctionPayout', [params.auctionId]);
 
   return {
@@ -228,7 +228,7 @@ export function encodeCollectAuctionPayout(params: { auctionId: bigint }): Encod
 }
 
 export function encodeCollectAuctionToken(params: { auctionId: bigint }): EncodedTransaction {
-  const auctionInterface = new ethers.Interface(AuctionABI);
+  const auctionInterface = new ethers.Interface(AuctionABI.abi);
   const data = auctionInterface.encodeFunctionData('collectAuctionToken', [params.auctionId]);
 
   return {
@@ -239,7 +239,7 @@ export function encodeCollectAuctionToken(params: { auctionId: bigint }): Encode
 }
 
 export function encodeMakeOffer(params: OfferParams): EncodedTransaction {
-  const offerInterface = new ethers.Interface(OfferABI);
+  const offerInterface = new ethers.Interface(OfferABI.abi);
   const data = offerInterface.encodeFunctionData('makeOffer', [
     {
       assetContract: params.assetContract,
@@ -251,15 +251,23 @@ export function encodeMakeOffer(params: OfferParams): EncodedTransaction {
     },
   ]);
 
+  // Check if currency is native token (ETH) - contract uses address(0) for native ETH
+  const isNativeToken = params.currency.toLowerCase() === ZERO_ADDRESS.toLowerCase() ||
+                        params.currency.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+
+  // For native ETH offers, send ETH value with transaction (escrow model)
+  // For ERC20 offers, value should be 0 (tokens transferred via approve + transferFrom)
+  const value = isNativeToken ? params.totalPrice.toString() : '0';
+
   return {
     to: CONTRACT_ADDRESSES.ROUTER,
     data,
-    value: '0',
+    value,
   };
 }
 
 export function encodeAcceptOffer(offerId: bigint): EncodedTransaction {
-  const offerInterface = new ethers.Interface(OfferABI);
+  const offerInterface = new ethers.Interface(OfferABI.abi);
   const data = offerInterface.encodeFunctionData('acceptOffer', [offerId]);
 
   return {
@@ -270,7 +278,7 @@ export function encodeAcceptOffer(offerId: bigint): EncodedTransaction {
 }
 
 export function encodeCancelOffer(offerId: bigint): EncodedTransaction {
-  const offerInterface = new ethers.Interface(OfferABI);
+  const offerInterface = new ethers.Interface(OfferABI.abi);
   const data = offerInterface.encodeFunctionData('cancelOffer', [offerId]);
 
   return {
@@ -281,7 +289,7 @@ export function encodeCancelOffer(offerId: bigint): EncodedTransaction {
 }
 
 export function encodeGrantRole(roleHash: string, account: Address): EncodedTransaction {
-  const permissionsInterface = new ethers.Interface(PermissionsABI);
+  const permissionsInterface = new ethers.Interface(PermissionsABI.abi);
   const data = permissionsInterface.encodeFunctionData('grantRole', [roleHash, account]);
 
   return {
@@ -292,7 +300,7 @@ export function encodeGrantRole(roleHash: string, account: Address): EncodedTran
 }
 
 export function encodeRevokeRole(roleHash: string, account: Address): EncodedTransaction {
-  const permissionsInterface = new ethers.Interface(PermissionsABI);
+  const permissionsInterface = new ethers.Interface(PermissionsABI.abi);
   const data = permissionsInterface.encodeFunctionData('revokeRole', [roleHash, account]);
 
   return {
@@ -303,7 +311,7 @@ export function encodeRevokeRole(roleHash: string, account: Address): EncodedTra
 }
 
 export function encodeAssignRole(roleHash: string, accounts: Address[]): EncodedTransaction {
-  const permissionsInterface = new ethers.Interface(PermissionsABI);
+  const permissionsInterface = new ethers.Interface(PermissionsABI.abi);
   const data = permissionsInterface.encodeFunctionData('assignRole', [roleHash, accounts]);
 
   return {

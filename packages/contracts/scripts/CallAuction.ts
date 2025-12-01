@@ -246,7 +246,7 @@ class Auction {
   async withdrawFees(currency: string) {
     console.log(`Withdrawing accumulated fee for currency: ${currency}`);
     try {
-      const tx = await this.contract.withdrawFeesAuction(currency);
+      const tx = await this.contract.withdrawAuctionFees(currency);
       await tx.wait();
       console.log('Withdraw fee successful:', tx.hash);
     } catch (error) {

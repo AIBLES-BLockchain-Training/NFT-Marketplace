@@ -237,7 +237,7 @@ async function getCurrencyFee(routerAsListing: any, currency: string) {
 async function withdrawFees(routerAsListing: any, currency: string) {
   console.log(`Withdrawing fees for ${currency === ethers.ZeroAddress ? "ETH" : currency}...`);
 
-  const accumulated = await routerAsListing.accumulatedFees(currency);
+  const accumulated = await routerAsListing.listingAccumulatedFees(currency);
   console.log("Accumulated fees:", ethers.formatEther(accumulated));
 
   if (accumulated.toString() === "0") {
@@ -245,7 +245,7 @@ async function withdrawFees(routerAsListing: any, currency: string) {
     return;
   }
 
-  const tx = await routerAsListing.withdrawFees(currency);
+  const tx = await routerAsListing.withdrawListingFees(currency);
   console.log("Transaction hash:", tx.hash);
 
   const receipt = await tx.wait();

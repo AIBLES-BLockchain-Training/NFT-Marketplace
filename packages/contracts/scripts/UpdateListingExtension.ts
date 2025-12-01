@@ -24,22 +24,49 @@ interface Extension {
 // IMPORTANT: Use canonical signatures (with tuples expanded) to match ethers.js encoding
 function getListingFunctions(): ListingFunction[] {
   return [
+    // === Core User Functions ===
     { selector: "0x746415b5", signature: "createListing((address,uint256,uint256,address,uint256,uint128,uint128,bool))" },
     { selector: "0x704232dc", signature: "buyFromListing(uint256,address,uint256,address,uint256)" },
     { selector: "0x305a67a8", signature: "cancelListing(uint256)" },
     { selector: "0x07b67758", signature: "updateListing(uint256,(address,uint256,uint256,address,uint256,uint128,uint128,bool))" },
+    
+    // === Admin Functions ===
+    { selector: "0x6cf8745d", signature: "initializeListing(address,address)" },
+    { selector: "0x51d5f97c", signature: "setCurrencyFee(address,uint256)" },
+    { selector: "0x2275b838", signature: "setPermissionContract(address)" },
+    { selector: "0xefdcd974", signature: "setFeeReceiver(address)" },
+    { selector: "0x779450ba", signature: "withdrawListingFees(address)" },
+    { selector: "0x48dd77df", signature: "approveBuyerForListing(uint256,address,bool)" },
+    { selector: "0xea8f9a3c", signature: "approveCurrencyForListing(uint256,address,uint256)" },
+    
+    // === View Functions - Listings ===
     { selector: "0xc5275fb0", signature: "getAllListings(uint256,uint256)" },
     { selector: "0x31654b4d", signature: "getAllValidListings(uint256,uint256)" },
     { selector: "0x107a274a", signature: "getListing(uint256)" },
+    { selector: "0xde74e57b", signature: "listings(uint256)" },
     { selector: "0xc78b616c", signature: "totalListings()" },
-    { selector: "0x6cf8745d", signature: "initializeListing(address,address)" },
-    { selector: "0x51d5f97c", signature: "setCurrencyFee(address,uint256)" },
-    { selector: "0x164e68de", signature: "withdrawFees(address)" },
-    { selector: "0x48dd77df", signature: "approveBuyerForListing(uint256,address,bool)" },
-    { selector: "0xea8f9a3c", signature: "approveCurrencyForListing(uint256,address,uint256)" },
-    { selector: "0x3fa615b0", signature: "feeReceiver()" },
-    { selector: "0xfcf66664", signature: "accumulatedFees(address)" },
-    { selector: "0x752d8a09", signature: "getCurrencyFee(address)" }
+    { selector: "0x6c2c9c7d", signature: "listingCounter()" },
+    { selector: "0xbfc5ca2b", signature: "userOwnedListings(address)" },
+    
+    // === View Functions - Approvals ===
+    { selector: "0x6ce1432a", signature: "buyerApprovals(uint256,address)" },
+    { selector: "0xe4801a2d", signature: "currencyApprovals(uint256,address)" },
+    
+    // === View Functions - Fees ===
+    { selector: "0x752d8a09", signature: "getCurrencyFee(address)" },
+    { selector: "0xb79bc82b", signature: "currencyFees(address)" },
+    { selector: "0x38ca5838", signature: "listingAccumulatedFees(address)" },
+    { selector: "0xb3f00674", signature: "feeReceiver()" },
+    
+    // === View Functions - Config ===
+    { selector: "0x50d549af", signature: "decimalListing()" },
+    { selector: "0xd53cb718", signature: "permissionContract()" },
+    { selector: "0x93272baf", signature: "getTokenType(address)" },
+    
+    // === View Functions - Permissions ===
+    { selector: "0x07e45ca1", signature: "hasListingPermission(address)" },
+    { selector: "0x70dfaeca", signature: "isCurrencySupported(address)" },
+    { selector: "0xaf36199b", signature: "isNFTWhitelisted(address)" }
   ];
 }
 

@@ -20,7 +20,7 @@ export const functions = {
     getAllExtensions: viewFun("0x4a00cc48", "getAllExtensions()", {}, p.array(p.struct({"metadata": p.struct({"name": p.string, "metadataURI": p.string, "implementation": p.address}), "functions": p.array(p.struct({"functionSelector": p.bytes4, "functionSignature": p.string}))}))),
     getAllFunctions: viewFun("0xab6418b4", "getAllFunctions()", {}, p.array(p.struct({"functionSelector": p.bytes4, "functionSignature": p.string}))),
     getExtension: viewFun("0xc22707ee", "getExtension(string)", {"_extensionName": p.string}, p.struct({"metadata": p.struct({"name": p.string, "metadataURI": p.string, "implementation": p.address}), "functions": p.array(p.struct({"functionSelector": p.bytes4, "functionSignature": p.string}))})),
-    getImplementationForFunction: viewFun("0xce0b6013", "getImplementationForFunction(bytes4)", {"_functionSelector": p.bytes4}, p.address),
+    getExtensionImplementation: viewFun("0xb4d99d2d", "getExtensionImplementation(bytes4)", {"_functionSelector": p.bytes4}, p.address),
     getMetadataForFunction: viewFun("0xa0dbaefd", "getMetadataForFunction(bytes4)", {"_functionSelector": p.bytes4}, p.struct({"name": p.string, "metadataURI": p.string, "implementation": p.address})),
     owner: viewFun("0x8da5cb5b", "owner()", {}, p.address),
     removeExtension: fun("0xee7d2adf", "removeExtension(string)", {"_extensionName": p.string}, ),
@@ -51,8 +51,8 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.getExtension, {_extensionName})
     }
 
-    getImplementationForFunction(_functionSelector: GetImplementationForFunctionParams["_functionSelector"]) {
-        return this.eth_call(functions.getImplementationForFunction, {_functionSelector})
+    getExtensionImplementation(_functionSelector: GetExtensionImplementationParams["_functionSelector"]) {
+        return this.eth_call(functions.getExtensionImplementation, {_functionSelector})
     }
 
     getMetadataForFunction(_functionSelector: GetMetadataForFunctionParams["_functionSelector"]) {
@@ -97,8 +97,8 @@ export type GetAllFunctionsReturn = FunctionReturn<typeof functions.getAllFuncti
 export type GetExtensionParams = FunctionArguments<typeof functions.getExtension>
 export type GetExtensionReturn = FunctionReturn<typeof functions.getExtension>
 
-export type GetImplementationForFunctionParams = FunctionArguments<typeof functions.getImplementationForFunction>
-export type GetImplementationForFunctionReturn = FunctionReturn<typeof functions.getImplementationForFunction>
+export type GetExtensionImplementationParams = FunctionArguments<typeof functions.getExtensionImplementation>
+export type GetExtensionImplementationReturn = FunctionReturn<typeof functions.getExtensionImplementation>
 
 export type GetMetadataForFunctionParams = FunctionArguments<typeof functions.getMetadataForFunction>
 export type GetMetadataForFunctionReturn = FunctionReturn<typeof functions.getMetadataForFunction>

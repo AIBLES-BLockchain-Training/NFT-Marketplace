@@ -5,7 +5,7 @@ import { NFT, ListingStatus } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { formatEth } from '../../lib/web3/utils';
-import { getIpfsGateways } from '../../lib/utils/format';
+import { getIpfsGateways, formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
 
 interface NFTCardProps {
   nft: NFT;
@@ -16,15 +16,48 @@ export function NFTCard({ nft }: NFTCardProps) {
   const [fallbackIndex, setFallbackIndex] = useState(0);
 
   const activeListings = nft.listings?.filter(l => l.status === ListingStatus.CREATED) || [];
-  const lowestPrice = activeListings.length > 0
+  
+  // Find the listing with the lowest price (also get currency info)
+  const lowestPriceListing = activeListings.length > 0
     ? activeListings.reduce((min, listing) => {
         const price = BigInt(listing.pricePerToken);
-        return price < min ? price : min;
-      }, BigInt(activeListings[0].pricePerToken))
+        const minPrice = BigInt(min.pricePerToken);
+        return price < minPrice ? listing : min;
+      }, activeListings[0])
     : null;
+    
+  const lowestPrice = lowestPriceListing ? BigInt(lowestPriceListing.pricePerToken) : null;
 
   // Get listing owner (for cards that represent individual listings)
   const listingOwner = activeListings.length === 1 ? activeListings[0].owner : null;
+  
+  // Get currency info from the lowest price listing
+  let currencySymbol = 'TOKEN';
+  let currencyAddress = '';
+  
+  if (lowestPriceListing) {
+    // Check if listing has currency approvals
+    if (lowestPriceListing.currencyApprovals && lowestPriceListing.currencyApprovals.length > 0) {
+      const currencyInfo = lowestPriceListing.currencyApprovals[0].currency;
+      currencySymbol = currencyInfo.symbol;
+      currencyAddress = currencyInfo.id;
+    } else {
+      // Fallback to basic currency field
+      currencyAddress = lowestPriceListing.currency || '';
+      currencySymbol = currencyAddress === '0x0000000000000000000000000000000000000000' ? 'ETH' : 'TOKEN';
+    }
+  }
+  
+  // Check if this is USDC currency
+  const isUSDC = isUSDCCurrency(currencyAddress);
+  
+  // Format price based on currency type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDC) {
+      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+    }
+    return formatEth(amount);
+  };
 
   // Check if listing is reserved
   const firstListing = activeListings[0];
@@ -126,7 +159,7 @@ export function NFTCard({ nft }: NFTCardProps) {
             <div className="flex items-center justify-between pt-1.5 border-t border-dark-border">
               <span className="text-[10px] text-gray-400">Price</span>
               <span className="text-xs font-semibold text-primary-400">
-                {formatEth(lowestPrice)} ETH
+                {formatPrice(lowestPrice!)} {currencySymbol}
               </span>
             </div>
           )}

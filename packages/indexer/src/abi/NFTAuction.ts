@@ -8,6 +8,7 @@ export const events = {
     AuctionCreated: event("0xe65d666b934fa6a599a38cb331d43bea98c313296c5b786f21e11c23938658fe", "AuctionCreated(uint256,address,address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256,uint8)", {"auctionId": indexed(p.uint256), "seller": indexed(p.address), "assetContract": indexed(p.address), "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "stepAmount": p.uint256, "tokenType": p.uint8}),
     AuctionFinalized: event("0x81bd28ae84f5a9d2a1eff49e950eba8746e0f1681c140b90c6c0f569996ac0c3", "AuctionFinalized(uint256,address,uint256,address)", {"auctionId": indexed(p.uint256), "winner": indexed(p.address), "winningBid": p.uint256, "currency": p.address}),
     AuctionPayoutCollected: event("0xab2d11a4cba899440e689b797feb807ed64a0e6a275253a20549e47958ccc9b6", "AuctionPayoutCollected(uint256,address,uint256)", {"auctionId": indexed(p.uint256), "seller": indexed(p.address), "amount": p.uint256}),
+    AuctionStorageReset: event("0xf40102efc4362cd60f95b3741aff2dc48fc1d32b0549f0657a03c73e353d49a8", "AuctionStorageReset(address)", {"admin": indexed(p.address)}),
     AuctionTokenCollected: event("0xc09791e926fed93c83ece90e9339e29eac0a7446063dfa0b4531928b3e147695", "AuctionTokenCollected(uint256,address,uint256)", {"auctionId": indexed(p.uint256), "winner": indexed(p.address), "tokenId": p.uint256}),
     FeeReceiverUpdated: event("0xa92ff4390fe6943f0b30e8fe715dde86f85ab79b2b2c640a10fc094cc4036cc8", "FeeReceiverUpdated(address,address)", {"oldReceiver": indexed(p.address), "newReceiver": indexed(p.address)}),
     FeeWithdrawn: event("0x00ed5939179dc194223f0edd1517ecee2210b22da7f82c8e4b1795e93b9f06aa", "FeeWithdrawn(address,address,uint256)", {"feeReceiver": indexed(p.address), "currency": indexed(p.address), "amount": p.uint256}),
@@ -17,61 +18,62 @@ export const events = {
 }
 
 export const functions = {
-    AUCTION_ROLE: viewFun("0x430730a3", "AUCTION_ROLE()", {}, p.bytes32),
-    MANAGEMENT_ROLE: viewFun("0xcda5f89f", "MANAGEMENT_ROLE()", {}, p.bytes32),
-    NFT_ROLE: viewFun("0xf684f33c", "NFT_ROLE()", {}, p.bytes32),
+    AUCTION_AUCTION_ROLE: viewFun("0x4320ac6c", "AUCTION_AUCTION_ROLE()", {}, p.bytes32),
+    AUCTION_MANAGEMENT_ROLE: viewFun("0x3c5d58d6", "AUCTION_MANAGEMENT_ROLE()", {}, p.bytes32),
+    AUCTION_NFT_ROLE: viewFun("0xe2dca2b2", "AUCTION_NFT_ROLE()", {}, p.bytes32),
     auctions: viewFun("0x571a26a0", "auctions(uint256)", {"_auctionId": p.uint256}, p.struct({"id": p.uint256, "auctionCreator": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "highestBidder": p.address, "highestBid": p.uint256, "stepAmount": p.uint256, "isPayoutCollected": p.bool, "isTokenCollected": p.bool, "status": p.uint8, "tokenType": p.uint8})),
     bidInAuction: fun("0x0858e5ad", "bidInAuction(uint256,uint256)", {"_auctionId": p.uint256, "_bidAmount": p.uint256}, ),
     cancelAuction: fun("0x96b5a755", "cancelAuction(uint256)", {"_auctionId": p.uint256}, ),
     collectAuctionPayout: fun("0xebf05a62", "collectAuctionPayout(uint256)", {"_auctionId": p.uint256}, ),
     collectAuctionToken: fun("0x12090b22", "collectAuctionToken(uint256)", {"_auctionId": p.uint256}, ),
     createAuction: fun("0x172e9f7b", "createAuction((address,uint256,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))", {"_auctionParams": p.struct({"_assetContract": p.address, "_tokenId": p.uint256, "_quantity": p.uint256, "_currency": p.address, "_startPrice": p.uint256, "_ceilingPrice": p.uint256, "_stepAmount": p.uint256, "_timeBufferInSeconds": p.uint256, "_startTime": p.uint256, "_endTime": p.uint256})}, ),
-    getAccumulatedFee: viewFun("0x8e9dafdb", "getAccumulatedFee(address)", {"_currency": p.address}, p.uint256),
+    getAccumulatedFeeAuction: viewFun("0xd903e8c2", "getAccumulatedFeeAuction(address)", {"_currency": p.address}, p.uint256),
     getAllAuctions: viewFun("0xc291537c", "getAllAuctions(uint256,uint256)", {"_startId": p.uint256, "_endId": p.uint256}, p.array(p.struct({"id": p.uint256, "auctionCreator": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "highestBidder": p.address, "highestBid": p.uint256, "stepAmount": p.uint256, "isPayoutCollected": p.bool, "isTokenCollected": p.bool, "status": p.uint8, "tokenType": p.uint8}))),
     getAllValidAuctions: viewFun("0x7b063801", "getAllValidAuctions(uint256,uint256)", {"_startId": p.uint256, "_endId": p.uint256}, p.array(p.struct({"id": p.uint256, "auctionCreator": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "highestBidder": p.address, "highestBid": p.uint256, "stepAmount": p.uint256, "isPayoutCollected": p.bool, "isTokenCollected": p.bool, "status": p.uint8, "tokenType": p.uint8}))),
     getAuction: viewFun("0x78bd7935", "getAuction(uint256)", {"_auctionId": p.uint256}, p.struct({"id": p.uint256, "auctionCreator": p.address, "assetContract": p.address, "tokenId": p.uint256, "quantity": p.uint256, "currency": p.address, "startPrice": p.uint256, "ceilingPrice": p.uint256, "startTime": p.uint256, "endTime": p.uint256, "timeBufferInSeconds": p.uint256, "highestBidder": p.address, "highestBid": p.uint256, "stepAmount": p.uint256, "isPayoutCollected": p.bool, "isTokenCollected": p.bool, "status": p.uint8, "tokenType": p.uint8})),
-    getCurrencyFee: viewFun("0x752d8a09", "getCurrencyFee(address)", {"_currency": p.address}, p.uint256),
-    getFeeReceiver: viewFun("0xe8a35392", "getFeeReceiver()", {}, p.address),
+    getCurrencyFeeAuction: viewFun("0x4a739a77", "getCurrencyFeeAuction(address)", {"_currency": p.address}, p.uint256),
+    getFeeReceiverAuction: viewFun("0xf221c4a5", "getFeeReceiverAuction()", {}, p.address),
     getMinTimeAuction: viewFun("0x0b9d3578", "getMinTimeAuction()", {}, p.uint256),
     getNewWinningBid: viewFun("0x62349d13", "getNewWinningBid(uint256)", {"_auctionId": p.uint256}, {"_0": p.address, "_1": p.uint256}),
-    getPermissionsContract: viewFun("0x964623dd", "getPermissionsContract()", {}, p.address),
-    getRouter: viewFun("0xb0f479a1", "getRouter()", {}, p.address),
+    getPermissionsAuction: viewFun("0x8e1cbb4a", "getPermissionsAuction()", {}, p.address),
+    getRouterAuction: viewFun("0x60d783b4", "getRouterAuction()", {}, p.address),
     initializeAuction: fun("0x3db0f5c1", "initializeAuction(address,address,address)", {"_permissionsContract": p.address, "_router": p.address, "_feeReceiver": p.address}, ),
     isAuctionExpired: viewFun("0x1389b117", "isAuctionExpired(uint256)", {"_auctionId": p.uint256}, p.bool),
     isNewWinningBid: viewFun("0x2eb566bd", "isNewWinningBid(uint256,uint256)", {"_auctionId": p.uint256, "_bidAmount": p.uint256}, p.bool),
     onERC1155BatchReceived: fun("0xbc197c81", "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)", {"_0": p.address, "_1": p.address, "_2": p.array(p.uint256), "_3": p.array(p.uint256), "_4": p.bytes}, p.bytes4),
     onERC1155Received: fun("0xf23a6e61", "onERC1155Received(address,address,uint256,uint256,bytes)", {"_0": p.address, "_1": p.address, "_2": p.uint256, "_3": p.uint256, "_4": p.bytes}, p.bytes4),
     onERC721Received: fun("0x150b7a02", "onERC721Received(address,address,uint256,bytes)", {"operator": p.address, "from": p.address, "tokenId": p.uint256, "data": p.bytes}, p.bytes4),
-    setCurrencyFee: fun("0x51d5f97c", "setCurrencyFee(address,uint256)", {"_currency": p.address, "_fee": p.uint256}, ),
-    setFeeReceiver: fun("0xefdcd974", "setFeeReceiver(address)", {"_feeReceiver": p.address}, ),
+    resetAuctionStorage: fun("0x9b689a92", "resetAuctionStorage()", {}, ),
+    setCurrencyFeeAuction: fun("0x562726b5", "setCurrencyFeeAuction(address,uint256)", {"_currency": p.address, "_fee": p.uint256}, ),
+    setFeeReceiverAuction: fun("0xf2fc6783", "setFeeReceiverAuction(address)", {"_feeReceiver": p.address}, ),
     setMinTimeAuction: fun("0xf9a6b221", "setMinTimeAuction(uint256)", {"_minTimeAuction": p.uint256}, ),
     setPermissionsContract: fun("0xd183ce74", "setPermissionsContract(address)", {"_permissionsContract": p.address}, ),
-    setRouter: fun("0xc0d78655", "setRouter(address)", {"_router": p.address}, ),
+    setRouterAuction: fun("0x6405d466", "setRouterAuction(address)", {"_router": p.address}, ),
     supportsInterface: viewFun("0x01ffc9a7", "supportsInterface(bytes4)", {"interfaceId": p.bytes4}, p.bool),
     totalAuctions: viewFun("0x16002f4a", "totalAuctions()", {}, p.uint256),
-    withdrawFees: fun("0x164e68de", "withdrawFees(address)", {"currency": p.address}, ),
+    withdrawFeesAuction: fun("0x41c61672", "withdrawFeesAuction(address)", {"currency": p.address}, ),
 }
 
 export class Contract extends ContractBase {
 
-    AUCTION_ROLE() {
-        return this.eth_call(functions.AUCTION_ROLE, {})
+    AUCTION_AUCTION_ROLE() {
+        return this.eth_call(functions.AUCTION_AUCTION_ROLE, {})
     }
 
-    MANAGEMENT_ROLE() {
-        return this.eth_call(functions.MANAGEMENT_ROLE, {})
+    AUCTION_MANAGEMENT_ROLE() {
+        return this.eth_call(functions.AUCTION_MANAGEMENT_ROLE, {})
     }
 
-    NFT_ROLE() {
-        return this.eth_call(functions.NFT_ROLE, {})
+    AUCTION_NFT_ROLE() {
+        return this.eth_call(functions.AUCTION_NFT_ROLE, {})
     }
 
     auctions(_auctionId: AuctionsParams["_auctionId"]) {
         return this.eth_call(functions.auctions, {_auctionId})
     }
 
-    getAccumulatedFee(_currency: GetAccumulatedFeeParams["_currency"]) {
-        return this.eth_call(functions.getAccumulatedFee, {_currency})
+    getAccumulatedFeeAuction(_currency: GetAccumulatedFeeAuctionParams["_currency"]) {
+        return this.eth_call(functions.getAccumulatedFeeAuction, {_currency})
     }
 
     getAllAuctions(_startId: GetAllAuctionsParams["_startId"], _endId: GetAllAuctionsParams["_endId"]) {
@@ -86,12 +88,12 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.getAuction, {_auctionId})
     }
 
-    getCurrencyFee(_currency: GetCurrencyFeeParams["_currency"]) {
-        return this.eth_call(functions.getCurrencyFee, {_currency})
+    getCurrencyFeeAuction(_currency: GetCurrencyFeeAuctionParams["_currency"]) {
+        return this.eth_call(functions.getCurrencyFeeAuction, {_currency})
     }
 
-    getFeeReceiver() {
-        return this.eth_call(functions.getFeeReceiver, {})
+    getFeeReceiverAuction() {
+        return this.eth_call(functions.getFeeReceiverAuction, {})
     }
 
     getMinTimeAuction() {
@@ -102,12 +104,12 @@ export class Contract extends ContractBase {
         return this.eth_call(functions.getNewWinningBid, {_auctionId})
     }
 
-    getPermissionsContract() {
-        return this.eth_call(functions.getPermissionsContract, {})
+    getPermissionsAuction() {
+        return this.eth_call(functions.getPermissionsAuction, {})
     }
 
-    getRouter() {
-        return this.eth_call(functions.getRouter, {})
+    getRouterAuction() {
+        return this.eth_call(functions.getRouterAuction, {})
     }
 
     isAuctionExpired(_auctionId: IsAuctionExpiredParams["_auctionId"]) {
@@ -133,6 +135,7 @@ export type AuctionCancelledEventArgs = EParams<typeof events.AuctionCancelled>
 export type AuctionCreatedEventArgs = EParams<typeof events.AuctionCreated>
 export type AuctionFinalizedEventArgs = EParams<typeof events.AuctionFinalized>
 export type AuctionPayoutCollectedEventArgs = EParams<typeof events.AuctionPayoutCollected>
+export type AuctionStorageResetEventArgs = EParams<typeof events.AuctionStorageReset>
 export type AuctionTokenCollectedEventArgs = EParams<typeof events.AuctionTokenCollected>
 export type FeeReceiverUpdatedEventArgs = EParams<typeof events.FeeReceiverUpdated>
 export type FeeWithdrawnEventArgs = EParams<typeof events.FeeWithdrawn>
@@ -141,14 +144,14 @@ export type RouterSetEventArgs = EParams<typeof events.RouterSet>
 export type UpdatePermissionsContractEventArgs = EParams<typeof events.UpdatePermissionsContract>
 
 /// Function types
-export type AUCTION_ROLEParams = FunctionArguments<typeof functions.AUCTION_ROLE>
-export type AUCTION_ROLEReturn = FunctionReturn<typeof functions.AUCTION_ROLE>
+export type AUCTION_AUCTION_ROLEParams = FunctionArguments<typeof functions.AUCTION_AUCTION_ROLE>
+export type AUCTION_AUCTION_ROLEReturn = FunctionReturn<typeof functions.AUCTION_AUCTION_ROLE>
 
-export type MANAGEMENT_ROLEParams = FunctionArguments<typeof functions.MANAGEMENT_ROLE>
-export type MANAGEMENT_ROLEReturn = FunctionReturn<typeof functions.MANAGEMENT_ROLE>
+export type AUCTION_MANAGEMENT_ROLEParams = FunctionArguments<typeof functions.AUCTION_MANAGEMENT_ROLE>
+export type AUCTION_MANAGEMENT_ROLEReturn = FunctionReturn<typeof functions.AUCTION_MANAGEMENT_ROLE>
 
-export type NFT_ROLEParams = FunctionArguments<typeof functions.NFT_ROLE>
-export type NFT_ROLEReturn = FunctionReturn<typeof functions.NFT_ROLE>
+export type AUCTION_NFT_ROLEParams = FunctionArguments<typeof functions.AUCTION_NFT_ROLE>
+export type AUCTION_NFT_ROLEReturn = FunctionReturn<typeof functions.AUCTION_NFT_ROLE>
 
 export type AuctionsParams = FunctionArguments<typeof functions.auctions>
 export type AuctionsReturn = FunctionReturn<typeof functions.auctions>
@@ -168,8 +171,8 @@ export type CollectAuctionTokenReturn = FunctionReturn<typeof functions.collectA
 export type CreateAuctionParams = FunctionArguments<typeof functions.createAuction>
 export type CreateAuctionReturn = FunctionReturn<typeof functions.createAuction>
 
-export type GetAccumulatedFeeParams = FunctionArguments<typeof functions.getAccumulatedFee>
-export type GetAccumulatedFeeReturn = FunctionReturn<typeof functions.getAccumulatedFee>
+export type GetAccumulatedFeeAuctionParams = FunctionArguments<typeof functions.getAccumulatedFeeAuction>
+export type GetAccumulatedFeeAuctionReturn = FunctionReturn<typeof functions.getAccumulatedFeeAuction>
 
 export type GetAllAuctionsParams = FunctionArguments<typeof functions.getAllAuctions>
 export type GetAllAuctionsReturn = FunctionReturn<typeof functions.getAllAuctions>
@@ -180,11 +183,11 @@ export type GetAllValidAuctionsReturn = FunctionReturn<typeof functions.getAllVa
 export type GetAuctionParams = FunctionArguments<typeof functions.getAuction>
 export type GetAuctionReturn = FunctionReturn<typeof functions.getAuction>
 
-export type GetCurrencyFeeParams = FunctionArguments<typeof functions.getCurrencyFee>
-export type GetCurrencyFeeReturn = FunctionReturn<typeof functions.getCurrencyFee>
+export type GetCurrencyFeeAuctionParams = FunctionArguments<typeof functions.getCurrencyFeeAuction>
+export type GetCurrencyFeeAuctionReturn = FunctionReturn<typeof functions.getCurrencyFeeAuction>
 
-export type GetFeeReceiverParams = FunctionArguments<typeof functions.getFeeReceiver>
-export type GetFeeReceiverReturn = FunctionReturn<typeof functions.getFeeReceiver>
+export type GetFeeReceiverAuctionParams = FunctionArguments<typeof functions.getFeeReceiverAuction>
+export type GetFeeReceiverAuctionReturn = FunctionReturn<typeof functions.getFeeReceiverAuction>
 
 export type GetMinTimeAuctionParams = FunctionArguments<typeof functions.getMinTimeAuction>
 export type GetMinTimeAuctionReturn = FunctionReturn<typeof functions.getMinTimeAuction>
@@ -192,11 +195,11 @@ export type GetMinTimeAuctionReturn = FunctionReturn<typeof functions.getMinTime
 export type GetNewWinningBidParams = FunctionArguments<typeof functions.getNewWinningBid>
 export type GetNewWinningBidReturn = FunctionReturn<typeof functions.getNewWinningBid>
 
-export type GetPermissionsContractParams = FunctionArguments<typeof functions.getPermissionsContract>
-export type GetPermissionsContractReturn = FunctionReturn<typeof functions.getPermissionsContract>
+export type GetPermissionsAuctionParams = FunctionArguments<typeof functions.getPermissionsAuction>
+export type GetPermissionsAuctionReturn = FunctionReturn<typeof functions.getPermissionsAuction>
 
-export type GetRouterParams = FunctionArguments<typeof functions.getRouter>
-export type GetRouterReturn = FunctionReturn<typeof functions.getRouter>
+export type GetRouterAuctionParams = FunctionArguments<typeof functions.getRouterAuction>
+export type GetRouterAuctionReturn = FunctionReturn<typeof functions.getRouterAuction>
 
 export type InitializeAuctionParams = FunctionArguments<typeof functions.initializeAuction>
 export type InitializeAuctionReturn = FunctionReturn<typeof functions.initializeAuction>
@@ -216,11 +219,14 @@ export type OnERC1155ReceivedReturn = FunctionReturn<typeof functions.onERC1155R
 export type OnERC721ReceivedParams = FunctionArguments<typeof functions.onERC721Received>
 export type OnERC721ReceivedReturn = FunctionReturn<typeof functions.onERC721Received>
 
-export type SetCurrencyFeeParams = FunctionArguments<typeof functions.setCurrencyFee>
-export type SetCurrencyFeeReturn = FunctionReturn<typeof functions.setCurrencyFee>
+export type ResetAuctionStorageParams = FunctionArguments<typeof functions.resetAuctionStorage>
+export type ResetAuctionStorageReturn = FunctionReturn<typeof functions.resetAuctionStorage>
 
-export type SetFeeReceiverParams = FunctionArguments<typeof functions.setFeeReceiver>
-export type SetFeeReceiverReturn = FunctionReturn<typeof functions.setFeeReceiver>
+export type SetCurrencyFeeAuctionParams = FunctionArguments<typeof functions.setCurrencyFeeAuction>
+export type SetCurrencyFeeAuctionReturn = FunctionReturn<typeof functions.setCurrencyFeeAuction>
+
+export type SetFeeReceiverAuctionParams = FunctionArguments<typeof functions.setFeeReceiverAuction>
+export type SetFeeReceiverAuctionReturn = FunctionReturn<typeof functions.setFeeReceiverAuction>
 
 export type SetMinTimeAuctionParams = FunctionArguments<typeof functions.setMinTimeAuction>
 export type SetMinTimeAuctionReturn = FunctionReturn<typeof functions.setMinTimeAuction>
@@ -228,8 +234,8 @@ export type SetMinTimeAuctionReturn = FunctionReturn<typeof functions.setMinTime
 export type SetPermissionsContractParams = FunctionArguments<typeof functions.setPermissionsContract>
 export type SetPermissionsContractReturn = FunctionReturn<typeof functions.setPermissionsContract>
 
-export type SetRouterParams = FunctionArguments<typeof functions.setRouter>
-export type SetRouterReturn = FunctionReturn<typeof functions.setRouter>
+export type SetRouterAuctionParams = FunctionArguments<typeof functions.setRouterAuction>
+export type SetRouterAuctionReturn = FunctionReturn<typeof functions.setRouterAuction>
 
 export type SupportsInterfaceParams = FunctionArguments<typeof functions.supportsInterface>
 export type SupportsInterfaceReturn = FunctionReturn<typeof functions.supportsInterface>
@@ -237,6 +243,6 @@ export type SupportsInterfaceReturn = FunctionReturn<typeof functions.supportsIn
 export type TotalAuctionsParams = FunctionArguments<typeof functions.totalAuctions>
 export type TotalAuctionsReturn = FunctionReturn<typeof functions.totalAuctions>
 
-export type WithdrawFeesParams = FunctionArguments<typeof functions.withdrawFees>
-export type WithdrawFeesReturn = FunctionReturn<typeof functions.withdrawFees>
+export type WithdrawFeesAuctionParams = FunctionArguments<typeof functions.withdrawFeesAuction>
+export type WithdrawFeesAuctionReturn = FunctionReturn<typeof functions.withdrawFeesAuction>
 

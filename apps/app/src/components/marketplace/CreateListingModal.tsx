@@ -149,18 +149,19 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
           }
 
           toast.success('NFT approved successfully!', { id: 'approval' });
+          setIsApproving(false);
         } catch (error: unknown) {
           toast.error(error instanceof Error ? error.message : 'Failed to approve NFT', { id: 'approval' });
           setIsApproving(false);
           return;
-        } finally {
-          setIsApproving(false);
         }
       }
 
       const priceWei = (() => {
         try {
-          return ethers.parseEther(pricePerToken.toString());
+          // Get selected currency decimals
+          const selectedCurrencyDecimals = currencies.find(c => c.id === selectedCurrency)?.decimals || 18;
+          return ethers.parseUnits(pricePerToken.toString(), selectedCurrencyDecimals);
         } catch (error) {
           console.warn('Invalid price per token:', pricePerToken);
           return 0n;
@@ -182,7 +183,8 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
 
       await sendTransaction(createListingTx, 'Listing created successfully! Your NFT is now live and ready for purchase.');
     } catch (error: unknown) {
-      // Error handling is done in useContract hook
+      console.error('CreateListing error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create listing', { duration: 5000 });
     }
   };
 

@@ -69,7 +69,16 @@ export function RevenueStats() {
         } catch (auctionError) {
           // Currency not configured in Auction contract, skip
         }
-        const accumulated = listingFees + auctionFees;
+
+        // Get accumulated from Offer contract 
+        let offerFees = BigInt(0);
+        try {
+          offerFees = await getAccumulatedFees('offer', currencyId);
+        } catch (offerError) {
+          // Currency not configured in Offer contract, skip
+        }
+
+        const accumulated = listingFees + auctionFees + offerFees;
         totalCollectedUSDC += accumulated;
 
         // Calculate withdrawn from withdrawals history (USDC only)
@@ -93,20 +102,25 @@ export function RevenueStats() {
       const extensions = [
         { name: 'Listing', isActive: true },
         { name: 'Auction', isActive: true },
-        { name: 'Offer', isActive: false },
+        { name: 'Offer', isActive: true },
       ];
 
       const poolsData: USDCFeePool[] = [];
       for (const ext of extensions) {
         if (ext.isActive) {
-          const extensionType = ext.name.toLowerCase() as 'listing' | 'auction';
+          const extensionType = ext.name.toLowerCase() as 'listing' | 'auction' | 'offer';
           
           let accumulated = BigInt(0);
           let feePercentage = 0;
           
           try {
             accumulated = await getAccumulatedFees(extensionType, USDC_ADDRESS);
-            feePercentage = await getCurrencyFeePercentage(extensionType, USDC_ADDRESS);
+            if (extensionType === 'offer') {
+              // Offer uses global fee percentage, not per-currency
+              feePercentage = await getCurrencyFeePercentage(extensionType, '');
+            } else {
+              feePercentage = await getCurrencyFeePercentage(extensionType, USDC_ADDRESS);
+            }
           } catch (error) {
             // Extension may not have USDC configured
           }

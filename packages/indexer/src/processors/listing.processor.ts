@@ -425,7 +425,7 @@ export async function processListingEvents(
       }
 
       else if (topic0 === ListingABI.events.FeeWithdrawn?.topic) {
-        const { admin, currency, amount } = ListingABI.events.FeeWithdrawn.decode(log)
+        const { receiver, currency, amount } = ListingABI.events.FeeWithdrawn.decode(log)
 
         const currencyEntity = await getOrCreateCurrency(currency, log.block)
 
@@ -435,7 +435,7 @@ export async function processListingEvents(
           extensionType: ExtensionType.LISTING,
           currency: currencyEntity,
           amount: amount,
-          receiver: admin.toLowerCase(),
+          receiver: receiver.toLowerCase(),
           timestamp: timestamp,
           transactionHash: transactionHash,
           blockNumber: blockNumber
@@ -532,6 +532,7 @@ export async function processListingEvents(
           listing.updatedAt = timestamp
           listing.transactionHash = transactionHash
 
+          // Mark listing as completed if quantity is depleted
           if (listing.quantity === BigInt(0)) {
             listing.status = ListingStatus.COMPLETED
           }
