@@ -7,6 +7,7 @@ import { formatEth } from '../../lib/web3/utils';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeBidInAuction } from '../../lib/web3/encoding';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 interface BidModalProps {
   isOpen: boolean;
@@ -31,7 +32,14 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
         return;
       }
 
-      const bidWei = BigInt(Math.floor(parseFloat(bidAmount) * 1e18));
+      const bidWei = (() => {
+        try {
+          return ethers.parseEther(bidAmount.toString());
+        } catch (error) {
+          console.warn('Invalid bid amount:', bidAmount);
+          return 0n;
+        }
+      })();
 
       if (bidWei < nextMinBid) {
         toast.error(`Bid must be at least ${formatEth(nextMinBid)} ETH`);

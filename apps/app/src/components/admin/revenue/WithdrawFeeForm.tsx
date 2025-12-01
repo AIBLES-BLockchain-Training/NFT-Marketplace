@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../../common/Card';
 import { Button } from '../../common/Button';
 import { TransactionResultModal } from '../../common/TransactionResultModal';
 import { useTransactionModal } from '../../../hooks/useTransactionModal';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_CURRENCY_FEE_STATS_QUERY } from '../../../lib/graphql/queries';
-import { getAccumulatedFees, formatFeeAmount } from '../../../lib/web3/revenue';
+import { getAccumulatedFees } from '../../../lib/web3/revenue';
+import { formatUSDCWithSymbol } from '../../../lib/utils/format';
+import { USDC_ADDRESS } from '../../../lib/constants';
 import toast from 'react-hot-toast';
 import { ethers } from 'ethers';
 
@@ -30,24 +32,11 @@ export function WithdrawFeeForm() {
 
   useEffect(() => {
     loadCurrencies();
+    // Auto-select USDC
+    setSelectedCurrency(USDC_ADDRESS);
   }, []);
 
-  useEffect(() => {
-    if (selectedCurrency) {
-      loadAvailableAmount();
-    }
-  }, [extension, selectedCurrency]);
-
-  const loadCurrencies = async () => {
-    try {
-      const result = await graphqlClient.query(GET_CURRENCY_FEE_STATS_QUERY, {});
-      setCurrencies(result?.supportedCurrencies || []);
-    } catch (error) {
-      console.error('Failed to load currencies:', error);
-    }
-  };
-
-  const loadAvailableAmount = async () => {
+  const loadAvailableAmountCallback = useCallback(async () => {
     if (!selectedCurrency) return;
 
     setIsLoadingAmount(true);
@@ -60,7 +49,23 @@ export function WithdrawFeeForm() {
     } finally {
       setIsLoadingAmount(false);
     }
+  }, [extension, selectedCurrency]);
+
+  useEffect(() => {
+    if (selectedCurrency) {
+      loadAvailableAmountCallback();
+    }
+  }, [selectedCurrency, loadAvailableAmountCallback]);
+
+  const loadCurrencies = async () => {
+    try {
+      const result = await graphqlClient.query(GET_CURRENCY_FEE_STATS_QUERY, {});
+      setCurrencies(result?.supportedCurrencies || []);
+    } catch (error) {
+      console.error('Failed to load currencies:', error);
+    }
   };
+
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,13 +79,10 @@ export function WithdrawFeeForm() {
       const iface = new ethers.Interface(LISTING_ABI);
       const data = iface.encodeFunctionData('withdrawFees', [selectedCurrency]);
 
-      const selectedCurrencyData = currencies.find((c) => c.id === selectedCurrency);
-      const formattedAmount = selectedCurrencyData
-        ? formatFeeAmount(availableAmount, selectedCurrencyData.decimals, selectedCurrencyData.symbol)
-        : 'fees';
+      const formattedAmount = formatUSDCWithSymbol(availableAmount.toString());
 
       const tx = {
-        to: process.env.NEXT_PUBLIC_ROUTER_CONTRACT! as `0x${string}`,
+        to: (process.env.NEXT_PUBLIC_ROUTER_CONTRACT || '') as `0x${string}`,
         data,
         value: '0',
       };
@@ -89,15 +91,16 @@ export function WithdrawFeeForm() {
 
       if (receipt?.status === 1) {
         // Reload available amount
-        await loadAvailableAmount();
+        await loadAvailableAmountCallback();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Withdraw fees error:', error);
-      toast.error(error?.message || 'Failed to withdraw fees');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to withdraw fees';
+      toast.error(errorMessage);
     }
   };
 
-  const selectedCurrencyData = currencies.find((c) => c.id === selectedCurrency);
+  // const selectedCurrencyData = currencies.find((c) => c.id === selectedCurrency);
 
   return (
     <Card>
@@ -125,24 +128,18 @@ export function WithdrawFeeForm() {
           </select>
         </div>
 
-        {/* Currency Selector */}
+        {/* Currency Selector - USDC Only */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Select Currency</label>
-          <select
-            value={selectedCurrency}
-            onChange={(e) => setSelectedCurrency(e.target.value)}
-            className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          >
-            <option value="">Select currency...</option>
-            {currencies.map((currency) => (
-              <option key={currency.id} value={currency.id}>
-                {currency.symbol} ({currency.id === '0x0000000000000000000000000000000000000000'
-                  ? 'Native'
-                  : `${currency.id.slice(0, 6)}...${currency.id.slice(-4)}`})
-              </option>
-            ))}
-          </select>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Currency</label>
+          <div className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white">
+            <div className="flex items-center justify-between">
+              <span>USDC (USD Coin)</span>
+              <span className="text-sm text-gray-400">
+                {USDC_ADDRESS.slice(0, 6)}...{USDC_ADDRESS.slice(-4)}
+              </span>
+            </div>
+          </div>
+          <input type="hidden" value={USDC_ADDRESS} onChange={(e) => setSelectedCurrency(e.target.value)} />
         </div>
 
         {/* Available Amount Display */}
@@ -153,9 +150,7 @@ export function WithdrawFeeForm() {
               <span className="text-lg font-bold text-primary-400">
                 {isLoadingAmount
                   ? 'Loading...'
-                  : selectedCurrencyData
-                  ? formatFeeAmount(availableAmount, selectedCurrencyData.decimals, selectedCurrencyData.symbol)
-                  : '0'}
+                  : formatUSDCWithSymbol(availableAmount.toString())}
               </span>
             </div>
           </div>

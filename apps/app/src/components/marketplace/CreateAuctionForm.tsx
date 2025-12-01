@@ -13,6 +13,7 @@ import {
   DEFAULT_BUYOUT_MULTIPLIER,
 } from '../../lib/constants';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 interface CreateAuctionFormProps {
   nft: NFT;
@@ -37,9 +38,24 @@ export function CreateAuctionForm({ nft, onSuccess, onCancel }: CreateAuctionFor
         return;
       }
 
-      const minimumBidWei = BigInt(Math.floor(parseFloat(minimumBid) * 1e18));
+      const minimumBidWei = (() => {
+        try {
+          return ethers.parseEther(minimumBid.toString());
+        } catch (error) {
+          console.warn('Invalid minimum bid:', minimumBid);
+          return 0n;
+        }
+      })();
+      
       const buyoutBidWei = buyoutBid
-        ? BigInt(Math.floor(parseFloat(buyoutBid) * 1e18))
+        ? (() => {
+            try {
+              return ethers.parseEther(buyoutBid.toString());
+            } catch (error) {
+              console.warn('Invalid buyout bid:', buyoutBid);
+              return minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
+            }
+          })()
         : minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
 
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);

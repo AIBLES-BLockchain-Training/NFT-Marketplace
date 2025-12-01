@@ -6,7 +6,7 @@ import { MainLayout } from '../../components/layout/MainLayout';
 import { NFTImage } from '../../components/common/NFTImage';
 import { graphqlClient } from '../../lib/graphql/client';
 import { GET_COLLECTIONS_TABLE_QUERY } from '../../lib/graphql/queries';
-import { formatEth } from '../../lib/web3/utils';
+import { formatUSDCWithSymbol, isUSDCCurrency } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
 
 interface CollectionTableData {
@@ -16,7 +16,6 @@ interface CollectionTableData {
   description?: string;
   collectionType: string;
   floorPrice: string;
-  floorPriceCurrency: string;
   oneDayVolume: string;
   oneDayChange: number;
   oneDaySales: number;
@@ -38,54 +37,39 @@ export default function CollectionsPage() {
 
   const LIMIT = 20;
 
-  const calculateMetrics = (rawCollection: any): CollectionTableData => {
+  const calculateMetrics = (rawCollection: Record<string, unknown>): CollectionTableData => {
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const twoDaysAgo = now - 48 * 60 * 60 * 1000;
 
     // Get all unique owners
     const ownerSet = new Set<string>();
-    rawCollection.nfts?.forEach((nft: any) => {
-      nft.owners?.forEach((owner: any) => {
+    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
+      nft.owners?.forEach((owner: Record<string, unknown>) => {
         if (owner.ownerAddress) {
           ownerSet.add(owner.ownerAddress.toLowerCase());
         }
       });
     });
 
-    // Calculate floor price (LOWEST active listing price)
-    // When comparing across currencies, take the one with highest numeric value for display
+    // Calculate floor price (LOWEST active USDC listing price)
     let floorPriceValue = '0';
-    let floorPriceCurrency = 'ETH';
-    let hasFoundListing = false;
 
-    rawCollection.nfts?.forEach((nft: any) => {
-      nft.listings?.forEach((listing: any) => {
+    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
+      nft.listings?.forEach((listing: Record<string, unknown>) => {
         if (listing.status === 'CREATED' || listing.status === 'ACTIVE') {
-          const listingPrice = BigInt(listing.pricePerToken || '0');
-          if (listingPrice > BigInt(0)) {
-            if (!hasFoundListing) {
-              // First listing found
-              floorPriceValue = listing.pricePerToken;
-              floorPriceCurrency = listing.currency || 'ETH';
-              hasFoundListing = true;
-            } else {
-              const currentFloor = BigInt(floorPriceValue);
-              // Take LOWEST price (floor)
-              // If comparing different currencies, prefer the one with higher numeric value
-              const currentCurrency = floorPriceCurrency;
-              const newCurrency = listing.currency || 'ETH';
-
-              if (currentCurrency === newCurrency) {
-                // Same currency - take the lower price
+          // Only consider USDC listings
+          if (isUSDCCurrency(listing.currency)) {
+            const listingPrice = BigInt(listing.pricePerToken || '0');
+            if (listingPrice > BigInt(0)) {
+              if (floorPriceValue === '0') {
+                // First USDC listing found
+                floorPriceValue = listing.pricePerToken;
+              } else {
+                const currentFloor = BigInt(floorPriceValue);
+                // Take LOWEST price (floor)
                 if (listingPrice < currentFloor) {
                   floorPriceValue = listing.pricePerToken;
-                }
-              } else {
-                // Different currencies - take the one with higher numeric value for better display
-                if (listingPrice > currentFloor) {
-                  floorPriceValue = listing.pricePerToken;
-                  floorPriceCurrency = newCurrency;
                 }
               }
             }
@@ -94,21 +78,24 @@ export default function CollectionsPage() {
       });
     });
 
-    // Calculate 1D sales and volume
+    // Calculate 1D sales and volume (USDC only)
     let oneDaySales = 0;
     let todayVolume = BigInt(0);  // Last 24 hours
     let yesterdayVolume = BigInt(0);  // 24-48 hours ago
 
-    rawCollection.nfts?.forEach((nft: any) => {
-      nft.purchaseHistory?.forEach((purchase: any) => {
-        const purchaseTime = new Date(purchase.timestamp).getTime();
-        if (purchaseTime >= oneDayAgo) {
-          // Last 24 hours
-          oneDaySales++;
-          todayVolume += BigInt(purchase.totalPrice || '0');
-        } else if (purchaseTime >= twoDaysAgo) {
-          // 24-48 hours ago
-          yesterdayVolume += BigInt(purchase.totalPrice || '0');
+    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
+      nft.purchaseHistory?.forEach((purchase: Record<string, unknown>) => {
+        // Only count USDC purchases
+        if (isUSDCCurrency(purchase.currency?.id)) {
+          const purchaseTime = new Date(purchase.timestamp).getTime();
+          if (purchaseTime >= oneDayAgo) {
+            // Last 24 hours
+            oneDaySales++;
+            todayVolume += BigInt(purchase.totalPrice || '0');
+          } else if (purchaseTime >= twoDaysAgo) {
+            // 24-48 hours ago
+            yesterdayVolume += BigInt(purchase.totalPrice || '0');
+          }
         }
       });
     });
@@ -118,16 +105,18 @@ export default function CollectionsPage() {
     let oneDayChange = 0;
     const MIN_SALES_FOR_CHANGE = 2; // Need at least 2 sales in each period for meaningful %
 
-    // Count sales in each period
+    // Count USDC sales in each period
     let todaySalesCount = 0;
     let yesterdaySalesCount = 0;
-    rawCollection.nfts?.forEach((nft: any) => {
-      nft.purchaseHistory?.forEach((purchase: any) => {
-        const purchaseTime = new Date(purchase.timestamp).getTime();
-        if (purchaseTime >= oneDayAgo) {
-          todaySalesCount++;
-        } else if (purchaseTime >= twoDaysAgo) {
-          yesterdaySalesCount++;
+    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
+      nft.purchaseHistory?.forEach((purchase: Record<string, unknown>) => {
+        if (isUSDCCurrency(purchase.currency?.id)) {
+          const purchaseTime = new Date(purchase.timestamp).getTime();
+          if (purchaseTime >= oneDayAgo) {
+            todaySalesCount++;
+          } else if (purchaseTime >= twoDaysAgo) {
+            yesterdaySalesCount++;
+          }
         }
       });
     });
@@ -147,7 +136,6 @@ export default function CollectionsPage() {
       logoUrl: rawCollection.logoUrl,
       collectionType: rawCollection.collectionType || 'ERC721',
       floorPrice: floorPriceValue,
-      floorPriceCurrency: floorPriceCurrency,
       oneDayVolume: todayVolume.toString(),
       oneDayChange: Number(oneDayChange.toFixed(2)),
       oneDaySales,
@@ -468,12 +456,9 @@ export default function CollectionsPage() {
                     {/* Floor Price */}
                     <div className="flex items-center justify-center">
                       {collection.floorPrice !== '0' ? (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-white font-semibold">
-                            {formatEth(collection.floorPrice)}
-                          </span>
-                          <span className="text-gray-500 text-sm">{collection.floorPriceCurrency}</span>
-                        </div>
+                        <span className="text-white font-semibold">
+                          {formatUSDCWithSymbol(collection.floorPrice)}
+                        </span>
                       ) : (
                         <span className="text-gray-500">—</span>
                       )}
@@ -482,12 +467,9 @@ export default function CollectionsPage() {
                     {/* 24H Volume */}
                     <div className="flex items-center justify-center">
                       {collection.oneDayVolume !== '0' ? (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-white font-semibold">
-                            {formatEth(collection.oneDayVolume)}
-                          </span>
-                          <span className="text-gray-500 text-sm">ETH</span>
-                        </div>
+                        <span className="text-white font-semibold">
+                          {formatUSDCWithSymbol(collection.oneDayVolume)}
+                        </span>
                       ) : (
                         <span className="text-gray-500">—</span>
                       )}

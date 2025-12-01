@@ -159,7 +159,14 @@ export function useBidValidation(
           });
           return;
         }
-        balanceBigInt = BigInt(Math.floor(parseFloat(balance) * 1e18));
+        balanceBigInt = (() => {
+          try {
+            return ethers.parseEther(balance.toString());
+          } catch (error) {
+            console.warn('Invalid balance value:', balance);
+            return 0n;
+          }
+        })();
 
         // For native ETH, reserve gas buffer for transaction fees
         availableBalance = balanceBigInt > GAS_BUFFER

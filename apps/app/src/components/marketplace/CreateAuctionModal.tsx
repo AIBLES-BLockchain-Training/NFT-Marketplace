@@ -18,6 +18,7 @@ import { graphqlClient } from '../../lib/graphql/client';
 import { GET_SUPPORTED_CURRENCIES_QUERY } from '../../lib/graphql/queries';
 import { truncate } from '../../lib/utils/format';
 import toast from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 interface CreateAuctionModalProps {
   nft: NFT;
@@ -171,13 +172,28 @@ export function CreateAuctionModal({ nft, isOpen, onClose, onSuccess }: CreateAu
       }
 
       // Create auction - use captured values
-      const minimumBidWei = BigInt(Math.floor(parseFloat(minimumBid) * 1e18));
+      const minimumBidWei = (() => {
+        try {
+          return ethers.parseEther(minimumBid.toString());
+        } catch (error) {
+          console.warn('Invalid minimum bid:', minimumBid);
+          return 0n;
+        }
+      })();
+      
       const buyoutBidWei = buyoutBid
-        ? BigInt(Math.floor(parseFloat(buyoutBid) * 1e18))
+        ? (() => {
+            try {
+              return ethers.parseEther(buyoutBid.toString());
+            } catch (error) {
+              console.warn('Invalid buyout bid:', buyoutBid);
+              return minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
+            }
+          })()
         : minimumBidWei * DEFAULT_BUYOUT_MULTIPLIER;
 
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
-      const endTime = startTime + BigInt(Math.floor(parseFloat(duration) * SECONDS_PER_DAY));
+      const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 
       // Check if currency is selected
       if (!selectedCurrency) {

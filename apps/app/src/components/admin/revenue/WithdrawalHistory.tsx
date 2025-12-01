@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../../common/Card';
 import { Button } from '../../common/Button';
 import { Spinner } from '../../common/Spinner';
 import { graphqlClient } from '../../../lib/graphql/client';
 import { GET_FEE_WITHDRAWALS_QUERY } from '../../../lib/graphql/queries';
-import { formatFeeAmount } from '../../../lib/web3/revenue';
+import { formatUSDCWithSymbol, isUSDCCurrency } from '../../../lib/utils/format';
 
 interface FeeWithdrawal {
   id: string;
@@ -30,11 +30,7 @@ export function WithdrawalHistory() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
-  useEffect(() => {
-    loadHistory();
-  }, [offset]);
-
-  const loadHistory = async () => {
+  const loadHistoryCallback = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await graphqlClient.query(GET_FEE_WITHDRAWALS_QUERY, {
@@ -42,15 +38,25 @@ export function WithdrawalHistory() {
         offset,
       });
 
-      const newWithdrawals = result?.feeWithdrawals || [];
-      setWithdrawals((prev) => (offset === 0 ? newWithdrawals : [...prev, ...newWithdrawals]));
-      setHasMore(newWithdrawals.length === limit);
+      // Filter to only show USDC withdrawals
+      const allWithdrawals = result?.feeWithdrawals || [];
+      const usdcWithdrawals = allWithdrawals.filter((w: FeeWithdrawal) => 
+        isUSDCCurrency(w.currency.id)
+      );
+      
+      setWithdrawals((prev) => (offset === 0 ? usdcWithdrawals : [...prev, ...usdcWithdrawals]));
+      setHasMore(usdcWithdrawals.length === limit);
     } catch (error) {
       console.error('Failed to load withdrawal history:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [limit, offset]);
+
+  useEffect(() => {
+    loadHistoryCallback();
+  }, [loadHistoryCallback]);
+
 
   const loadMore = () => {
     setOffset(offset + limit);
@@ -128,11 +134,11 @@ export function WithdrawalHistory() {
                   </span>
                 </td>
                 <td className="py-4 px-4">
-                  <span className="font-medium text-white">{w.currency.symbol}</span>
+                  <span className="font-medium text-white">USDC</span>
                 </td>
                 <td className="py-4 px-4 text-right">
                   <span className="font-semibold text-white">
-                    {formatFeeAmount(BigInt(w.amount), w.currency.decimals, w.currency.symbol)}
+                    {formatUSDCWithSymbol(w.amount)}
                   </span>
                 </td>
                 <td className="py-4 px-4">

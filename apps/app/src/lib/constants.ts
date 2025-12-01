@@ -30,3 +30,17 @@ export const DURATION_OPTIONS = [
 // Pagination
 export const DEFAULT_PAGE_LIMIT = 50;
 export const MAX_PAGE_LIMIT = 100;
+
+// USDC Currency Settings
+export const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // Sepolia USDC address
+export const USDC_DECIMALS = 6;
+export const USDC_SYMBOL = 'USDC';
+export const USDC_NAME = 'USD Coin';
+
+// Currency Display Settings
+export const DISPLAY_CURRENCY = {
+  address: USDC_ADDRESS,
+  symbol: USDC_SYMBOL,
+  decimals: USDC_DECIMALS,
+  name: USDC_NAME,
+} as const;

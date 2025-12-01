@@ -53,7 +53,14 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
         return;
       }
 
-      const priceWei = BigInt(Math.floor(parseFloat(pricePerToken) * 1e18));
+      const priceWei = (() => {
+        try {
+          return ethers.parseEther(pricePerToken.toString());
+        } catch (error) {
+          console.warn('Invalid price per token:', pricePerToken);
+          return 0n;
+        }
+      })();
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const endTime = startTime + BigInt(parseInt(duration) * SECONDS_PER_DAY);
 
