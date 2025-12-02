@@ -3,7 +3,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
-import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
+import { formatUSDC, isUSDCCurrency } from '../../lib/utils/format';
 import { truncate } from '../../lib/utils/format';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -31,7 +31,7 @@ export function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardPr
   // Format price based on currency type
   const formatPrice = (amount: bigint) => {
     if (isUSDC) {
-      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+      return formatUSDC(amount, 2); // Don't show symbol, we add it separately
     }
     return formatEth(amount);
   };

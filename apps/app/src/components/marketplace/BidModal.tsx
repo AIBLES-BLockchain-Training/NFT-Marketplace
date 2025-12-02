@@ -4,6 +4,7 @@ import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { TransactionResultModal } from '../common/TransactionResultModal';
 import { formatEth } from '../../lib/web3/utils';
+import { formatUSDC, isUSDCCurrency } from '../../lib/utils/format';
 import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeBidInAuction } from '../../lib/web3/encoding';
 import toast from 'react-hot-toast';
@@ -25,6 +26,19 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
   const currentBid = auction.bids?.[0] ? BigInt(auction.bids[0].bidAmount) : minimumBidAmount;
   const nextMinBid = currentBid + (currentBid * bidBufferBps / 10000n);
 
+  // Check if currency is USDC
+  const isUSDCAuction = isUSDCCurrency(auction.currency?.id || '');
+  const currencySymbol = auction.currency?.symbol || 'ETH';
+  const currencyDecimals = auction.currency?.decimals || 18;
+
+  // Format price based on currency type
+  const formatPrice = (amount: bigint) => {
+    if (isUSDCAuction) {
+      return formatUSDC(amount, 2);
+    }
+    return formatEth(amount);
+  };
+
   const handleBid = async () => {
     try {
       if (!bidAmount || parseFloat(bidAmount) <= 0) {
@@ -34,7 +48,7 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
 
       const bidWei = (() => {
         try {
-          return ethers.parseEther(bidAmount.toString());
+          return ethers.parseUnits(bidAmount.toString(), currencyDecimals);
         } catch (error) {
           console.warn('Invalid bid amount:', bidAmount);
           return 0n;
@@ -42,7 +56,7 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
       })();
 
       if (bidWei < nextMinBid) {
-        toast.error(`Bid must be at least ${formatEth(nextMinBid)} ETH`);
+        toast.error(`Bid must be at least ${formatPrice(nextMinBid)} ${currencySymbol}`);
         return;
       }
 
@@ -66,13 +80,13 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
             <div className="flex items-center justify-between">
               <span className="text-gray-400">Current Bid</span>
               <span className="text-white font-semibold">
-                {formatEth(currentBid)} ETH
+                {formatPrice(currentBid)} {currencySymbol}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-400">Minimum Next Bid</span>
               <span className="text-primary-400 font-semibold">
-                {formatEth(nextMinBid)} ETH
+                {formatPrice(nextMinBid)} {currencySymbol}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -86,19 +100,19 @@ export function BidModal({ isOpen, onClose, auction, onSuccess }: BidModalProps)
 
         <div>
           <label className="block text-sm text-gray-400 mb-2">
-            Your Bid Amount (ETH)
+            Your Bid Amount ({currencySymbol})
           </label>
           <input
             type="number"
             step="any"
-            min={parseFloat(formatEth(nextMinBid))}
-            placeholder={formatEth(nextMinBid)}
+            min={parseFloat(formatPrice(nextMinBid))}
+            placeholder={formatPrice(nextMinBid)}
             value={bidAmount}
             onChange={(e) => setBidAmount(e.target.value)}
             className="w-full px-4 py-3 bg-dark-card border border-dark-border rounded-lg text-white text-lg focus:outline-none focus:border-primary-500"
           />
           <p className="mt-2 text-xs text-gray-500">
-            Enter at least {formatEth(nextMinBid)} ETH to place a valid bid
+            Enter at least {formatPrice(nextMinBid)} {currencySymbol} to place a valid bid
           </p>
         </div>
 

@@ -5,7 +5,7 @@ echo "Starting NFT Marketplace Indexer..."
 
 # Apply database migrations
 echo "Applying database migrations..."
-npx squid-typeorm-migration apply
+npx @subsquid/typeorm-migration apply
 
 # Function to handle shutdown
 shutdown() {

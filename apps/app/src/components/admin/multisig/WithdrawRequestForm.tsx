@@ -81,7 +81,7 @@ export function WithdrawRequestForm() {
     e.preventDefault();
 
     if (!currentUserIsOwner) {
-      toast.error('Chỉ admin MultiSig mới có thể tạo yêu cầu rút tiền');
+      toast.error('Only MultiSig admin can create withdrawal request');
       return;
     }
 
@@ -92,7 +92,7 @@ export function WithdrawRequestForm() {
       if (customWithdrawal) {
         // Custom withdrawal to specified address
         if (!ethers.isAddress(customTo)) {
-          toast.error('Địa chỉ không hợp lệ');
+          toast.error('Invalid address');
           return;
         }
 
@@ -110,7 +110,7 @@ export function WithdrawRequestForm() {
           value: '0',
         };
 
-        const receipt = await sendTransaction(tx, `Đã tạo yêu cầu chuyển ${customValue} ETH đến ${customTo.slice(0, 10)}...`);
+        const receipt = await sendTransaction(tx, `Created ETH transfer request: ${customValue} ETH to ${customTo.slice(0, 10)}...`);
         
         if (receipt?.status === 1) {
           setCustomTo('');
@@ -119,7 +119,7 @@ export function WithdrawRequestForm() {
       } else {
         // Fee withdrawal from extensions
         if (availableAmount === BigInt(0)) {
-          toast.error('Không có phí để rút');
+          toast.error('No fees available to withdraw');
           return;
         }
 
@@ -137,7 +137,7 @@ export function WithdrawRequestForm() {
           const iface = new ethers.Interface(OFFER_ABI);
           callData = iface.encodeFunctionData('withdrawOfferFees', [selectedCurrency]);
         } else {
-          throw new Error('Extension không hợp lệ');
+          throw new Error('Invalid extension selected');
         }
 
         // Submit withdrawal transaction to MultiSig
@@ -151,7 +151,7 @@ export function WithdrawRequestForm() {
         };
 
         const formattedAmount = formatUSDCWithSymbol(availableAmount.toString());
-        const receipt = await sendTransaction(tx, `Đã tạo yêu cầu rút ${formattedAmount} từ ${extension}`);
+        const receipt = await sendTransaction(tx, `Created withdrawal request: ${formattedAmount} from ${extension} extension`);
         
         if (receipt?.status === 1) {
           await loadAvailableAmountCallback();
@@ -159,7 +159,7 @@ export function WithdrawRequestForm() {
       }
     } catch (error: unknown) {
       console.error('Submit withdrawal error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Không thể tạo yêu cầu rút tiền';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create withdrawal request';
       toast.error(errorMessage);
     }
   };
@@ -271,6 +271,26 @@ export function WithdrawRequestForm() {
                   </div>
                 </div>
               )}
+
+              {/* Withdrawal Info */}
+              {selectedCurrency && availableAmount > BigInt(0) && (
+                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="text-sm">
+                      <p className="text-blue-400 font-semibold mb-1">Full Amount Withdrawal</p>
+                      <p className="text-gray-300 mb-2">
+                        This will create a MultiSig request to withdraw the entire available amount of <span className="font-semibold text-white">{formatUSDCWithSymbol(availableAmount.toString())}</span> from {extension} extension.
+                      </p>
+                      <p className="text-blue-400/80 text-xs">
+                        ⚠️ Current contracts only support full withdrawal. Partial amounts require contract upgrades.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -316,7 +336,8 @@ export function WithdrawRequestForm() {
           >
             {!currentUserIsOwner ? 'No Permission' :
              !customWithdrawal && availableAmount === BigInt(0) ? 'No Fees Available' :
-             'Create Withdrawal Request'}
+             !customWithdrawal ? `Create Request: ${formatUSDCWithSymbol(availableAmount.toString())}` :
+             'Create ETH Transfer Request'}
           </Button>
 
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">

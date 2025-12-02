@@ -81,7 +81,41 @@ export function useTransactionModal() {
   const closeModal = useCallback(() => {
     setShowResultModal(false);
     setResult(null);
+    
+    // Force restore scroll when closing modal
+    setTimeout(() => {
+      document.body.style.overflow = 'unset';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+    }, 100);
   }, []);
+
+  // Safe close function for modals with parent modal
+  const safeCloseModal = useCallback((onParentClose?: () => void, onSuccess?: () => void) => {
+    // Immediately restore scroll to prevent page lock
+    document.body.style.overflow = 'unset';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    
+    closeModal(); // Close result modal first
+    
+    setTimeout(() => {
+      onParentClose?.(); // Then close parent modal after a delay
+      if (result?.success) {
+        onSuccess?.();
+      }
+      
+      // Double-check scroll restoration after all modals close
+      setTimeout(() => {
+        document.body.style.overflow = 'unset';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+      }, 300);
+    }, 50); // Reduce delay for better UX
+  }, [closeModal, result]);
 
   return {
     sendTransaction,
@@ -89,5 +123,6 @@ export function useTransactionModal() {
     showResultModal,
     result,
     closeModal,
+    safeCloseModal,
   };
 }

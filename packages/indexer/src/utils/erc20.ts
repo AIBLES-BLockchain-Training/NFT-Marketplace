@@ -32,8 +32,22 @@ export async function fetchTokenInfo(
     };
   }
 
+  // Known token addresses with correct decimals (Sepolia testnet)
+  const KNOWN_TOKENS: { [key: string]: TokenInfo } = {
+    '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238': {
+      name: 'USD Coin',
+      symbol: 'USDC',
+      decimals: 6,
+    },
+  };
+
+  // Check if this is a known token first
+  if (KNOWN_TOKENS[address]) {
+    return KNOWN_TOKENS[address];
+  }
+
   let symbol = 'TKN';
-  let decimals = 18;
+  let decimals = 18; // Default fallback - most ERC20 tokens use 18
   let name = `Token_${address.slice(0, 10)}`;
 
   try {

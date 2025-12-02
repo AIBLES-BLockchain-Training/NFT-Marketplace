@@ -52,21 +52,50 @@ export function Modal({ isOpen, onClose, children, title, size = 'md', zIndex = 
         if (openModalsCount === 0 && document.body.style.overflow === 'hidden') {
           console.warn('[Modal] Force restoring scroll - counter was 0 but body still hidden');
           document.body.style.overflow = 'unset';
+          document.body.style.position = '';
+          document.body.style.top = '';
+          document.body.style.width = '';
         }
       }, 100);
     };
   }, []);
 
+  // Emergency cleanup - restore scroll if page becomes unresponsive
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const handleBeforeUnload = () => {
+      document.body.style.overflow = 'unset';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+      
+      // Emergency hotkey: Ctrl+Shift+R to force restore scroll
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        console.warn('[Modal] Emergency scroll restore triggered');
+        document.body.style.overflow = 'unset';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        openModalsCount = 0; // Reset counter
+        e.preventDefault();
+      }
     };
 
     if (isOpen) {
-      window.addEventListener('keydown', handleEscape);
+      window.addEventListener('keydown', handleKeydown);
     }
 
-    return () => window.removeEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleKeydown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;

@@ -36,7 +36,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
           <YAxis 
             stroke="#9CA3AF"
             fontSize={12}
-            tickFormatter={(value) => `${value} ETH`}
+            tickFormatter={(value) => `$${value}`}
           />
           <Tooltip 
             contentStyle={{
@@ -45,7 +45,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
               borderRadius: '8px',
               color: '#F3F4F6'
             }}
-            formatter={(value: number) => [`${value} ETH`, '']}
+            formatter={(value: number) => [`$${value}`, '']}
           />
           <Legend />
           <Line 

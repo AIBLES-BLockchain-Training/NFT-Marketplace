@@ -3,7 +3,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { CompactCountdownTimer } from './CountdownTimer';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
-import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
+import { formatUSDC, isUSDCCurrency } from '../../lib/utils/format';
 import { isAuctionActive, getAuctionStatusText, getAuctionStatusVariant } from '../../lib/auction/status';
 import { Auction } from '../../types';
 
@@ -38,7 +38,7 @@ export function AuctionCardCompact({
   // Format price based on currency type
   const formatPrice = (amount: bigint) => {
     if (isUSDC) {
-      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+      return formatUSDC(amount, 2); // Don't show symbol, we add it separately
     }
     return formatEth(amount);
   };

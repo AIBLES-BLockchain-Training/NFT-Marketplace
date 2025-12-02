@@ -112,7 +112,11 @@ export function canCollectPayout(
     return { canCollect: false, reason: 'Only seller can collect payout' };
   }
 
-  if (!hasAuctionEnded(auction.endTime)) {
+  // Check if auction has ended (either by time OR by status)
+  const timeEnded = hasAuctionEnded(auction.endTime);
+  const statusEnded = auction.status === 'ENDED';
+  
+  if (!timeEnded && !statusEnded) {
     return { canCollect: false, reason: 'Auction has not ended yet' };
   }
 
@@ -141,7 +145,11 @@ export function canCollectNFT(
     return { canCollect: false, reason: 'Wallet not connected' };
   }
 
-  if (!hasAuctionEnded(auction.endTime)) {
+  // Check if auction has ended (either by time OR by status)
+  const timeEnded = hasAuctionEnded(auction.endTime);
+  const statusEnded = auction.status === 'ENDED';
+  
+  if (!timeEnded && !statusEnded) {
     return { canCollect: false, reason: 'Auction has not ended yet' };
   }
 

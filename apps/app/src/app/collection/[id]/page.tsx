@@ -35,7 +35,7 @@ import { formatEth } from '../../../lib/web3/utils';
 import { encodeCancelListing, encodeApproveBuyerForListing } from '../../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../../lib/contracts/addresses';
 import { TransactionResultModal } from '../../../components/common/TransactionResultModal';
-import { truncateTokenId, formatUSDCFromLegacy, isUSDCCurrency } from '../../../lib/utils/format';
+import { truncateTokenId, formatUSDC, isUSDCCurrency } from '../../../lib/utils/format';
 import { EditCollectionBanner } from '../../../components/collection/EditCollectionBanner';
 import { isAuctionActive, hasAuctionEnded, canCollectPayout, canCollectNFT } from '../../../lib/auction/status';
 import toast from 'react-hot-toast';
@@ -351,7 +351,7 @@ export default function CollectionDetailPage() {
             // Filter by sub-tab
             if (currentAuctionSubTab === 'active') {
               transformedAuctions = transformedAuctions.filter((auction: any) =>
-                !hasAuctionEnded(auction.endTime) && auction.status !== 'CANCELLED'
+                !hasAuctionEnded(auction.endTime) && auction.status !== 'CANCELLED' && auction.status !== 'ENDED'
               );
             } else if (currentAuctionSubTab === 'expired') {
               transformedAuctions = transformedAuctions.filter((auction: any) => {
@@ -366,12 +366,20 @@ export default function CollectionDetailPage() {
               });
             } else if (currentAuctionSubTab === 'claimable') {
               transformedAuctions = transformedAuctions.filter((auction: any) => {
-                if (!hasAuctionEnded(auction.endTime)) return false;
+                // Check if auction has ended (either by time OR by status)
+                const timeEnded = hasAuctionEnded(auction.endTime);
+                const statusEnded = auction.status === 'ENDED';
+                
+                console.log(`Auction ${auction.auctionId}: timeEnded=${timeEnded}, statusEnded=${statusEnded}, status=${auction.status}`);
+                
+                if (!timeEnded && !statusEnded) return false;
                 if (!address) return false;
                 if (auction.status === 'CANCELLED') return false;
 
                 const payoutCheck = canCollectPayout(auction, address);
                 const nftCheck = canCollectNFT(auction, address);
+                
+                console.log(`Auction ${auction.auctionId}: payoutCheck=${payoutCheck.canCollect}, nftCheck=${nftCheck.canCollect}`);
 
                 return payoutCheck.canCollect || nftCheck.canCollect;
               });
@@ -1668,7 +1676,7 @@ export default function CollectionDetailPage() {
                                             {(() => {
                                               const currencyId = price?.currency?.id || '';
                                               if (isUSDCCurrency(currencyId)) {
-                                                return formatUSDCFromLegacy(BigInt(displayPrice));
+                                                return `${formatUSDC(BigInt(displayPrice))} USDC`;
                                               }
                                               return `${formatEth(displayPrice)} ${displayCurrency}`;
                                             })()}

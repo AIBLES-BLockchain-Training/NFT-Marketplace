@@ -134,18 +134,96 @@ export function useMultiSigData() {
 
   const getTransactionDescription = (tx: any): string => {
     if (tx.value > 0) {
-      return `Transfer ETH`;
+      return `Transfer ${ethers.formatEther(tx.value)} ETH`;
     }
     
-    // Try to decode common function calls
+    // Try to decode withdrawal transactions directly first
+    try {
+      const WITHDRAWAL_ABI = [
+        'function withdrawListingFees(address currency) external',
+        'function withdrawFeesAuction(address currency) external', 
+        'function withdrawOfferFees(address currency) external'
+      ];
+      
+      const withdrawalIface = new ethers.Interface(WITHDRAWAL_ABI);
+      const decoded = withdrawalIface.parseTransaction({ data: tx.data });
+      
+      if (decoded?.name === 'withdrawListingFees') {
+        const currency = decoded.args[0];
+        // Check if it's USDC address
+        if (currency.toLowerCase() === '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238') {
+          return `Withdraw Listing Fees (USDC)`;
+        }
+        return `Withdraw Listing Fees (${currency.slice(0, 8)}...)`;
+      } else if (decoded?.name === 'withdrawFeesAuction') {
+        const currency = decoded.args[0];
+        if (currency.toLowerCase() === '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238') {
+          return `Withdraw Auction Fees (USDC)`;
+        }
+        return `Withdraw Auction Fees (${currency.slice(0, 8)}...)`;
+      } else if (decoded?.name === 'withdrawOfferFees') {
+        const currency = decoded.args[0];
+        if (currency.toLowerCase() === '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238') {
+          return `Withdraw Offer Fees (USDC)`;
+        }
+        return `Withdraw Offer Fees (${currency.slice(0, 8)}...)`;
+      }
+    } catch (error) {
+      // Direct withdrawal decoding failed, try MultiSig format
+    }
+    
+    // Try to decode as MultiSig submitTransaction 
+    try {
+      const MULTISIG_SUBMIT_ABI = ['function submitTransaction(address to, uint value, bytes data) external'];
+      const WITHDRAWAL_ABI = [
+        'function withdrawListingFees(address currency) external',
+        'function withdrawFeesAuction(address currency) external', 
+        'function withdrawOfferFees(address currency) external'
+      ];
+      
+      const multiSigIface = new ethers.Interface(MULTISIG_SUBMIT_ABI);
+      const decoded = multiSigIface.parseTransaction({ data: tx.data });
+      
+      if (decoded?.name === 'submitTransaction') {
+        const innerData = decoded.args[2];
+        const innerValue = decoded.args[1];
+        
+        // Check if it's ETH transfer
+        if (innerValue > 0n) {
+          return `Withdraw ${ethers.formatEther(innerValue)} ETH`;
+        }
+        
+        // Try to decode withdrawal function
+        try {
+          const withdrawalIface = new ethers.Interface(WITHDRAWAL_ABI);
+          const innerDecoded = withdrawalIface.parseTransaction({ data: innerData });
+          
+          if (innerDecoded?.name === 'withdrawListingFees') {
+            return `Withdraw Listing Fees (USDC)`;
+          } else if (innerDecoded?.name === 'withdrawFeesAuction') {
+            return `Withdraw Auction Fees (USDC)`;
+          } else if (innerDecoded?.name === 'withdrawOfferFees') {
+            return `Withdraw Offer Fees (USDC)`;
+          }
+        } catch (error) {
+          // Inner decoding failed
+        }
+        
+        return `MultiSig Transaction`;
+      }
+    } catch (error) {
+      // Decoding failed
+    }
+    
+    // Try to decode common function calls by selector
     try {
       const selector = tx.data.slice(0, 10);
       
       const functionMap: { [key: string]: string } = {
         '0xa9059cbb': 'Transfer Token',
-        '0x23b872dd': 'Transfer From',
+        '0x23b872dd': 'Transfer From', 
         '0x095ea7b3': 'Approve Token',
-        '0x7afe1bff': 'Withdraw Fees',
+        '0x779450ba': 'Withdraw Listing Fees (USDC)', // Direct mapping for this selector
         '0x7b76583c': 'Add Owner',
         '0x173825d9': 'Remove Owner',
         '0x797af627': 'Change Requirement',
@@ -167,11 +245,14 @@ export function useMultiSigData() {
     loadMultiSigData();
   }, [loadMultiSigData]);
 
-  // Auto refresh every 30 seconds
+  // Auto refresh every 2 minutes to avoid excessive reloading
   useEffect(() => {
     const interval = setInterval(() => {
-      loadMultiSigData();
-    }, 30000);
+      // Only refresh if user is not currently interacting (to avoid interrupting workflow)
+      if (document.visibilityState === 'visible') {
+        loadMultiSigData();
+      }
+    }, 120000); // 2 minutes instead of 30 seconds
 
     return () => clearInterval(interval);
   }, [loadMultiSigData]);

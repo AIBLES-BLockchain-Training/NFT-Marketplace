@@ -40,13 +40,14 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat
 RUN npm install -g @subsquid/commands
 
+# Copy dependencies from builder
+COPY --from=builder /app/node_modules ./node_modules
+
 # Copy built files from builder
 COPY --from=builder /app/packages/indexer/lib ./lib
 COPY --from=builder /app/packages/indexer/schema.graphql ./schema.graphql
 COPY --from=builder /app/packages/indexer/squid.yaml ./squid.yaml
 COPY --from=builder /app/packages/indexer/commands.json ./commands.json
-
-# Copy entrypoint script
 COPY packages/indexer/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
@@ -61,4 +62,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4001/graphql', (r) => {if(r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
 
 # Start both processor and GraphQL server
-CMD ["./entrypoint.sh"]
+  CMD ["/app/entrypoint.sh"]

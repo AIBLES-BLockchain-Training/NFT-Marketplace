@@ -6,7 +6,7 @@ import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { AuctionCardCompact } from '../auction/AuctionCardCompact';
 import { OfferCard } from '../marketplace/OfferCard';
-import { getIpfsGateways, truncateTokenId, formatUSDCWithSymbol, formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
+import { getIpfsGateways, truncateTokenId, formatUSDCWithSymbol, isUSDCCurrency } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
 
 interface NFTDetailProps {
@@ -288,7 +288,7 @@ export function NFTDetail({
                         <div className="flex-1">
                           <p className="text-xs text-gray-500">Price</p>
                           <p className="text-lg text-white font-bold">
-                            {formatUSDCFromLegacy(BigInt(price))}
+                            {formatUSDCWithSymbol(BigInt(price))}
                           </p>
                         </div>
 

@@ -6,7 +6,7 @@ async function main() {
   const [signer] = await ethers.getSigners();
   const ROUTER_ADDRESS = process.env['ADDRESS_ROUTER'] || '';
   const PERMISSIONS_ADDRESS = process.env['ADDRESS_PERMISSIONS'] || '';
-  const FEE_RECIPIENT = signer.address;
+  const FEE_RECIPIENT = process.env['ADDRESS_MULTISIG'] || '';
   const FEE_PERCENTAGE = 250; // 2.5%
 
   if (!ROUTER_ADDRESS || !PERMISSIONS_ADDRESS) {

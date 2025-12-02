@@ -12,7 +12,7 @@ import { getBrowserProvider } from '../../lib/web3/provider';
 import { encodeBuyFromListing } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS, ROUTER_ADDRESS } from '../../lib/contracts/addresses';
 import { USDC_ADDRESS } from '../../lib/constants';
-import { truncate } from '../../lib/utils/format';
+import { truncate, formatUSDC, isUSDCCurrency } from '../../lib/utils/format';
 import { checkERC20Allowance, approveERC20 } from '../../lib/web3/approve';
 import { ERC20_ABI } from '../../lib/contracts/abis';
 import toast from 'react-hot-toast';
@@ -75,25 +75,7 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
     if (isNativeToken) {
       return pricePerToken * selectedQuantityForContract;
     } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
-      // Use same logic as formatUSDCFromLegacy for consistency
-      console.log('BuyModal USDC price conversion:', {
-        input: pricePerToken.toString(),
-        isLarge: pricePerToken >= BigInt('1000000000000000000')
-      });
-      
-      // If number is very large (18+ digits), convert from 18-decimal to 6-decimal
-      if (pricePerToken >= BigInt('1000000000000000000')) { // 1e18
-        const usdcPrice = pricePerToken / BigInt(10**12);
-        return usdcPrice * selectedQuantityForContract;
-      }
-      
-      // If it's exactly divisible by 10^12 and result > 0, convert
-      if (pricePerToken % BigInt(10**12) === 0n && pricePerToken >= BigInt(10**12)) {
-        const usdcPrice = pricePerToken / BigInt(10**12);
-        return usdcPrice * selectedQuantityForContract;
-      }
-      
-      // Otherwise assume it's already in 6-decimal format
+      // USDC price is now always in proper 6-decimal format
       return pricePerToken * selectedQuantityForContract;
     } else {
       return pricePerToken * selectedQuantityForContract;
@@ -146,8 +128,9 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
     if (isNativeToken) {
       return parseFloat(ethers.formatEther(totalPriceDisplay));
     } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
-      // totalPriceDisplay is already in 6-decimal format
-      return parseFloat(ethers.formatUnits(totalPriceDisplay, 6));
+      // totalPriceDisplay is already in 6-decimal format for USDC
+      // Convert BigInt to number with proper decimals (6 for USDC)
+      return Number(totalPriceDisplay) / 1e6;
     } else {
       // Default to 18 decimals for other ERC20 tokens
       return parseFloat(ethers.formatEther(totalPriceDisplay));
@@ -306,20 +289,7 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                         if (isNative) {
                           return formatEth(BigInt(approval.pricePerToken));
                         } else if (approval.currency.id.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
-                          // Use same logic as formatUSDCFromLegacy
-                          const priceBI = BigInt(approval.pricePerToken);
-                          if (priceBI >= BigInt('1000000000000000000')) { // 1e18
-                            const usdcPrice = priceBI / BigInt(10**12);
-                            return ethers.formatUnits(usdcPrice, 6);
-                          }
-                          
-                          if (priceBI % BigInt(10**12) === 0n && priceBI >= BigInt(10**12)) {
-                            const usdcPrice = priceBI / BigInt(10**12);
-                            return ethers.formatUnits(usdcPrice, 6);
-                          }
-                          
-                          // Already in 6-decimal format
-                          return ethers.formatUnits(priceBI, 6);
+                          return formatUSDC(BigInt(approval.pricePerToken), 2);
                         } else {
                           return formatEth(BigInt(approval.pricePerToken));
                         }
@@ -361,19 +331,7 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                       if (isNativeToken) {
                         return formatEth(pricePerToken);
                       } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
-                        // Use same logic as formatUSDCFromLegacy
-                        if (pricePerToken >= BigInt('1000000000000000000')) { // 1e18
-                          const usdcPrice = pricePerToken / BigInt(10**12);
-                          return ethers.formatUnits(usdcPrice, 6);
-                        }
-                        
-                        if (pricePerToken % BigInt(10**12) === 0n && pricePerToken >= BigInt(10**12)) {
-                          const usdcPrice = pricePerToken / BigInt(10**12);
-                          return ethers.formatUnits(usdcPrice, 6);
-                        }
-                        
-                        // Already in 6-decimal format
-                        return ethers.formatUnits(pricePerToken, 6);
+                        return formatUSDC(pricePerToken, 2);
                       } else {
                         return formatEth(pricePerToken);
                       }
@@ -414,8 +372,7 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                       if (isNativeToken) {
                         return formatEth(totalPriceDisplay);
                       } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
-                        // totalPriceDisplay is already converted to 6-decimal format
-                        return ethers.formatUnits(totalPriceDisplay, 6);
+                        return formatUSDC(totalPriceDisplay, 2);
                       } else {
                         return formatEth(totalPriceDisplay);
                       }
@@ -429,19 +386,7 @@ export function BuyModal({ isOpen, onClose, listing, onSuccess }: BuyModalProps)
                       if (isNativeToken) {
                         return formatEth(pricePerToken);
                       } else if (currencyAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
-                        // Use same logic as formatUSDCFromLegacy
-                        if (pricePerToken >= BigInt('1000000000000000000')) { // 1e18
-                          const usdcPrice = pricePerToken / BigInt(10**12);
-                          return ethers.formatUnits(usdcPrice, 6);
-                        }
-                        
-                        if (pricePerToken % BigInt(10**12) === 0n && pricePerToken >= BigInt(10**12)) {
-                          const usdcPrice = pricePerToken / BigInt(10**12);
-                          return ethers.formatUnits(usdcPrice, 6);
-                        }
-                        
-                        // Already in 6-decimal format
-                        return ethers.formatUnits(pricePerToken, 6);
+                        return formatUSDC(pricePerToken, 2);
                       } else {
                         return formatEth(pricePerToken);
                       }

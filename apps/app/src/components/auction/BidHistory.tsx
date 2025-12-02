@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { formatEth, formatAddress } from '../../lib/web3/utils';
-import { formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
+import { formatUSDC, isUSDCCurrency } from '../../lib/utils/format';
 import { calculateBidIncrease } from '../../lib/auction/calculations';
 import { Card } from '../common/Card';
 
@@ -53,7 +53,7 @@ export function BidHistory({
   // Helper function to format currency based on type
   const formatPrice = (amount: bigint) => {
     if (isUSDC) {
-      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+      return formatUSDC(amount, 2); // Don't show symbol, we add it separately
     }
     return formatEth(amount);
   };

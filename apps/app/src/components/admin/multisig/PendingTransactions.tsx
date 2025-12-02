@@ -16,6 +16,13 @@ const MULTISIG_ABI = [
   'function revokeConfirmation(uint txIndex) external',
   'function executeTransaction(uint txIndex) external',
   'function isConfirmed(uint txIndex, address owner) public view returns (bool)',
+  'function submitTransaction(address to, uint value, bytes data) external'
+];
+
+const WITHDRAWAL_ABI = [
+  'function withdrawListingFees(address currency) external',
+  'function withdrawFeesAuction(address currency) external', 
+  'function withdrawOfferFees(address currency) external'
 ];
 
 interface TransactionData {
@@ -34,9 +41,52 @@ export function PendingTransactions() {
   const { pendingTransactions, currentUserIsOwner, requiredConfirmations, refreshData } = useMultiSigData();
   const [expandedTx, setExpandedTx] = useState<number | null>(null);
 
+  const decodeWithdrawalAmount = (data: string): { type: string; amount: string } | null => {
+    try {
+      // First, try to decode as MultiSig submitTransaction
+      const multiSigIface = new ethers.Interface(MULTISIG_ABI);
+      const decoded = multiSigIface.parseTransaction({ data });
+      
+      if (decoded?.name === 'submitTransaction') {
+        const innerData = decoded.args[2]; // The data parameter
+        
+        // Now decode the inner withdrawal function
+        const withdrawalIface = new ethers.Interface(WITHDRAWAL_ABI);
+        try {
+          const innerDecoded = withdrawalIface.parseTransaction({ data: innerData });
+          
+          if (innerDecoded?.name === 'withdrawListingFees') {
+            return { type: 'Listing Fees', amount: 'Available USDC' };
+          } else if (innerDecoded?.name === 'withdrawFeesAuction') {
+            return { type: 'Auction Fees', amount: 'Available USDC' };
+          } else if (innerDecoded?.name === 'withdrawOfferFees') {
+            return { type: 'Offer Fees', amount: 'Available USDC' };
+          }
+        } catch (error) {
+          // Inner decoding failed, might be custom ETH transfer
+          const toAddress = decoded.args[0];
+          const value = decoded.args[1];
+          if (value > 0n) {
+            return { type: 'ETH Transfer', amount: formatEther(value) + ' ETH' };
+          }
+        }
+      }
+    } catch (error) {
+      // Decoding failed
+    }
+    
+    return null;
+  };
+
   const getTransactionDescription = (tx: TransactionData): string => {
     if (tx.value > 0) {
       return `Transfer ${formatEther(tx.value)} ETH to ${tx.to.slice(0, 10)}...`;
+    }
+    
+    // Try to decode withdrawal information
+    const withdrawalInfo = decodeWithdrawalAmount(tx.data);
+    if (withdrawalInfo) {
+      return `Withdraw ${withdrawalInfo.type} - ${withdrawalInfo.amount}`;
     }
     
     // Decode function calls for better description
@@ -48,8 +98,6 @@ export function PendingTransactions() {
         '0xa9059cbb': 'Transfer Token',
         '0x23b872dd': 'Transfer From',
         '0x095ea7b3': 'Approve Token',
-        '0x7fffffff': 'Withdraw Fees',
-        '0x1785f53c': 'Execute Withdrawal',
       };
 
       if (functionMap[selector]) {

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { graphqlClient } from '../lib/graphql/client';
 import { GET_DASHBOARD_CHARTS_DATA_QUERY } from '../lib/graphql/queries';
 import { ethers } from 'ethers';
+import { formatUSDC, isUSDCCurrency } from '../lib/utils/format';
 
 export interface RevenueDataPoint {
   month: string;
@@ -67,6 +68,7 @@ export function useDashboardCharts() {
       const purchases = data.purchaseHistories || [];
       const feeWithdrawals = data.feeWithdrawals || [];
       
+      
       // Group by month for last 6 months
       const monthlyData: { [key: string]: RevenueDataPoint } = {};
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
@@ -91,8 +93,19 @@ export function useDashboardCharts() {
         const monthKey = date.toLocaleDateString('en', { month: 'short' });
         
         if (monthlyData[monthKey]) {
-          const priceInEth = parseFloat(ethers.formatEther(purchase.totalPrice || '0'));
-          const fee = priceInEth * 0.025; // 2.5% fee
+          let priceInUSD = 0;
+          
+          // Check if it's USDC or ETH
+          if (purchase.currency && (purchase.currency.symbol === 'USDC' || isUSDCCurrency(purchase.currency.id))) {
+            // USDC with 6 decimals
+            priceInUSD = parseFloat(formatUSDC(purchase.totalPrice || '0'));
+          } else {
+            // ETH with 18 decimals - convert to USD (assume 1 ETH = $2000 for revenue calculation)
+            const priceInEth = parseFloat(ethers.formatEther(purchase.totalPrice || '0'));
+            priceInUSD = priceInEth * 2000; // Convert to USD equivalent
+          }
+          
+          const fee = priceInUSD * 0.025; // 2.5% fee
           
           monthlyData[monthKey].revenue += fee;
           
@@ -206,8 +219,19 @@ export function useDashboardCharts() {
           const dayKey = date.toLocaleDateString('en', { weekday: 'short' });
           
           if (dailyData[dayKey]) {
-            const volumeInEth = parseFloat(ethers.formatEther(purchase.totalPrice || '0'));
-            dailyData[dayKey].volume += volumeInEth;
+            let volumeInUSD = 0;
+            
+            // Check if it's USDC or ETH
+            if (purchase.currency && (purchase.currency.symbol === 'USDC' || isUSDCCurrency(purchase.currency.id))) {
+              // USDC with 6 decimals
+              volumeInUSD = parseFloat(formatUSDC(purchase.totalPrice || '0'));
+            } else {
+              // ETH with 18 decimals - convert to USD
+              const volumeInEth = parseFloat(ethers.formatEther(purchase.totalPrice || '0'));
+              volumeInUSD = volumeInEth * 2000; // Convert to USD equivalent
+            }
+            
+            dailyData[dayKey].volume += volumeInUSD;
             dailyData[dayKey].transactions += 1;
           }
         });
@@ -280,12 +304,12 @@ export function useDashboardCharts() {
 
   const setFallbackRevenueData = () => {
     setRevenueData([
-      { month: 'Jan', revenue: 2.5, listings: 1.8, auctions: 0.5, offers: 0.2 },
-      { month: 'Feb', revenue: 3.8, listings: 2.5, auctions: 0.8, offers: 0.5 },
-      { month: 'Mar', revenue: 5.3, listings: 3.2, auctions: 1.6, offers: 0.5 },
-      { month: 'Apr', revenue: 4.7, listings: 2.8, auctions: 1.2, offers: 0.7 },
-      { month: 'May', revenue: 6.4, listings: 4.5, auctions: 1.8, offers: 0.1 },
-      { month: 'Jun', revenue: 8.2, listings: 5.1, auctions: 2.9, offers: 0.2 },
+      { month: 'Jan', revenue: 125, listings: 90, auctions: 25, offers: 10 },
+      { month: 'Feb', revenue: 190, listings: 125, auctions: 40, offers: 25 },
+      { month: 'Mar', revenue: 265, listings: 160, auctions: 80, offers: 25 },
+      { month: 'Apr', revenue: 235, listings: 140, auctions: 60, offers: 35 },
+      { month: 'May', revenue: 320, listings: 225, auctions: 90, offers: 5 },
+      { month: 'Jun', revenue: 410, listings: 255, auctions: 145, offers: 10 },
     ]);
   };
 
@@ -300,13 +324,13 @@ export function useDashboardCharts() {
 
   const setFallbackVolumeData = () => {
     setVolumeData([
-      { day: 'Mon', volume: 15, transactions: 8 },
-      { day: 'Tue', volume: 22, transactions: 12 },
-      { day: 'Wed', volume: 18, transactions: 10 },
-      { day: 'Thu', volume: 28, transactions: 16 },
-      { day: 'Fri', volume: 35, transactions: 20 },
-      { day: 'Sat', volume: 42, transactions: 25 },
-      { day: 'Sun', volume: 32, transactions: 18 },
+      { day: 'Mon', volume: 750, transactions: 8 },
+      { day: 'Tue', volume: 1100, transactions: 12 },
+      { day: 'Wed', volume: 900, transactions: 10 },
+      { day: 'Thu', volume: 1400, transactions: 16 },
+      { day: 'Fri', volume: 1750, transactions: 20 },
+      { day: 'Sat', volume: 2100, transactions: 25 },
+      { day: 'Sun', volume: 1600, transactions: 18 },
     ]);
   };
 

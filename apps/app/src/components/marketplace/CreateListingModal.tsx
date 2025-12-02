@@ -31,7 +31,7 @@ interface CreateListingModalProps {
 }
 
 export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateListingModalProps) {
-  const { sendTransaction, isLoading, showResultModal, result, closeModal } = useTransactionModal();
+  const { sendTransaction, isLoading, showResultModal, result, closeModal, safeCloseModal } = useTransactionModal();
   const { address } = useWallet();
   const [pricePerToken, setPricePerToken] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -39,7 +39,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
   const [reserved, setReserved] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [currencies, setCurrencies] = useState<WhitelistedCurrency[]>([]);
-  const [selectedCurrency, setSelectedCurrency] = useState<string>(ZERO_ADDRESS);
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
   const [loadingCurrencies, setLoadingCurrencies] = useState(true);
 
   // Fetch whitelisted currencies when modal opens
@@ -59,32 +59,15 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
 
       const fetchedCurrencies = result.supportedCurrencies || [];
 
-      // Add ETH as first option if not already present
-      const ethCurrency = {
-        id: ZERO_ADDRESS,
-        name: 'Ethereum',
-        symbol: 'ETH',
-        decimals: 18,
-        isActive: true,
-      };
-
-      const hasEth = fetchedCurrencies.some((c: WhitelistedCurrency) =>
-        c.id.toLowerCase() === ZERO_ADDRESS.toLowerCase()
-      );
-
-      const allCurrencies = hasEth ? fetchedCurrencies : [ethCurrency, ...fetchedCurrencies];
-      setCurrencies(allCurrencies);
-      setSelectedCurrency(ZERO_ADDRESS); // Default to ETH
+      setCurrencies(fetchedCurrencies);
+      // Auto-select first currency if available
+      if (fetchedCurrencies.length > 0) {
+        setSelectedCurrency(fetchedCurrencies[0].id);
+      }
     } catch (error) {
       console.error('Error fetching currencies:', error);
-      // Fallback to ETH only
-      setCurrencies([{
-        id: ZERO_ADDRESS,
-        name: 'Ethereum',
-        symbol: 'ETH',
-        decimals: 18,
-        isActive: true,
-      }]);
+      // No fallback - empty currencies
+      setCurrencies([]);
     } finally {
       setLoadingCurrencies(false);
     }
@@ -109,6 +92,11 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
 
       if (!address) {
         toast.error('Please connect your wallet');
+        return;
+      }
+
+      if (!selectedCurrency) {
+        toast.error('Please select a currency');
         return;
       }
 
@@ -330,13 +318,7 @@ export function CreateListingModal({ nft, isOpen, onClose, onSuccess }: CreateLi
       {result && (
         <TransactionResultModal
           isOpen={showResultModal}
-          onClose={() => {
-            onClose(); // Close the create modal FIRST to prevent re-mount
-            closeModal(); // Then close result modal
-            if (result.success) {
-              onSuccess?.();
-            }
-          }}
+          onClose={() => safeCloseModal(onClose, onSuccess)}
           success={result.success}
           message={result.message}
           txHash={result.txHash}

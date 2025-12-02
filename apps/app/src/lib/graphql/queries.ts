@@ -325,9 +325,28 @@ export const GET_COLLECTIONS_TABLE_QUERY = `
         owners {
           ownerAddress
         }
+        listings(limit: 100) {
+          id
+          pricePerToken
+          status
+          currencyApprovals {
+            id
+            pricePerToken
+            currency {
+              id
+              symbol
+              decimals
+            }
+          }
+        }
         purchaseHistory(limit: 1000) {
           timestamp
           totalPrice
+          currency {
+            id
+            symbol
+            decimals
+          }
         }
       }
     }
@@ -1484,6 +1503,7 @@ export const GET_DASHBOARD_CHARTS_DATA_QUERY = `
       tradeType
       timestamp
       currency {
+        id
         symbol
         decimals
       }
@@ -1493,14 +1513,14 @@ export const GET_DASHBOARD_CHARTS_DATA_QUERY = `
       createdAt
       pricePerToken
     }
-    auctions(limit: 1000, where: { status_in: [CREATED, ACTIVE, COMPLETED] }) {
+    auctions(limit: 1000, where: { status_in: [CREATED, ACTIVE, ENDED] }) {
       id
       startTime
       endTime
       startPrice
       status
     }
-    offers(limit: 1000, where: { status_in: [ACTIVE, ACCEPTED, EXPIRED] }) {
+    offers(limit: 1000, where: { status_in: [ACTIVE, COMPLETED, CANCELLED] }) {
       id
       createdAt
       totalPrice
@@ -1516,6 +1536,7 @@ export const GET_DASHBOARD_CHARTS_DATA_QUERY = `
       timestamp
       extensionType
       currency {
+        id
         symbol
         decimals
       }

@@ -380,6 +380,32 @@ export async function processAuctionEvents(
 
         // Update winning bidder to the latest bidder (highest bid)
         auction.winningBidder = bidderSubject;
+        
+        // Check if bid amount reaches ceiling price (buyout)
+        if (auction.ceilingPrice && bidAmount >= auction.ceilingPrice) {
+          console.log(`Auction ${auctionIdStr} reached buyout price: ${bidAmount} >= ${auction.ceilingPrice}`);
+          auction.status = AuctionStatus.ENDED;
+          
+          // Create purchase history for buyout
+          const usedCurrency = auction.currency;
+          const purchaseHistory = new PurchaseHistory({
+            id: `${transactionHash}-${log.logIndex}-buyout`, // Unique ID for buyout
+            nft: auction.nft,
+            seller: auction.seller,
+            buyer: bidderSubject,
+            quantity: auction.quantity,
+            currency: usedCurrency,
+            totalPrice: bidAmount,
+            tradeType: TradeType.AUCTION,
+            timestamp: timestamp,
+            blockNumber: blockNumber,
+            auction: auction,
+            listing: undefined,
+            transactionHash: transactionHash,
+          });
+          purchaseHistories.push(purchaseHistory);
+          auction.purchaseHistory.push(purchaseHistory);
+        }
       }
 
       if (topic0 === auctionEvents.AuctionFinalized.topic) {

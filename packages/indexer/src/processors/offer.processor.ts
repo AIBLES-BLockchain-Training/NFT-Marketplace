@@ -11,6 +11,7 @@ import {
   SupportedCurrency
 } from '../model'
 import * as OfferABI from '../abi/NFTOffer'
+import { fetchTokenInfo } from '../utils/erc20'
 
 export function getOfferTopics(): string[] {
   return [
@@ -113,18 +114,21 @@ export async function processOfferEvents(
     return nft
   }
 
-  async function getOrCreateCurrency(address: string): Promise<SupportedCurrency> {
+  async function getOrCreateCurrency(address: string, block: any): Promise<SupportedCurrency> {
     const currencyId = address.toLowerCase()
     if (currencyMap.has(currencyId)) {
       return currencyMap.get(currencyId)!
     }
     let currency = await ctx.store.get(SupportedCurrency, currencyId)
     if (!currency) {
+      // Fetch proper token info using ERC20 utility
+      const tokenInfo = await fetchTokenInfo(ctx, block, address)
+      
       currency = new SupportedCurrency({
         id: currencyId,
-        name: currencyId === '0x0000000000000000000000000000000000000000' ? 'ETH' : `Token_${address.slice(0, 6)}`,
-        symbol: currencyId === '0x0000000000000000000000000000000000000000' ? 'ETH' : 'TKN',
-        decimals: 18,
+        name: tokenInfo.name,
+        symbol: tokenInfo.symbol,
+        decimals: tokenInfo.decimals, // Use correct decimals (6 for USDC, 18 for others)
         isActive: true,
         feePercentage: 0,
         totalAmountFee: BigInt(0),
@@ -177,7 +181,7 @@ export async function processOfferEvents(
         const nft = await getOrCreateNFT(assetContract, tokenId, offerorSubject)
         console.log(`[Offer] Created/Found NFT: ${nft.id}`)
 
-        const currencyEntity = await getOrCreateCurrency(currency)
+        const currencyEntity = await getOrCreateCurrency(currency, log.block)
         console.log(`[Offer] Created/Found currency: ${currencyEntity.id}`)
 
         // Try to get NFT owner at time of offer creation
@@ -260,7 +264,7 @@ export async function processOfferEvents(
           const offerorSubject = await getOrCreateSubject(offeror)
           const assetOwnerSubject = await getOrCreateSubject(assetOwner)
           const nft = await getOrCreateNFT(assetContract, tokenId)
-          const currencyEntity = await getOrCreateCurrency(currency)
+          const currencyEntity = await getOrCreateCurrency(currency, log.block)
 
           // Create purchase history
           const purchaseHistory = new PurchaseHistory({

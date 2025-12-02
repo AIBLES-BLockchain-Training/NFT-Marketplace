@@ -9,7 +9,9 @@ import { useTransactionModal } from '../../hooks/useTransactionModal';
 import { encodeUpdateListing } from '../../lib/web3/encoding';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
 import { SECONDS_PER_DAY, DURATION_OPTIONS } from '../../lib/constants';
-import { truncateTokenId } from '../../lib/utils/format';
+import { truncateTokenId, formatUSDC, formatUSDCWithSymbol, isUSDCCurrency } from '../../lib/utils/format';
+import { formatEth } from '../../lib/web3/utils';
+import { USDC_ADDRESS } from '../../lib/constants';
 import toast from 'react-hot-toast';
 
 interface UpdateListingModalProps {
@@ -30,8 +32,20 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
   // Update form when listing changes
   useEffect(() => {
     if (listing) {
-      // Convert from wei to ETH
-      const currentPrice = ethers.formatEther(listing.pricePerToken);
+      // Get current currency and format price accordingly
+      const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || ZERO_ADDRESS;
+      
+      let currentPrice;
+      if (isUSDCCurrency(currencyId)) {
+        // Format USDC price
+        const priceToUse = listing.currencyApprovals?.[0]?.pricePerToken || listing.pricePerToken;
+        currentPrice = ethers.formatUnits(priceToUse, 6);
+      } else {
+        // Format ETH price
+        const priceToUse = listing.currencyApprovals?.[0]?.pricePerToken || listing.pricePerToken;
+        currentPrice = ethers.formatEther(priceToUse);
+      }
+      
       setPricePerToken(currentPrice);
       setQuantity(listing.quantity);
 
@@ -53,9 +67,17 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
         return;
       }
 
+      // Get current currency info
+      const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || ZERO_ADDRESS;
+      const isUSDC = isUSDCCurrency(currencyId);
+      
       const priceWei = (() => {
         try {
-          return ethers.parseEther(pricePerToken.toString());
+          if (isUSDC) {
+            return ethers.parseUnits(pricePerToken.toString(), 6);
+          } else {
+            return ethers.parseEther(pricePerToken.toString());
+          }
         } catch (error) {
           console.warn('Invalid price per token:', pricePerToken);
           return 0n;
@@ -68,11 +90,11 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
         assetContract: listing.nft.collection.id,
         tokenId: BigInt(listing.nft.tokenId),
         quantity: BigInt(quantity),
-        currency: ZERO_ADDRESS,
+        currency: currencyId, // Use current listing currency
         pricePerToken: priceWei,
         startTimestamp: startTime,
         endTimestamp: endTime,
-        reserved: false,
+        reserved: listing.isReserved || false,
       });
 
       await sendTransaction(tx, 'Listing updated successfully!');
@@ -119,7 +141,13 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
 
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Price per Token (ETH)
+                Price per Token ({(() => {
+                  const currencyId = listing?.currencyApprovals?.[0]?.currency?.id || listing?.currency?.id || ZERO_ADDRESS;
+                  if (isUSDCCurrency(currencyId)) {
+                    return 'USDC';
+                  }
+                  return 'ETH';
+                })()})
               </label>
               <Input
                 type="number"
@@ -131,7 +159,17 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
                 required
               />
               <p className="mt-2 text-xs text-gray-500">
-                Current: {ethers.formatEther(listing?.pricePerToken || '0')} ETH
+                Current: {(() => {
+                  if (!listing) return '0';
+                  const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || ZERO_ADDRESS;
+                  const priceToUse = listing.currencyApprovals?.[0]?.pricePerToken || listing.pricePerToken;
+                  
+                  if (isUSDCCurrency(currencyId)) {
+                    return formatUSDCWithSymbol(priceToUse);
+                  } else {
+                    return `${formatEth(BigInt(priceToUse))} ETH`;
+                  }
+                })()}
               </p>
             </div>
 

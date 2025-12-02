@@ -58,22 +58,24 @@ export default function CollectionsPage() {
     rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
       nft.listings?.forEach((listing: Record<string, unknown>) => {
         if (listing.status === 'CREATED' || listing.status === 'ACTIVE') {
-          // Only consider USDC listings
-          if (isUSDCCurrency(listing.currency)) {
-            const listingPrice = BigInt(listing.pricePerToken || '0');
-            if (listingPrice > BigInt(0)) {
-              if (floorPriceValue === '0') {
-                // First USDC listing found
-                floorPriceValue = listing.pricePerToken;
-              } else {
-                const currentFloor = BigInt(floorPriceValue);
-                // Take LOWEST price (floor)
-                if (listingPrice < currentFloor) {
-                  floorPriceValue = listing.pricePerToken;
+          // Check USDC currency approvals
+          listing.currencyApprovals?.forEach((approval: Record<string, unknown>) => {
+            if (isUSDCCurrency(approval.currency?.id)) {
+              const listingPrice = BigInt(approval.pricePerToken || '0');
+              if (listingPrice > BigInt(0)) {
+                if (floorPriceValue === '0') {
+                  // First USDC listing found
+                  floorPriceValue = approval.pricePerToken;
+                } else {
+                  const currentFloor = BigInt(floorPriceValue);
+                  // Take LOWEST price (floor)
+                  if (listingPrice < currentFloor) {
+                    floorPriceValue = approval.pricePerToken;
+                  }
                 }
               }
             }
-          }
+          });
         }
       });
     });

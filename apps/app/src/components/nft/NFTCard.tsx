@@ -5,7 +5,7 @@ import { NFT, ListingStatus } from '../../types';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { formatEth } from '../../lib/web3/utils';
-import { getIpfsGateways, formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
+import { getIpfsGateways, formatUSDC, isUSDCCurrency } from '../../lib/utils/format';
 
 interface NFTCardProps {
   nft: NFT;
@@ -54,7 +54,7 @@ export function NFTCard({ nft }: NFTCardProps) {
   // Format price based on currency type
   const formatPrice = (amount: bigint) => {
     if (isUSDC) {
-      return formatUSDCFromLegacy(amount, 2, false); // Don't show symbol, we add it separately
+      return formatUSDC(amount, 2); // Don't show symbol, we add it separately
     }
     return formatEth(amount);
   };
@@ -159,7 +159,7 @@ export function NFTCard({ nft }: NFTCardProps) {
             <div className="flex items-center justify-between pt-1.5 border-t border-dark-border">
               <span className="text-[10px] text-gray-400">Price</span>
               <span className="text-xs font-semibold text-primary-400">
-                {formatPrice(lowestPrice!)} {currencySymbol}
+                {formatPrice(lowestPrice!)} USDC
               </span>
             </div>
           )}

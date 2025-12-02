@@ -55,8 +55,8 @@ export function VolumeAreaChart({ data, isLoading }: VolumeAreaChartProps) {
               color: '#F3F4F6'
             }}
             formatter={(value: number, name: string) => [
-              name === 'volume' ? `${value} ETH` : `${value}`,
-              name === 'volume' ? 'Volume' : 'Transactions'
+              name === 'volume' ? `$${value}` : `${value}`,
+              name === 'volume' ? 'Volume (USD)' : 'Transactions'
             ]}
           />
           <Area 

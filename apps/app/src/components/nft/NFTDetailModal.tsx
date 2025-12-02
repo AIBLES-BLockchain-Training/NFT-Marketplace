@@ -8,7 +8,7 @@ import { Button } from '../common/Button';
 import { NFTImage } from '../common/NFTImage';
 import { formatEth } from '../../lib/web3/utils';
 import { ZERO_ADDRESS } from '../../lib/contracts/addresses';
-import { truncateTokenId, formatUSDCFromLegacy, isUSDCCurrency } from '../../lib/utils/format';
+import { truncateTokenId, formatUSDC, formatUSDCWithSymbol, isUSDCCurrency } from '../../lib/utils/format';
 import { useWallet } from '../../hooks/useWallet';
 import { useCancelAuction } from '../../hooks/useCancelAuction';
 import {
@@ -350,18 +350,53 @@ export function NFTDetailModal({
 
                 {/* Stats Grid - Always show */}
                 {(() => {
-                  // Calculate top offer
+                  // Calculate top offer (from USDC offers only)
                   const topOffer = activeOffers && activeOffers.length > 0
-                    ? activeOffers.reduce((max, offer) => {
-                        const maxPrice = BigInt(max.totalPrice || '0');
-                        const offerPrice = BigInt(offer.totalPrice || '0');
-                        return offerPrice > maxPrice ? offer : max;
-                      })
+                    ? activeOffers
+                        .filter(offer => isUSDCCurrency(offer.currency?.id || ''))
+                        .reduce((max, offer) => {
+                          const maxPrice = BigInt(max?.totalPrice || '0');
+                          const offerPrice = BigInt(offer.totalPrice || '0');
+                          return offerPrice > maxPrice ? offer : max;
+                        }, null)
                     : null;
 
-                  // Get last sale
+                  // Calculate collection floor price from USDC listings
+                  let collectionFloorPrice = '—';
+                  if (nft.collection && allNFTs && allNFTs.length > 0) {
+                    let floorPriceValue = '0';
+                    
+                    allNFTs.forEach(nftItem => {
+                      nftItem.listings?.forEach(listing => {
+                        if ((listing.status === 'CREATED' || listing.status === 'ACTIVE')) {
+                          // Check USDC listings
+                          const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || '';
+                          if (isUSDCCurrency(currencyId)) {
+                            const price = listing.currencyApprovals?.[0]?.pricePerToken || listing.pricePerToken;
+                            const listingPrice = BigInt(price || '0');
+                            if (listingPrice > BigInt(0)) {
+                              if (floorPriceValue === '0') {
+                                floorPriceValue = price;
+                              } else {
+                                const currentFloor = BigInt(floorPriceValue);
+                                if (listingPrice < currentFloor) {
+                                  floorPriceValue = price;
+                                }
+                              }
+                            }
+                          }
+                        }
+                      });
+                    });
+                    
+                    if (floorPriceValue !== '0') {
+                      collectionFloorPrice = formatUSDCWithSymbol(floorPriceValue);
+                    }
+                  }
+
+                  // Get last sale (USDC only)
                   const lastSale = purchaseHistory && purchaseHistory.length > 0
-                    ? purchaseHistory[0]
+                    ? purchaseHistory.find(history => isUSDCCurrency(history.currency?.id || ''))
                     : null;
 
                   // Count traits for rarity
@@ -372,13 +407,13 @@ export function NFTDetailModal({
                       <div>
                         <p className="text-xs text-gray-400 mb-1">TOP OFFER</p>
                         <p className="text-sm font-bold text-white">
-                          {topOffer ? `${formatEth(topOffer.totalPrice)} ${topOffer.currency?.symbol || 'ETH'}` : '—'}
+                          {topOffer ? formatUSDCWithSymbol(topOffer.totalPrice) : '—'}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-400 mb-1">COLLECTION FLOOR</p>
                         <p className="text-sm font-bold text-white">
-                          {nft.collection.floorPrice ? `${formatEth(nft.collection.floorPrice)} ETH` : '—'}
+                          {collectionFloorPrice}
                         </p>
                       </div>
                       <div>
@@ -388,7 +423,7 @@ export function NFTDetailModal({
                       <div>
                         <p className="text-xs text-gray-400 mb-1">LAST SALE</p>
                         <p className="text-sm font-bold text-white">
-                          {lastSale ? `${formatEth(lastSale.totalPrice)} ${lastSale.currency?.symbol || 'ETH'}` : '—'}
+                          {lastSale ? formatUSDCWithSymbol(lastSale.totalPrice) : '—'}
                         </p>
                       </div>
                     </div>
@@ -472,7 +507,7 @@ export function NFTDetailModal({
                                         {(() => {
                                           const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency || '';
                                           if (isUSDCCurrency(currencyId)) {
-                                            return formatUSDCFromLegacy(BigInt(price));
+                                            return formatUSDCWithSymbol(BigInt(price));
                                           }
                                           return `${formatEth(price)} ${currencySymbol}`;
                                         })()}
@@ -568,7 +603,7 @@ export function NFTDetailModal({
                                         {(() => {
                                           const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency || '';
                                           if (isUSDCCurrency(currencyId)) {
-                                            return formatUSDCFromLegacy(BigInt(price));
+                                            return formatUSDCWithSymbol(BigInt(price));
                                           }
                                           return `${formatEth(price)} ${currencySymbol}`;
                                         })()}
@@ -986,15 +1021,9 @@ export function NFTDetailModal({
                                   </p>
                                   <div className="text-right">
                                     <p className="text-lg font-bold text-primary-400">
-                                      {(() => {
-                                        const price = Number(offer.totalPrice) / 1e18;
-                                        if (price === 0) return '0';
-                                        const multiplier = Math.pow(10, 4);
-                                        const rounded = Math.round(price * multiplier) / multiplier;
-                                        let result = rounded.toFixed(4);
-                                        result = result.replace(/\.?0+$/, '');
-                                        return result;
-                                      })()} {offer.currency?.symbol || 'TOKEN'}
+                                      {isUSDCCurrency(offer.currency?.id || '') 
+                                        ? formatUSDCWithSymbol(offer.totalPrice)
+                                        : `${formatEth(offer.totalPrice)} ${offer.currency?.symbol || 'TOKEN'}`}
                                     </p>
                                     <p className="text-xs text-gray-400">
                                       Qty: {offer.quantity}
@@ -1023,14 +1052,16 @@ export function NFTDetailModal({
                                     <p className="text-gray-400">Price per Token</p>
                                     <p className="text-white font-semibold">
                                       {(() => {
-                                        const pricePerToken = Number(offer.totalPrice) / Number(offer.quantity) / 1e18;
-                                        if (pricePerToken === 0) return '0';
-                                        const multiplier = Math.pow(10, 4);
-                                        const rounded = Math.round(pricePerToken * multiplier) / multiplier;
-                                        let result = rounded.toFixed(4);
-                                        result = result.replace(/\.?0+$/, '');
-                                        return result;
-                                      })()} {offer.currency?.symbol || 'TOKEN'}
+                                        const totalPriceBI = BigInt(offer.totalPrice || '0');
+                                        const quantityBI = BigInt(offer.quantity || '1');
+                                        const pricePerToken = totalPriceBI / quantityBI;
+                                        
+                                        if (isUSDCCurrency(offer.currency?.id || '')) {
+                                          return formatUSDCWithSymbol(pricePerToken);
+                                        } else {
+                                          return `${formatEth(pricePerToken)} ${offer.currency?.symbol || 'TOKEN'}`;
+                                        }
+                                      })()} 
                                     </p>
                                   </div>
                                   <div>
@@ -1133,9 +1164,13 @@ export function NFTDetailModal({
                                 </div>
                                 <div className="text-right">
                                   <p className="text-lg font-bold text-primary-400">
-                                    {formatEth(history.totalPrice)}
+                                    {isUSDCCurrency(history.currency?.id || '') 
+                                      ? formatUSDCWithSymbol(history.totalPrice)
+                                      : `${formatEth(history.totalPrice)} ${history.currency.symbol}`}
                                   </p>
-                                  <p className="text-xs text-gray-400">{history.currency.symbol}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {isUSDCCurrency(history.currency?.id || '') ? '' : history.currency.symbol}
+                                  </p>
                                 </div>
                               </div>
 

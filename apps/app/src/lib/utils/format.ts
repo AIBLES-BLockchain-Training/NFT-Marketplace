@@ -107,48 +107,53 @@ export function truncateTokenId(tokenId: string | undefined): string {
 /**
  * Format USDC amount from wei (6 decimals) to human readable
  * @param amount - Amount in USDC wei (6 decimals)
- * @param displayDecimals - Number of decimal places to show
+ * @param displayDecimals - Maximum number of decimal places to show (default: 4)
  */
-export function formatUSDC(amount: string | bigint, displayDecimals = 2): string {
+export function formatUSDC(amount: string | bigint, displayDecimals = 4): string {
   try {
     const amountBigInt = typeof amount === 'string' ? BigInt(amount) : amount;
-    if (amountBigInt === 0n) return '0.00';
+    if (amountBigInt === 0n) return '0';
     
     // Convert from 6 decimals to human readable
     const divisor = 10n ** 6n;
     const whole = amountBigInt / divisor;
     const fraction = amountBigInt % divisor;
     
-    // Format with the specified number of decimal places
-    const fractionStr = fraction.toString().padStart(6, '0');
-    const truncatedFraction = fractionStr.slice(0, displayDecimals);
-    
-    if (displayDecimals === 0) {
+    if (fraction === 0n) {
+      // No decimals, show clean number
       return whole.toString();
     }
     
+    // Convert fraction to decimal places, limiting to max displayDecimals
+    const fractionStr = fraction.toString().padStart(6, '0');
+    const maxDecimals = Math.min(displayDecimals, 4); // Cap at 4 decimal places
+    const truncatedFraction = fractionStr.slice(0, maxDecimals);
+    
     // Remove trailing zeros
     const cleanFraction = truncatedFraction.replace(/0+$/, '');
+    
     if (cleanFraction === '') {
-      return whole.toString() + '.00';
+      // All decimals were zeros, return whole number only
+      return whole.toString();
     }
     
-    return `${whole.toString()}.${cleanFraction.padEnd(Math.max(2, displayDecimals), '0')}`;
+    // Return with proper rounding and clean formatting
+    return `${whole.toString()}.${cleanFraction}`;
   } catch (error) {
     console.warn('Failed to format USDC amount:', amount, error);
-    return '0.00';
+    return '0';
   }
 }
 
 /**
  * Format USDC amount with symbol
  * @param amount - Amount in USDC wei (6 decimals)
- * @param displayDecimals - Number of decimal places to show
+ * @param displayDecimals - Maximum number of decimal places to show (default: 4)
  * @param showSymbol - Whether to show USDC symbol
  */
 export function formatUSDCWithSymbol(
   amount: string | bigint, 
-  displayDecimals = 2, 
+  displayDecimals = 4, 
   showSymbol = true
 ): string {
   const formatted = formatUSDC(amount, displayDecimals);
@@ -156,49 +161,20 @@ export function formatUSDCWithSymbol(
 }
 
 /**
- * Format USDC amount from legacy 18-decimal storage to proper display
- * This handles old database entries that stored USDC prices in 18-decimal format
- * @param amount - Amount in legacy 18-decimal format
- * @param displayDecimals - Number of decimal places to show
- * @param showSymbol - Whether to show USDC symbol
+ * DEPRECATED: Format USDC amount from legacy 18-decimal storage to proper display
+ * This function is no longer needed as all data now uses proper 6-decimal format
+ * Kept for reference/rollback purposes
  */
+/*
 export function formatUSDCFromLegacy(
   amount: string | bigint, 
-  displayDecimals = 2, 
+  displayDecimals = 4, 
   showSymbol = true
 ): string {
-  try {
-    const amountBigInt = typeof amount === 'string' ? BigInt(amount) : amount;
-    
-    // Check the size of the number to determine format
-    // For USDC: 10 USDC = 10,000,000 (6 decimals) or 10,000,000,000,000,000,000 (18 decimals legacy)
-    
-    // If number is very large (18+ digits), it's definitely 18-decimal format
-    if (amountBigInt >= BigInt('1000000000000000000')) { // 1e18
-      const usdcAmount = amountBigInt / BigInt(10**12);
-      return formatUSDCWithSymbol(usdcAmount, displayDecimals, showSymbol);
-    }
-    
-    // If number is medium (7-17 digits), could be either format - check more carefully
-    if (amountBigInt >= BigInt('1000000')) { // 1e6
-      // If it's exactly divisible by 10^12 and result > 0, it's likely 18-decimal
-      if (amountBigInt % BigInt(10**12) === 0n && amountBigInt >= BigInt(10**12)) {
-        const usdcAmount = amountBigInt / BigInt(10**12);
-        return formatUSDCWithSymbol(usdcAmount, displayDecimals, showSymbol);
-      }
-      
-      // Otherwise assume 6-decimal format
-      return formatUSDCWithSymbol(amountBigInt, displayDecimals, showSymbol);
-    }
-    
-    // Small numbers (< 1M) - assume already in 6-decimal
-    return formatUSDCWithSymbol(amountBigInt, displayDecimals, showSymbol);
-    
-  } catch (error) {
-    console.warn('Failed to format USDC amount from legacy format:', amount, error);
-    return showSymbol ? '0.00 USDC' : '0.00';
-  }
+  // This function is deprecated - use formatUSDC or formatUSDCWithSymbol instead
+  return formatUSDCWithSymbol(amount, displayDecimals, showSymbol);
 }
+*/
 
 /**
  * Check if a currency address is USDC
