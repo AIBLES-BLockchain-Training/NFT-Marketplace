@@ -350,7 +350,7 @@ export function OfferSettings() {
                 </div>
                 <Button
                   onClick={() => handleWithdrawFees(fee.currency)}
-                  variant="accent"
+                  variant="primary"
                   size="sm"
                   isLoading={isLoading}
                 >

@@ -44,9 +44,11 @@ export default function CollectionsPage() {
 
     // Get all unique owners
     const ownerSet = new Set<string>();
-    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
-      nft.owners?.forEach((owner: Record<string, unknown>) => {
-        if (owner.ownerAddress) {
+    const nfts = rawCollection.nfts as any[];
+    nfts?.forEach((nft: Record<string, unknown>) => {
+      const owners = nft.owners as any[];
+      owners?.forEach((owner: Record<string, unknown>) => {
+        if (owner.ownerAddress && typeof owner.ownerAddress === 'string') {
           ownerSet.add(owner.ownerAddress.toLowerCase());
         }
       });
@@ -55,22 +57,24 @@ export default function CollectionsPage() {
     // Calculate floor price (LOWEST active USDC listing price)
     let floorPriceValue = '0';
 
-    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
-      nft.listings?.forEach((listing: Record<string, unknown>) => {
+    nfts?.forEach((nft: Record<string, unknown>) => {
+      const listings = nft.listings as any[];
+      listings?.forEach((listing: Record<string, unknown>) => {
         if (listing.status === 'CREATED' || listing.status === 'ACTIVE') {
           // Check USDC currency approvals
-          listing.currencyApprovals?.forEach((approval: Record<string, unknown>) => {
-            if (isUSDCCurrency(approval.currency?.id)) {
-              const listingPrice = BigInt(approval.pricePerToken || '0');
+          const currencyApprovals = listing.currencyApprovals as any[];
+          currencyApprovals?.forEach((approval: Record<string, unknown>) => {
+            if (approval.currency && isUSDCCurrency((approval.currency as any).id)) {
+              const listingPrice = BigInt((approval.pricePerToken as string) || '0');
               if (listingPrice > BigInt(0)) {
                 if (floorPriceValue === '0') {
                   // First USDC listing found
-                  floorPriceValue = approval.pricePerToken;
+                  floorPriceValue = approval.pricePerToken as string;
                 } else {
                   const currentFloor = BigInt(floorPriceValue);
                   // Take LOWEST price (floor)
                   if (listingPrice < currentFloor) {
-                    floorPriceValue = approval.pricePerToken;
+                    floorPriceValue = approval.pricePerToken as string;
                   }
                 }
               }
@@ -85,18 +89,19 @@ export default function CollectionsPage() {
     let todayVolume = BigInt(0);  // Last 24 hours
     let yesterdayVolume = BigInt(0);  // 24-48 hours ago
 
-    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
-      nft.purchaseHistory?.forEach((purchase: Record<string, unknown>) => {
+    nfts?.forEach((nft: Record<string, unknown>) => {
+      const purchaseHistory = nft.purchaseHistory as any[];
+      purchaseHistory?.forEach((purchase: Record<string, unknown>) => {
         // Only count USDC purchases
-        if (isUSDCCurrency(purchase.currency?.id)) {
-          const purchaseTime = new Date(purchase.timestamp).getTime();
+        if (purchase.currency && isUSDCCurrency((purchase.currency as any).id)) {
+          const purchaseTime = new Date(purchase.timestamp as string).getTime();
           if (purchaseTime >= oneDayAgo) {
             // Last 24 hours
             oneDaySales++;
-            todayVolume += BigInt(purchase.totalPrice || '0');
+            todayVolume += BigInt((purchase.totalPrice as string) || '0');
           } else if (purchaseTime >= twoDaysAgo) {
             // 24-48 hours ago
-            yesterdayVolume += BigInt(purchase.totalPrice || '0');
+            yesterdayVolume += BigInt((purchase.totalPrice as string) || '0');
           }
         }
       });
@@ -110,10 +115,11 @@ export default function CollectionsPage() {
     // Count USDC sales in each period
     let todaySalesCount = 0;
     let yesterdaySalesCount = 0;
-    rawCollection.nfts?.forEach((nft: Record<string, unknown>) => {
-      nft.purchaseHistory?.forEach((purchase: Record<string, unknown>) => {
-        if (isUSDCCurrency(purchase.currency?.id)) {
-          const purchaseTime = new Date(purchase.timestamp).getTime();
+    nfts?.forEach((nft: Record<string, unknown>) => {
+      const purchaseHistory = nft.purchaseHistory as any[];
+      purchaseHistory?.forEach((purchase: Record<string, unknown>) => {
+        if (purchase.currency && isUSDCCurrency((purchase.currency as any).id)) {
+          const purchaseTime = new Date(purchase.timestamp as string).getTime();
           if (purchaseTime >= oneDayAgo) {
             todaySalesCount++;
           } else if (purchaseTime >= twoDaysAgo) {
@@ -133,10 +139,10 @@ export default function CollectionsPage() {
     // If not enough data, leave as 0 (will show as "--" in UI)
 
     return {
-      id: rawCollection.id,
-      name: rawCollection.name,
-      logoUrl: rawCollection.logoUrl,
-      collectionType: rawCollection.collectionType || 'ERC721',
+      id: rawCollection.id as string,
+      name: rawCollection.name as string,
+      logoUrl: rawCollection.logoUrl as string,
+      collectionType: (rawCollection.collectionType as string) || 'ERC721',
       floorPrice: floorPriceValue,
       oneDayVolume: todayVolume.toString(),
       oneDayChange: Number(oneDayChange.toFixed(2)),

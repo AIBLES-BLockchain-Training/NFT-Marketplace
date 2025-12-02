@@ -257,7 +257,7 @@ export function filterAndFormatUSDCAmounts<T>(
     if (typeof currency === 'string') {
       isUSDC = isUSDCCurrency(currency);
     } else if (currency?.id || currency?.address) {
-      isUSDC = isUSDCCurrency(currency.id || currency.address);
+      isUSDC = isUSDCCurrency((currency as any).id || (currency as any).address);
     }
     
     return {

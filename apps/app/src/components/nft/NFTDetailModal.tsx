@@ -368,9 +368,9 @@ export function NFTDetailModal({
                     
                     allNFTs.forEach(nftItem => {
                       nftItem.listings?.forEach(listing => {
-                        if ((listing.status === 'CREATED' || listing.status === 'ACTIVE')) {
+                        if (listing.status === 'CREATED') {
                           // Check USDC listings
-                          const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || '';
+                          const currencyId = listing.currencyApprovals?.[0]?.currency?.id || (listing.currency as any)?.id || '';
                           if (isUSDCCurrency(currencyId)) {
                             const price = listing.currencyApprovals?.[0]?.pricePerToken || listing.pricePerToken;
                             const listingPrice = BigInt(price || '0');

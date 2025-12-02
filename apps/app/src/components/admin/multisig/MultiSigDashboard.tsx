@@ -215,9 +215,9 @@ export function MultiSigDashboard() {
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-white">Transaction #{tx.index}</span>
                           <span className={`px-2 py-1 text-xs rounded-full ${
-                            tx.isExecuted ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                            tx.executed ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
                           }`}>
-                            {tx.isExecuted ? 'Executed' : `${tx.confirmations}/${requiredConfirmations} confirmations`}
+                            {tx.executed ? 'Executed' : `${tx.confirmations}/${requiredConfirmations} confirmations`}
                           </span>
                         </div>
                         <div className="text-sm text-gray-400">

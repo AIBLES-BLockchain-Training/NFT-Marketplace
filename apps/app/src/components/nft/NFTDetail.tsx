@@ -241,15 +241,15 @@ export function NFTDetail({
           if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
             return isUSDCCurrency(listing.currencyApprovals[0].currency.id);
           }
-          return isUSDCCurrency(listing.currency?.id || '');
+          return isUSDCCurrency((listing.currency as any)?.id || '');
         }).length > 0 && (
           <Card>
             <h3 className="text-sm font-semibold text-gray-400 mb-4">
               Available Listings ({activeListings.filter(listing => {
                 if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
-                  return isUSDCCurrency(listing.currencyApprovals[0].currency.id);
+                  return isUSDCCurrency((listing.currencyApprovals[0].currency as any).id);
                 }
-                return isUSDCCurrency(listing.currency?.id || '');
+                return isUSDCCurrency((listing.currency as any)?.id || '');
               }).length})
             </h3>
             <div className="space-y-3">
@@ -257,9 +257,9 @@ export function NFTDetail({
                 .filter(listing => {
                   // Only show USDC listings
                   if (listing.currencyApprovals && listing.currencyApprovals.length > 0) {
-                    return isUSDCCurrency(listing.currencyApprovals[0].currency.id);
+                    return isUSDCCurrency((listing.currencyApprovals[0].currency as any).id);
                   }
-                  return isUSDCCurrency(listing.currency?.id || '');
+                  return isUSDCCurrency((listing.currency as any)?.id || '');
                 })
                 .sort((a, b) => parseFloat(a.pricePerToken) - parseFloat(b.pricePerToken))
                 .map((listing) => {

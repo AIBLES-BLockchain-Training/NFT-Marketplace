@@ -87,11 +87,11 @@ export function useMultiSigData() {
       if (txCount > 0) {
         // Load last 50 transactions or all if less than 50
         const startIndex = Math.max(0, txCount - 50);
-        const transactionPromises = [];
+        const transactionPromises: Promise<MultiSigTransaction>[] = [];
 
         for (let i = startIndex; i < txCount; i++) {
           transactionPromises.push(
-            contract.transactions(i).then(async (tx: any) => {
+            contract.transactions(i).then(async (tx: any): Promise<MultiSigTransaction> => {
               const isConfirmedByUser = address ? await contract.isConfirmed(i, address) : false;
               
               return {

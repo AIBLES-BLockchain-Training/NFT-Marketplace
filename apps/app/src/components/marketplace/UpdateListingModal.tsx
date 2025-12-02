@@ -33,7 +33,7 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
   useEffect(() => {
     if (listing) {
       // Get current currency and format price accordingly
-      const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || ZERO_ADDRESS;
+      const currencyId = listing.currencyApprovals?.[0]?.currency?.id || (listing.currency as any)?.id || ZERO_ADDRESS;
       
       let currentPrice;
       if (isUSDCCurrency(currencyId)) {
@@ -68,7 +68,7 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
       }
 
       // Get current currency info
-      const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || ZERO_ADDRESS;
+      const currencyId = listing.currencyApprovals?.[0]?.currency?.id || (listing.currency as any)?.id || ZERO_ADDRESS;
       const isUSDC = isUSDCCurrency(currencyId);
       
       const priceWei = (() => {
@@ -142,7 +142,7 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 Price per Token ({(() => {
-                  const currencyId = listing?.currencyApprovals?.[0]?.currency?.id || listing?.currency?.id || ZERO_ADDRESS;
+                  const currencyId = listing?.currencyApprovals?.[0]?.currency?.id || (listing?.currency as any)?.id || ZERO_ADDRESS;
                   if (isUSDCCurrency(currencyId)) {
                     return 'USDC';
                   }
@@ -161,7 +161,7 @@ export function UpdateListingModal({ listing, isOpen, onClose, onSuccess }: Upda
               <p className="mt-2 text-xs text-gray-500">
                 Current: {(() => {
                   if (!listing) return '0';
-                  const currencyId = listing.currencyApprovals?.[0]?.currency?.id || listing.currency?.id || ZERO_ADDRESS;
+                  const currencyId = listing.currencyApprovals?.[0]?.currency?.id || (listing.currency as any)?.id || ZERO_ADDRESS;
                   const priceToUse = listing.currencyApprovals?.[0]?.pricePerToken || listing.pricePerToken;
                   
                   if (isUSDCCurrency(currencyId)) {
