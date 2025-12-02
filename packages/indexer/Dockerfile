@@ -37,7 +37,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat postgresql-client
 RUN npm install -g @subsquid/commands
 
 # Copy dependencies from builder
@@ -45,9 +45,11 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built files from builder
 COPY --from=builder /app/packages/indexer/lib ./lib
+COPY --from=builder /app/packages/indexer/db ./db
 COPY --from=builder /app/packages/indexer/schema.graphql ./schema.graphql
 COPY --from=builder /app/packages/indexer/squid.yaml ./squid.yaml
 COPY --from=builder /app/packages/indexer/commands.json ./commands.json
+COPY --from=builder /app/packages/indexer/package.json ./package.json
 COPY packages/indexer/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 

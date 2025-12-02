@@ -3,9 +3,22 @@ set -e
 
 echo "Starting NFT Marketplace Indexer..."
 
+# Wait for database to be ready
+echo "Waiting for database connection..."
+until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"; do
+  echo "Database is not ready yet, waiting..."
+  sleep 2
+done
+echo "Database is ready!"
+
 # Apply database migrations
 echo "Applying database migrations..."
-npx @subsquid/typeorm-migration apply
+npx squid-typeorm-migration apply
+if [ $? -ne 0 ]; then
+    echo "Migration failed! Exiting..."
+    exit 1
+fi
+echo "Migrations completed successfully!"
 
 # Function to handle shutdown
 shutdown() {
